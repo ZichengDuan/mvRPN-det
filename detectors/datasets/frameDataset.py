@@ -6,9 +6,9 @@ from PIL import Image
 from scipy.sparse import coo_matrix
 from torchvision.datasets import VisionDataset
 import torch
-from multiview_detector.datasets import *
+from detectors.datasets import *
 from torchvision.transforms import ToTensor
-from multiview_detector.utils.projection import *
+from detectors.utils.projection import *
 import warnings
 import cv2
 warnings.filterwarnings("ignore")

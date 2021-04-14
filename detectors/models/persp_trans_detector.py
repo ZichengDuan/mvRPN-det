@@ -5,9 +5,9 @@ import torch.nn as nn
 import torch.nn.functional as F
 import kornia
 from torchvision.models.vgg import vgg11
-from multiview_detector.models.resnet import resnet18
+from detectors.models.resnet import resnet18
 import matplotlib
-from multiview_detector.models.mobilenet import MobileNetV3_Small, MobileNetV3_Large
+from detectors.models.mobilenet import MobileNetV3_Small, MobileNetV3_Large
 matplotlib.use('Agg')
 
 class Reshape(nn.Module):
@@ -37,51 +37,23 @@ class PerspTransDetector(nn.Module):
         self.proj_mats = [torch.from_numpy(map_zoom_mat @ imgcoord2worldgrid_matrices[cam] @ img_zoom_mat)
                           for cam in range(self.num_cam)]
         self.freeze_backbone = True
-        if arch == 'vgg11':
-            base = vgg11().features
-            base[-1] = nn.Sequential()
-            base[-4] = nn.Sequential()
-            split = 10
-            self.base_pt1 = base[:split].to('cuda:1')
-            self.base_pt2 = base[split:].to('cuda:0')
-            out_channel = 512
-        elif arch == 'resnet18':
-            self.base = nn.Sequential(*list(resnet18(replace_stride_with_dilation=[False, True, True]).children())[:-2]).to('cuda:1')
-            split = 7
-            # self.base_pt1 = base[:split].to('cuda:0')
-            # self.base_pt2 = base[split:].to('cuda:1')
-            out_channel = 512
-        elif arch == 'small':
-            net = MobileNetV3_Small()
-            self.base = nn.Sequential(*list(net.children())[:-4]).to('cuda:1')
-            split = 3
-            # self.base_pt1 = base[:split].to('cuda:1')
-            # self.base_pt2 = base[split:].to('cuda:0')
-            out_channel = 576
-        elif arch == 'large':
-            net = MobileNetV3_Large()
-            base = nn.Sequential(*list(net.children())[:-4])
-            split = 3
-            self.base_pt1 = base[:split].to('cuda:1')
-            self.base_pt2 = base[split:].to('cuda:0')
-            out_channel = 960
+        if arch == 'resnet18':
+            self.backbone = nn.Sequential(*list(resnet18(replace_stride_with_dilation=[False, True, True]).children())[:-2]).to('cuda:1')
+            self.down = nn.Sequential(nn.Conv2d(1024, 1024, kernel_size=4, stride=4),
+                                      nn.ReLU(),
+                                      nn.Conv2d(1024, 1024, kernel_size=2, stride=2),
+                                      nn.ReLU(),
+                                      nn.Conv2d(1024, 1024, kernel_size=2, stride=2),).to('cuda:0')
+            self.fc_conf = nn.Sequential(nn.Conv2d(1024, 4, kernel_size=1, stride=1)).to('cuda:0')
+            self.fc_pos = nn.Sequential(nn.Conv2d(1024, 8, kernel_size=1, stride=1)).to('cuda:0')
+            # out_channel = 1024
 
         else:
             raise Exception('architecture currently support [vgg11, resnet18]')
         # 2.5cm -> 0.5m: 20x
-        # self.img_classifier = nn.Sequential(nn.Conv2d(out_channel, 64, 1),
+        # self.score_classifier = nn.Sequential(nn.Conv2d(out_channel * self.num_cam + 2, 128, 3, padding=1),
         #                                     nn.ReLU(),
-        #                                     nn.Conv2d(64, 2, 1, bias=False)).to('cuda:0')
-
-
-        # huge 3*3 kernels for map features, dilation = 2，原来是4
-        self.score_classifier = nn.Sequential(nn.Conv2d(out_channel * self.num_cam + 2, 128, 3, padding=1),
-                                            nn.ReLU(),
-                                            nn.Conv2d(128, 1, 4, stride=1,padding=1, dilation=1, bias=False)).to('cuda:1')
-        # self.score_classifier2 = nn.Sequential(nn.Conv2d(out_channel * self.num_cam + 2, 128, 3, padding=1),
-        #                                     nn.ReLU(),
-        #                                     nn.Conv2d(128, 1, 3, stride=1,padding=1, dilation=1, bias=False)).to('cuda:1')
-
+        #                                     nn.Conv2d(128, 1, 4, stride=1,padding=1, dilation=1, bias=False)).to('cuda:1')
 
     def forward(self, imgs, epoch = None, visualize=False, train = True):
         B, N, C, H, W = imgs.shape
@@ -89,21 +61,20 @@ class PerspTransDetector(nn.Module):
         world_features = []
 
         for cam in range(self.num_cam):
-            img_feature =self.base(imgs[:, cam].to('cuda:1'))
-            # img_feature = self.base_pt1(imgs[:, cam].to('cuda:0'))
-            # img_feature = self.base_pt2(img_feature.to('cuda:1'))
-            # img_feature = self.down(img_feature.to('cuda:1')) # 26, 48
-            img_feature = F.interpolate(img_feature, self.upsample_shape, mode='bilinear')
+            img_feature =self.backbone(imgs[:, cam].to('cuda:1'))
+            # img_feature = F.interpolate(img_feature, self.upsample_shape, mode='bilinear')
             proj_mat = self.proj_mats[cam].repeat([B, 1, 1]).float().to('cuda:1')
             world_feature = kornia.warp_perspective(img_feature.to('cuda:1'), proj_mat, self.reducedgrid_shape)
             world_feature = kornia.vflip(world_feature)
-            world_features.append(world_feature.to('cuda:1'))
+            world_features.append(world_feature.to('cuda:0'))
+        world_features = torch.cat(world_features, dim=1).to('cuda:0')
+        # print(world_features.shape)
+        world_features = self.down(world_features.to('cuda:0'))
+        conf_res = self.fc_conf(world_features.to('cuda:0'))
+        pos_res = self.fc_pos(world_features.to('cuda:0'))
+        # print(conf_res.shape)
+        return conf_res, pos_res
 
-        # world_features = torch.cat(world_features + [self.coord_map.repeat([B, 1, 1, 1]).to('cuda:1')], dim=1)
-        world_features = torch.cat(world_features + [self.coord_map.repeat([B, 1, 1, 1]).to('cuda:1')], dim=1)
-        score_res = self.score_classifier(world_features)
-
-        return score_res
 
     def get_imgcoord2worldgrid_matrices(self, intrinsic_matrices, extrinsic_matrices, worldgrid2worldcoord_mat):
         projection_matrices = {}
@@ -129,19 +100,3 @@ class PerspTransDetector(nn.Module):
             ret = torch.cat([ret, rr], dim=1)
         return ret
 
-def test():
-    from multiview_detector.datasets.frameDataset import frameDataset
-    from multiview_detector.datasets.Wildtrack import Wildtrack
-    from multiview_detector.datasets.MultiviewX import MultiviewX
-    import torchvision.transforms as T
-    from torch.utils.data import DataLoader
-
-    transform = T.Compose([T.Resize([720, 1280]),  # H,W
-                           T.ToTensor(),
-                           T.Normalize(mean=[0.485, 0.456, 0.406], std=[0.229, 0.224, 0.225])])
-    dataset = frameDataset(Wildtrack(os.path.expanduser('~/Data/Wildtrack')), transform=transform)
-    dataloader = DataLoader(dataset, 1, False, num_workers=0)
-    imgs, map_gt, imgs_gt, frame = next(iter(dataloader))
-    model = PerspTransDetector(dataset)
-    map_res, img_res = model(imgs, visualize=True)
-    pass

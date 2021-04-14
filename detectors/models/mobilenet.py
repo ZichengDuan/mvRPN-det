@@ -6,7 +6,7 @@ import torch
 import torch.nn as nn
 import torch.nn.functional as F
 from torch.nn import init
-from multiview_detector.models.resnet import resnet18
+from detectors.models.resnet import resnet18
 
 class hswish(nn.Module):
     def forward(self, x):
