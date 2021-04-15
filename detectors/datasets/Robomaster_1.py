@@ -19,7 +19,7 @@ class Robomaster_1_dataset(VisionDataset):
         self.worldgrid_shape = worldgrid_shape
         # self.worldgrid_shape = [448, 794]
         self.num_cam = 2
-        self.num_frame = 600
+        self.num_frame = 200
         self.indexing = 'xy'
         self.worldgrid2worldcoord_mat = np.array([[1,0,0], [0,1,0], [0,0,1]])
         self.intrinsic_matrices, self.extrinsic_matrices = zip(

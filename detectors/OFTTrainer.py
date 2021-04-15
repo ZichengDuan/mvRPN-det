@@ -27,7 +27,7 @@ class OFTtrainer(BaseTrainer):
         self.denormalize = denormalize
         self.alpha = alpha
         self.MSELoss = nn.MSELoss()
-        self.L1Loss = nn.L1Loss()
+        self.L1Loss = nn.SmoothL1Loss()
 
     def train(self, epoch, data_loader, optimizer, log_interval=100):
         self.model.train()
@@ -36,29 +36,43 @@ class OFTtrainer(BaseTrainer):
         total_score_loss = 0
         total_seg_loss = 0
         # -------------------------------------------------------
-        for batch_idx, (imgs, conf_gt, offx_gt, offy_gt, frame) in enumerate(data_loader):
+        for batch_idx, (imgs, conf_gt, conf_off_gt, frame) in enumerate(data_loader):
             optimizer.zero_grad()
-            conf_res, off_res = self.model(imgs)
+            conf_res, off_res, seg_res = self.model(imgs)
 
             #计算置信度loss
-            conf_res = conf_res.reshape(4, -1).squeeze()
-            conf_res = nn.Softmax(conf_res)
+            # print("frame: ", frame)
+            # print(conf_gt)
+            # conf_res = conf_res.reshape(1, -1).squeeze()
+            # conf_res = nn.Softmax()(conf_res)
+            # print(conf_res)
 
-            conf_gts = conf_gt.reshape(4, -1).squeeze()
-            conf_loss = self.MSELoss(conf_res, conf_gts.to("cuda:1"))
+            # conf_gts = conf_gt.reshape(1, -1).squeeze()
 
-            off_gt = []
-            off_gt_mask = []
-            for i in range(len(offx_gt)):
-                off_gt = torch.cat([off_gt, offx_gt.squeeze()[i], offy_gt.squeeze()[i]], dim=1).to("cuda:1")
-                off_gt_mask = torch.cat([off_gt_mask, conf_gt[i], conf_gt[i]], dim=1).to("cuda:1")
-            off_res *= off_gt_mask
-            off_loss = self.L1Loss(off_res, offx_gt)
+            # conf_loss = self.MSELoss(conf_res, conf_gts.to("cuda:0"))
+            # print(conf_res, conf_gt)
+            # print(off_res.shape, conf_off_gt.shape)
+            # off_res *= conf_off_gt.to("cuda:0")
+            # break
+            # off_loss = self.L1Loss(off_res, off_gt.to("cuda:0"))
+            # print(off_res)
+            # -----------------Location Segmentation-------------------------
+            # print(seg_res.shape, conf_gt.shape)
+            seg_loss = nn.CrossEntropyLoss()(seg_res, conf_gt.to('cuda:0'))
+            if batch_idx % 100 == 0:
+                print(nn.Softmax()(seg_res.reshape(-1, 2)))
+            # ------------------------------------------------------------
 
-            # 标签格式也应该是缩小64倍的
+            # Loss = conf_loss
 
+            seg_loss.backward()
+            optimizer.step()
 
-
+            if (batch_idx + 1) % 10 == 0:
+                # print(Loss, conf_loss.item(), off_loss.item())
+                print(seg_loss)
+                print("Frame: ", frame)
+                print("conf_gt", conf_gt)
     def test(self, data_loader):
         self.model.eval()
         for batch_idx, (imgs, score_gt, mask, frame) in enumerate(data_loader):
@@ -67,5 +81,5 @@ class OFTtrainer(BaseTrainer):
 
             # ----------------------------Loss------------------------------
             loss = 0
-            mask = mask.squeeze().to('cuda:1').long()
+            mask = mask.squeeze().to('cuda:0').long()
             # --------------------Confidence Loss------------------------ Gaussian MSE 1

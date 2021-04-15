@@ -32,7 +32,7 @@ class oftFrameDataset(VisionDataset):
 
 
         if train:
-            frame_range = range(0, 1200)
+            frame_range = range(0, 1000)
         else:
             frame_range = range(3500, 3600)
 
@@ -47,15 +47,18 @@ class oftFrameDataset(VisionDataset):
         self.proj_mats = [torch.from_numpy(map_zoom_mat @ imgcoord2worldgrid_matrices[cam] @ img_zoom_mat)
                           for cam in range(2)]
 
+        self.reduced_width = 13
+        self.reduced_height = 7
+
         self.conf_maps = {}
-        self.offset_maps = {}
+        self.conf_maps_off = {}
+        # self.offset_maps = {}
 
         self.img_fpaths = self.base.get_image_fpaths(frame_range)
         self.gt_fpath = os.path.join(self.root, 'gt.txt')
         self.prepare_gt()
-        self.prepare_conf_gt()
-        self.prepre_offset_maps()
-
+        self.prepare_conf_gt(frame_range)
+        # self.prepre_offset_maps(frame_range)
 
     def prepare_gt(self):
         og_gt = []
@@ -89,46 +92,53 @@ class oftFrameDataset(VisionDataset):
         print(self.gt_fpath)
         np.savetxt(self.gt_fpath, og_gt, '%d')
 
-    def prepare_conf_gt(self):
+    def prepare_conf_gt(self, frame_range):
         # 生成4 * 12 * 7那么大的confmap
         for fname in sorted(os.listdir(os.path.join(self.root, 'annotations'))):
             frame = int(fname.split('.')[0])
+            if frame in frame_range:
+                conf_map = np.zeros((self.reduced_height, self.reduced_width))
+                conf_map_offset = np.zeros((2, self.reduced_height, self.reduced_width))
+                with open(os.path.join(self.root, 'annotations', fname)) as json_file:
+                    cars = [json.load(json_file)][0]
+                for i, car in enumerate(cars):
+                    wx = car['wx'] / 10
+                    wy = car['wy'] / 10
+                    x_grid = int(wx / (Const.grid_width / self.reduced_width))
+                    y_grid = int(wy / (Const.grid_height / self.reduced_height))
+                    conf_map[y_grid, x_grid] = 1
+                    conf_map_offset[0, y_grid, x_grid] = 1
+                    conf_map_offset[1, y_grid, x_grid] = 1
 
-            conf_map = torch.zeros((4, 7, 12))
-            with open(os.path.join(self.root, 'annotations', fname)) as json_file:
-                cars = [json.load(json_file)][0]
-            for i, car in enumerate(cars):
-                wx = car['wx'] / 10
-                wy = car['wy'] / 10
-                x_grid = int(wx / (Const.grid_width / 12))
-                y_grid = int(wy / (Const.grid_height / 7))
-                conf_map[i, x_grid, y_grid] = 1
-            self.conf_maps[frame] = conf_map
+                self.conf_maps[frame] = conf_map
+                self.conf_maps_off[frame] = conf_map_offset
 
-    def prepre_offset_maps(self):
-        # 生成4 * 12 * 7那么大的confmap
-        for fname in sorted(os.listdir(os.path.join(self.root, 'annotations'))):
-            frame = int(fname.split('.')[0])
 
-            offset_map = torch.zeros((8, 7, 12))
-            with open(os.path.join(self.root, 'annotations', fname)) as json_file:
-                cars = [json.load(json_file)][0]
-            for i, car in enumerate(cars):
-                wx = car['wx'] / 10
-                wy = car['wy'] / 10
-
-                det_grid_width = Const.grid_width / 12
-                det_grid_height = Const.grid_height / 7
-
-                for m in range(7):
-                    for n in range(12):
-                        offset_map[i, m, n] = (det_grid_width / 2 + m * det_grid_width) - wx
-                        offset_map[i + 1, m, n] = (det_grid_height / 2 + n * det_grid_height) - wy
-
-            self.offset_maps[frame] = offset_map
+    # def prepre_offset_maps(self, frame_range):
+    #     # 生成4 * 12 * 7那么大的confmap
+    #     for fname in sorted(os.listdir(os.path.join(self.root, 'annotations'))):
+    #         frame = int(fname.split('.')[0])
+    #
+    #         if frame in frame_range:
+    #             offset_map = np.zeros((2, self.reduced_height, self.reduced_width))
+    #             with open(os.path.join(self.root, 'annotations', fname)) as json_file:
+    #                 cars = [json.load(json_file)][0]
+    #             for i, car in enumerate(cars):
+    #                 wx = car['wx'] / 10
+    #                 wy = car['wy'] / 10
+    #
+    #                 det_grid_width = Const.grid_width / self.reduced_width
+    #                 det_grid_height = Const.grid_height / self.reduced_height
+    #
+    #                 for m in range(self.reduced_height):
+    #                     for n in range(self.reduced_width):
+    #                         offset_map[0, m, n] = ((det_grid_width / 2 + n * det_grid_width) - wx) / (det_grid_width / 2)
+    #                         offset_map[1, m, n] = ((det_grid_height / 2 + m * det_grid_height) - wy) / (det_grid_height / 2)
+    #
+    #             self.offset_maps[frame] = offset_map
 
     def __getitem__(self, index):
-        frame = list(self.score_gt.keys())[index]
+        frame = list(self.conf_maps.keys())[index]
         imgs = []
         for cam in range(self.num_cam):
             fpath = self.img_fpaths[cam][frame]
@@ -140,10 +150,26 @@ class oftFrameDataset(VisionDataset):
             imgs.append(img)
         imgs = torch.stack(imgs)
 
-        return imgs, frame
+        conf_map = self.conf_maps[frame]
+        conf_map_off = self.conf_maps_off[frame]
+        # offset_map = self.offset_maps[frame]
+
+
+        # if self.target_transform is not None:
+        #     print("dzc", conf_map_off.shape, conf_map.shape)
+        #     conf_map = self.target_transform(conf_map)
+        #     conf_map_off = self.target_transform(conf_map_off)
+        #     offset_map = self.target_transform(offset_map)
+        #     print(conf_map_off.shape, conf_map.shape)
+
+        conf_map = torch.tensor(conf_map).long()
+        conf_map_off = torch.tensor(conf_map_off).long()
+        # offset_map = torch.tensor(offset_map).long()
+
+        return imgs, conf_map, conf_map_off,  frame
 
     def __len__(self):
-        return len(self.score_gt.keys())
+        return len(self.conf_maps.keys())
 
 def get_imgcoord2worldgrid_matrices(intrinsic_matrices, extrinsic_matrices, worldgrid2worldcoord_mat):
     projection_matrices = {}
