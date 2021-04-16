@@ -47,8 +47,8 @@ class PerspTransDetector(nn.Module):
             self.downsample = nn.Sequential(nn.RReLU(), nn.MaxPool2d(kernel_size=3, stride=2, padding=1)).to('cuda:0')
 
 
-            self.fc_conf = nn.Sequential(nn.Conv2d(1026, 1, kernel_size=1, stride=1)).to('cuda:0')
-            self.fc_pos = nn.Sequential(nn.Conv2d(1026, 2, kernel_size=1, stride=1)).to('cuda:0')
+            # self.fc_conf = nn.Sequential(nn.Conv2d(1026, 1, kernel_size=1, stride=1)).to('cuda:0')
+            # self.fc_pos = nn.Sequential(nn.Conv2d(1026, 2, kernel_size=1, stride=1)).to('cuda:0')
             self.seg = nn.Sequential(nn.Conv2d(1026, 2, kernel_size=1, stride=1)).to('cuda:0')
             # out_channel = 1024
 

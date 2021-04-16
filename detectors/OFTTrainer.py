@@ -59,20 +59,20 @@ class OFTtrainer(BaseTrainer):
             # -----------------Location Segmentation-------------------------
             # print(seg_res.shape, conf_gt.shape)
             seg_loss = nn.CrossEntropyLoss()(seg_res, conf_gt.to('cuda:0'))
-            if batch_idx % 100 == 0:
-                print(nn.Softmax()(seg_res.reshape(-1, 2)))
+            if batch_idx % 10 == 0:
+                print(seg_loss)
             # ------------------------------------------------------------
-
-            # Loss = conf_loss
-
             seg_loss.backward()
             optimizer.step()
 
-            if (batch_idx + 1) % 10 == 0:
+            if (batch_idx + 1) % 100 == 0:
                 # print(Loss, conf_loss.item(), off_loss.item())
-                print(seg_loss)
                 print("Frame: ", frame)
                 print("conf_gt", conf_gt)
+                # print("conf_res", seg_res)
+                print(nn.Softmax(dim=1)(seg_res))
+
+
     def test(self, data_loader):
         self.model.eval()
         for batch_idx, (imgs, score_gt, mask, frame) in enumerate(data_loader):

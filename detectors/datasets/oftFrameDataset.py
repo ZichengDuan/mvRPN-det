@@ -113,7 +113,6 @@ class oftFrameDataset(VisionDataset):
                 self.conf_maps[frame] = conf_map
                 self.conf_maps_off[frame] = conf_map_offset
 
-
     # def prepre_offset_maps(self, frame_range):
     #     # 生成4 * 12 * 7那么大的confmap
     #     for fname in sorted(os.listdir(os.path.join(self.root, 'annotations'))):
