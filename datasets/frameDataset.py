@@ -6,7 +6,7 @@ from PIL import Image
 from scipy.sparse import coo_matrix
 from torchvision.datasets import VisionDataset
 import torch
-from detectors.datasets import *
+from datasets import *
 from torchvision.transforms import ToTensor
 from detectors.utils.projection import *
 import warnings
@@ -326,7 +326,6 @@ class frameDataset(VisionDataset):
 
 
 def test():
-    from multiview_detector.datasets.Wildtrack import Wildtrack
     # from multiview_detector.datasets.MultiviewX import MultiviewX
     from multiview_detector.utils.projection import get_worldcoord_from_imagecoord
     dataset = frameDataset(Robomaster_1_dataset(os.path.expanduser('/home/dzc/Data/1cardata')))

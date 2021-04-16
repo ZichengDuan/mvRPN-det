@@ -1,16 +1,12 @@
-import math
 import json
-from scipy.stats import multivariate_normal
 from PIL import Image
-from scipy.sparse import coo_matrix
 import torch
 from torchvision.transforms import ToTensor
-from detectors.datasets.Robomaster_1 import *
+from datasets.Robomaster_1 import *
 import warnings
 
-import cv2
 from EX_CONST import Const
-import kornia
+
 warnings.filterwarnings("ignore")
 
 class oftFrameDataset(VisionDataset):
