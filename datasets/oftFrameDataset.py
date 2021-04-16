@@ -5,7 +5,7 @@ from torchvision.transforms import ToTensor
 from datasets.Robomaster_1 import *
 import warnings
 
-from EX_CONST import Const
+from .EX_CONST import Const
 
 warnings.filterwarnings("ignore")
 

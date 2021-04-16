@@ -1,10 +1,7 @@
 import os
 
 import cv2
-import matplotlib.pyplot as plt
 import numpy as np
-import time
-import math
 from EX_CONST import Const
 
 # np.set_printoptions(suppress=True)
