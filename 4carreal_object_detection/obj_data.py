@@ -5,6 +5,7 @@ import json
 from EX_CONST import Const
 import cv2
 
+
 def read_txt(left_right_dir):
     l_lhs = None
     for m in range(0, 4358):
@@ -13,6 +14,7 @@ def read_txt(left_right_dir):
         # if 4 - len(idx) > 0:
         #     for j in range(4 - len(idx)):
         #         idx = "0" + idx
+
         left = open(left_right_dir + "/left1/%s.txt" % idx)
         right = open(left_right_dir + "/right2/%s.txt" % idx)
         datas = []
@@ -129,8 +131,6 @@ def read_txt(left_right_dir):
             od_xmin.append(xmin_od)
             od_ymax.append(ymax_od)
             od_ymin.append(ymin_od)
-
-
 
             # -----------------------------------------
 
