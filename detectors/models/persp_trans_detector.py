@@ -8,6 +8,7 @@ from torchvision.models.vgg import vgg11
 from detectors.models.resnet import resnet18
 import matplotlib
 from detectors.models.mobilenet import MobileNetV3_Small, MobileNetV3_Large
+from .region_proposal_network import RegionProposalNetwork
 matplotlib.use('Agg')
 
 class Reshape(nn.Module):
@@ -36,9 +37,10 @@ class PerspTransDetector(nn.Module):
         # projection matrices: img feat -> map feat
         self.proj_mats = [torch.from_numpy(map_zoom_mat @ imgcoord2worldgrid_matrices[cam] @ img_zoom_mat)
                           for cam in range(self.num_cam)]
-        self.freeze_backbone = True
+
         if arch == 'resnet18':
             self.backbone = nn.Sequential(*list(resnet18(replace_stride_with_dilation=[False, False, False]).children())[:-2]).to('cuda:1')
+
             self.basicblock = nn.Sequential(nn.Conv2d(1026, 1026, kernel_size=3, stride=1, padding=1),
                                             nn.BatchNorm2d(1026),
                                             nn.RReLU(),
