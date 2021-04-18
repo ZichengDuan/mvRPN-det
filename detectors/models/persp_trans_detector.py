@@ -40,26 +40,11 @@ class PerspTransDetector(nn.Module):
 
         if arch == 'resnet18':
             self.backbone = nn.Sequential(*list(resnet18(replace_stride_with_dilation=[False, False, False]).children())[:-2]).to('cuda:1')
-
-            self.basicblock = nn.Sequential(nn.Conv2d(1026, 1026, kernel_size=3, stride=1, padding=1),
-                                            nn.BatchNorm2d(1026),
-                                            nn.RReLU(),
-                                            nn.Conv2d(1026, 1026, kernel_size=3, stride=1, padding=1),
-                                            nn.BatchNorm2d(1026)).to('cuda:0')
-            self.downsample = nn.Sequential(nn.RReLU(), nn.MaxPool2d(kernel_size=3, stride=2, padding=1)).to('cuda:0')
-
-
-            # self.fc_conf = nn.Sequential(nn.Conv2d(1026, 1, kernel_size=1, stride=1)).to('cuda:0')
-            # self.fc_pos = nn.Sequential(nn.Conv2d(1026, 2, kernel_size=1, stride=1)).to('cuda:0')
-            self.seg = nn.Sequential(nn.Conv2d(1026, 2, kernel_size=1, stride=1)).to('cuda:0')
-            # out_channel = 1024
+            self.rpn = RegionProposalNetwork(in_channels=1026, mid_channels=1026, ratios=[1], anchor_scales=[4]).to('cuda:0')
 
         else:
             raise Exception('architecture currently support [vgg11, resnet18]')
         # 2.5cm -> 0.5m: 20x
-        # self.score_classifier = nn.Sequential(nn.Conv2d(out_channel * self.num_cam + 2, 128, 3, padding=1),
-        #                                     nn.ReLU(),
-        #                                     nn.Conv2d(128, 1, 4, stride=1,padding=1, dilation=1, bias=False)).to('cuda:1')
 
     def forward(self, imgs, epoch = None, visualize=False, train = True):
         B, N, C, H, W = imgs.shape
@@ -68,24 +53,14 @@ class PerspTransDetector(nn.Module):
 
         for cam in range(self.num_cam):
             img_feature =self.backbone(imgs[:, cam].to('cuda:1'))
-            # img_feature = F.interpolate(img_feature, self.upsample_shape, mode='bilinear')
             proj_mat = self.proj_mats[cam].repeat([B, 1, 1]).float().to('cuda:1')
             world_feature = kornia.warp_perspective(img_feature.to('cuda:1'), proj_mat, self.reducedgrid_shape)
             world_feature = kornia.vflip(world_feature)
             world_features.append(world_feature.to('cuda:0'))
         world_features = torch.cat(world_features + [self.coord_map.repeat([B, 1, 1, 1]).to('cuda:0')], dim=1)
-        # world_features = torch.cat(world_features, dim=1).to('cuda:0')
 
-        for k in range(4):
-            world_features_fx = self.basicblock(world_features.to('cuda:0'))
-            world_features = torch.add(world_features, world_features_fx)
-            world_features = self.downsample(world_features)
-        # print(world_features.shape)
-        conf_res = self.fc_conf(world_features.to('cuda:0'))
-        pos_res = self.fc_pos(world_features.to('cuda:0'))
-        seg_res = self.seg(world_features.to('cuda:0'))
-        # print(conf_res.shape)
-        return conf_res, pos_res, seg_res
+        rpn_locs, rpn_scores, anchor = self.rpn(world_features)
+        return rpn_locs, rpn_scores, anchor
 
 
     def get_imgcoord2worldgrid_matrices(self, intrinsic_matrices, extrinsic_matrices, worldgrid2worldcoord_mat):

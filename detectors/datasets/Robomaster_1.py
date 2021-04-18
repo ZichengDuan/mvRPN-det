@@ -19,12 +19,12 @@ class Robomaster_1_dataset(VisionDataset):
         self.worldgrid_shape = worldgrid_shape
         # self.worldgrid_shape = [448, 794]
         self.num_cam = 2
-        self.num_frame = 200
+        self.num_frame = 1000
         self.indexing = 'xy'
         self.worldgrid2worldcoord_mat = np.array([[1,0,0], [0,1,0], [0,0,1]])
         self.intrinsic_matrices, self.extrinsic_matrices = zip(
             *[self.get_intrinsic_extrinsic_matrix(cam) for cam in range(self.num_cam)])
-        self.left_2d_points, self.left_3d_points, self.right_2d_points, self.right_3d_points = self.get_2d3d_points()
+        # self.left_2d_points, self.left_3d_points, self.right_2d_points, self.right_3d_points = self.get_2d3d_points()
 
     def get_image_fpaths(self, frame_range):
         img_fpaths = {cam: {} for cam in range(self.num_cam)}

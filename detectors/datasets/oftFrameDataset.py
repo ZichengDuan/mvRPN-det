@@ -15,10 +15,9 @@ warnings.filterwarnings("ignore")
 
 class oftFrameDataset(VisionDataset):
     def __init__(self, base,  train=True, transform=ToTensor(), target_transform=ToTensor(),
-                 reID=False, grid_reduce=4, img_reduce=4, train_ratio=0.9, force_download=True):
+                 reID=False, grid_reduce=4, img_reduce=4, train_ratio=0.9):
         super().__init__(base.root, transform=transform, target_transform=target_transform)
 
-        map_sigma, map_kernel_size = 10 / grid_reduce, 10
         self.reID, self.grid_reduce, self.img_reduce = reID, grid_reduce, img_reduce
         self.base = base
         self.train = train
@@ -31,10 +30,10 @@ class oftFrameDataset(VisionDataset):
             frame_range = range(0, int(self.num_frame * (1 - train_ratio)))
 
 
-        if train:
-            frame_range = range(0, 1000)
-        else:
-            frame_range = range(3500, 3600)
+        # if train:
+        #     frame_range = range(0, 1000)
+        # else:
+        #     frame_range = range(3500, 3600)
 
         self.upsample_shape = list(map(lambda x: int(x / self.img_reduce), self.img_shape))
         img_reduce_local = np.array(self.img_shape) / np.array(self.upsample_shape)
@@ -47,17 +46,11 @@ class oftFrameDataset(VisionDataset):
         self.proj_mats = [torch.from_numpy(map_zoom_mat @ imgcoord2worldgrid_matrices[cam] @ img_zoom_mat)
                           for cam in range(2)]
 
-        self.reduced_width = 13
-        self.reduced_height = 7
-
-        self.conf_maps = {}
-        self.conf_maps_off = {}
-        # self.offset_maps = {}
-
+        self.bboxes = {}
         self.img_fpaths = self.base.get_image_fpaths(frame_range)
         self.gt_fpath = os.path.join(self.root, 'gt.txt')
         self.prepare_gt()
-        self.prepare_conf_gt(frame_range)
+        self.prepare_bbox(frame_range)
         # self.prepre_offset_maps(frame_range)
 
     def prepare_gt(self):
@@ -92,83 +85,39 @@ class oftFrameDataset(VisionDataset):
         print(self.gt_fpath)
         np.savetxt(self.gt_fpath, og_gt, '%d')
 
-    def prepare_conf_gt(self, frame_range):
+    def prepare_bbox(self, frame_range):
         # 生成4 * 12 * 7那么大的confmap
-        for fname in sorted(os.listdir(os.path.join(self.root, 'annotations'))):
+
+        for fname in sorted(os.listdir(os.path.join(self.root, 'od_annotations'))):
+            frame_box = []
             frame = int(fname.split('.')[0])
             if frame in frame_range:
-                conf_map = np.zeros((self.reduced_height, self.reduced_width))
-                conf_map_offset = np.zeros((2, self.reduced_height, self.reduced_width))
-                with open(os.path.join(self.root, 'annotations', fname)) as json_file:
+                with open(os.path.join(self.root, 'od_annotations', fname)) as json_file:
                     cars = [json.load(json_file)][0]
                 for i, car in enumerate(cars):
-                    wx = car['wx'] / 10
-                    wy = car['wy'] / 10
-                    x_grid = int(wx / (Const.grid_width / self.reduced_width))
-                    y_grid = int(wy / (Const.grid_height / self.reduced_height))
-                    conf_map[y_grid, x_grid] = 1
-                    conf_map_offset[0, y_grid, x_grid] = 1
-                    conf_map_offset[1, y_grid, x_grid] = 1
+                    ymin_od = int(car["ymin_od"])
+                    xmin_od = int(car["xmin_od"])
+                    ymax_od = int(car["ymax_od"])
+                    xmax_od = int(car["xmax_od"])
+                    frame_box.append([ymin_od, xmin_od, ymax_od, xmax_od])
+                self.bboxes[frame] = frame_box
 
-                self.conf_maps[frame] = conf_map
-                self.conf_maps_off[frame] = conf_map_offset
-
-    # def prepre_offset_maps(self, frame_range):
-    #     # 生成4 * 12 * 7那么大的confmap
-    #     for fname in sorted(os.listdir(os.path.join(self.root, 'annotations'))):
-    #         frame = int(fname.split('.')[0])
-    #
-    #         if frame in frame_range:
-    #             offset_map = np.zeros((2, self.reduced_height, self.reduced_width))
-    #             with open(os.path.join(self.root, 'annotations', fname)) as json_file:
-    #                 cars = [json.load(json_file)][0]
-    #             for i, car in enumerate(cars):
-    #                 wx = car['wx'] / 10
-    #                 wy = car['wy'] / 10
-    #
-    #                 det_grid_width = Const.grid_width / self.reduced_width
-    #                 det_grid_height = Const.grid_height / self.reduced_height
-    #
-    #                 for m in range(self.reduced_height):
-    #                     for n in range(self.reduced_width):
-    #                         offset_map[0, m, n] = ((det_grid_width / 2 + n * det_grid_width) - wx) / (det_grid_width / 2)
-    #                         offset_map[1, m, n] = ((det_grid_height / 2 + m * det_grid_height) - wy) / (det_grid_height / 2)
-    #
-    #             self.offset_maps[frame] = offset_map
 
     def __getitem__(self, index):
-        frame = list(self.conf_maps.keys())[index]
+        frame = list(self.bboxes.keys())[index]
         imgs = []
         for cam in range(self.num_cam):
             fpath = self.img_fpaths[cam][frame]
             img = Image.open(fpath).convert('RGB')
             if self.transform is not None:
-                # print(fpath)
-                # print(type(img))
                 img = self.transform(img)
             imgs.append(img)
         imgs = torch.stack(imgs)
-
-        conf_map = self.conf_maps[frame]
-        conf_map_off = self.conf_maps_off[frame]
-        # offset_map = self.offset_maps[frame]
-
-
-        # if self.target_transform is not None:
-        #     print("dzc", conf_map_off.shape, conf_map.shape)
-        #     conf_map = self.target_transform(conf_map)
-        #     conf_map_off = self.target_transform(conf_map_off)
-        #     offset_map = self.target_transform(offset_map)
-        #     print(conf_map_off.shape, conf_map.shape)
-
-        conf_map = torch.tensor(conf_map).long()
-        conf_map_off = torch.tensor(conf_map_off).long()
-        # offset_map = torch.tensor(offset_map).long()
-
-        return imgs, conf_map, conf_map_off,  frame
+        bbox = self.bboxes[frame]
+        return imgs, bbox, frame
 
     def __len__(self):
-        return len(self.conf_maps.keys())
+        return len(self.bboxes.keys())
 
 def get_imgcoord2worldgrid_matrices(intrinsic_matrices, extrinsic_matrices, worldgrid2worldcoord_mat):
     projection_matrices = {}

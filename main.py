@@ -17,6 +17,7 @@ from detectors.utils.draw_curve import draw_curve
 from detectors.utils.image_utils import img_color_denormalize
 from detectors.OFTTrainer import OFTtrainer
 import warnings
+from tensorboardX import SummaryWriter
 warnings.filterwarnings("ignore")
 
 def main(args):
@@ -39,10 +40,8 @@ def main(args):
 
     data_path = os.path.expanduser('/home/dzc/Data/%s' % Const.dataset)
     base = Robomaster_1_dataset(data_path, args, worldgrid_shape=Const.grid_size)
-
     train_set = oftFrameDataset(base, train=True, transform=train_trans, grid_reduce=4)
     test_set = oftFrameDataset(base , train=False, transform=train_trans, grid_reduce=4)
-
     train_loader = torch.utils.data.DataLoader(train_set, batch_size=args.batch_size, shuffle=True,
                                                num_workers=args.num_workers, pin_memory=True, drop_last=True)
     test_loader = torch.utils.data.DataLoader(test_set, batch_size=args.batch_size, shuffle=False,
@@ -82,14 +81,12 @@ def main(args):
         print('Testing...')
 
         for epoch in tqdm.tqdm(range(1, args.epochs + 1)):
-            print()
             print('Training...')
-            train_loss, train_prec = trainer.train(epoch, train_loader, optimizer, args.log_interval)
-            print()
-            print('Testing...')
-            trainer.test(test_loader)
-            torch.save(model.state_dict(), os.path.join('/home/dzc/Desktop/CASIA/proj/mvdet/MVDet/finalModels/mvdet_model.pth'))
 
+            loss = trainer.train(epoch, train_loader, optimizer, args.log_interval)
+            print('Testing...')
+            # trainer.test(test_loader)
+            # torch.save(model.state_dict(), os.path.join('/home/dzc/Desktop/CASIA/proj/mvdet/MVDet/finalModels/mvdet_model.pth'))
 if __name__ == '__main__':
     # settings
     parser = argparse.ArgumentParser(description='Multiview detector')
@@ -104,7 +101,7 @@ if __name__ == '__main__':
     parser.add_argument('-b', '--batch_size', type=int, default=1, metavar='N',
                         help='input batch size for training (default: 1)')
     parser.add_argument('--epochs', type=int, default=10, metavar='N', help='number of epochs to train (default: 10)')
-    parser.add_argument('--lr', type=float, default=0.001, metavar='LR', help='learning rate (default: 0.1)')
+    parser.add_argument('--lr', type=float, default=0.01, metavar='LR', help='learning rate (default: 0.1)')
     parser.add_argument('--weight_decay', type=float, default=1e-5)
     parser.add_argument('--momentum', type=float, default=0.5, metavar='M', help='SGD momentum (default: 0.5)')
     parser.add_argument('--log_interval', type=int, default=10, metavar='N',

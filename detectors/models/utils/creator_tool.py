@@ -1,8 +1,8 @@
 import numpy as np
 import cupy as cp
 
-from model.utils.bbox_tools import bbox2loc, bbox_iou, loc2bbox
-from model.utils.nms import non_maximum_suppression
+from .bbox_tools import bbox2loc, bbox_iou, loc2bbox
+from .nms import non_maximum_suppression
 
 
 class ProposalTargetCreator(object):
@@ -198,10 +198,30 @@ class AnchorTargetCreator(object):
         """
 
         img_H, img_W = img_size
-
         n_anchor = len(anchor)
         inside_index = _get_inside_index(anchor, img_H, img_W)
         anchor = anchor[inside_index]
+
+        tmp = np.zeros((448, 800), dtype=np.uint8())
+        import cv2
+        tmp = cv2.cvtColor(tmp, cv2.COLOR_GRAY2BGR)
+        # cv2.imwrite("/home/dzc/Desktop/CASIA/proj/mvRPN-det/anchorBase.jpg", tmp)
+        # print(anchor)
+        for idx, anc in enumerate(anchor):
+            anc[0::2] = np.clip(anc[0::2], 0, 447).astype(np.int)
+            anc[1::2] = np.clip(anc[1::2], 0, 799).astype(np.int)
+            # print((anc[1], anc[0]), (anc[3], anc[2]))
+            if idx % 100 == 0:
+                cv2.rectangle(tmp, (int(anc[1]), int(anc[0])), (int(anc[3]), int(anc[2])), color=(255, 0, 0))
+
+        for idx, bbx in enumerate(bbox):
+            bbx[0::2] = np.clip(bbx[0::2], 0, 447).astype(np.int)
+            bbx[1::2] = np.clip(bbx[1::2], 0, 799).astype(np.int)
+            # print((anc[1], anc[0]), (anc[3], anc[2]))
+            # if idx % 500 == 0:
+            cv2.rectangle(tmp, (int(bbx[1]), int(bbx[0])), (int(bbx[3]), int(bbx[2])), color=(255, 255, 0))
+
+        cv2.imwrite("/home/dzc/Desktop/CASIA/proj/mvRPN-det/anchorBase.jpg", tmp)
         argmax_ious, label = self._create_label(
             inside_index, anchor, bbox)
 
@@ -251,6 +271,7 @@ class AnchorTargetCreator(object):
 
     def _calc_ious(self, anchor, bbox, inside_index):
         # ious between the anchors and the gt boxes
+        # print(anchor, bbox)
         ious = bbox_iou(anchor, bbox)
         argmax_ious = ious.argmax(axis=1)
         max_ious = ious[np.arange(len(inside_index)), argmax_ious]

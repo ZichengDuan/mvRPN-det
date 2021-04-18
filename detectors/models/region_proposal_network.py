@@ -43,7 +43,7 @@ class RegionProposalNetwork(nn.Module):
 
     def __init__(
             self, in_channels=1026, mid_channels=1026, ratios=[0.5, 1, 2],
-            anchor_scales=[8, 16, 32], feat_stride=16,
+            anchor_scales=[8, 16, 32], feat_stride=4,
             proposal_creator_params=dict(),
     ):
         super(RegionProposalNetwork, self).__init__()
@@ -60,7 +60,7 @@ class RegionProposalNetwork(nn.Module):
         normal_init(self.score, 0, 0.01)
         normal_init(self.loc, 0, 0.01)
 
-    def forward(self, x, img_size, scale=1.):
+    def forward(self, x):
         """Forward Region Proposal Network.
 
         Here are notations.
@@ -103,8 +103,8 @@ class RegionProposalNetwork(nn.Module):
         anchor = _enumerate_shifted_anchor(
             np.array(self.anchor_base),
             self.feat_stride, hh, ww)
-
-        n_anchor = anchor.shape[0] // (hh * ww)
+        # print("shifted_anchor ", anchor)
+        # n_anchor = anchor.shape[0] // (hh * ww)
         h = F.relu(self.conv1(x))
 
         rpn_locs = self.loc(h)
@@ -113,26 +113,10 @@ class RegionProposalNetwork(nn.Module):
         rpn_locs = rpn_locs.permute(0, 2, 3, 1).contiguous().view(n, -1, 4)
         rpn_scores = self.score(h)
         rpn_scores = rpn_scores.permute(0, 2, 3, 1).contiguous()
-        rpn_softmax_scores = F.softmax(rpn_scores.view(n, hh, ww, n_anchor, 2), dim=4)
-        rpn_fg_scores = rpn_softmax_scores[:, :, :, :, 1].contiguous()
-        rpn_fg_scores = rpn_fg_scores.view(n, -1)
+        # rpn_softmax_scores = F.softmax(rpn_scores.view(n, hh, ww, n_anchor, 2), dim=4)
         rpn_scores = rpn_scores.view(n, -1, 2)
 
-        rois = list()
-        roi_indices = list()
-        for i in range(n):
-            roi = self.proposal_layer(
-                rpn_locs[i].cpu().data.numpy(),
-                rpn_fg_scores[i].cpu().data.numpy(),
-                anchor, img_size,
-                scale=scale)
-            batch_index = i * np.ones((len(roi),), dtype=np.int32)
-            rois.append(roi)
-            roi_indices.append(batch_index)
-
-        rois = np.concatenate(rois, axis=0)
-        roi_indices = np.concatenate(roi_indices, axis=0)
-        return rpn_locs, rpn_scores, rois, roi_indices, anchor
+        return rpn_locs, rpn_scores, anchor
 
 
 def _enumerate_shifted_anchor(anchor_base, feat_stride, height, width):
@@ -151,6 +135,9 @@ def _enumerate_shifted_anchor(anchor_base, feat_stride, height, width):
     shift_y = xp.arange(0, height * feat_stride, feat_stride)
     shift_x = xp.arange(0, width * feat_stride, feat_stride)
     shift_x, shift_y = xp.meshgrid(shift_x, shift_y)
+
+    # print(shift_x)
+
     shift = xp.stack((shift_y.ravel(), shift_x.ravel(),
                       shift_y.ravel(), shift_x.ravel()), axis=1)
 
