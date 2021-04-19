@@ -102,7 +102,7 @@ def read_txt(left_right_dir):
             # -----------------------------------------
             x1_ori, x2_ori, x3_ori, x4_ori = world_x / 10 + 25, world_x / 10 + 25, world_x / 10 - 25, world_x / 10 - 25
             y1_ori, y2_ori, y3_ori, y4_ori = world_y / 10 + 25, world_y / 10 - 25, world_y / 10 - 25, world_y / 10 + 25
-            print("ori: ", x1_ori, x2_ori, x3_ori, x4_ori)
+            # print("ori: ", x1_ori, x2_ori, x3_ori, x4_ori)
             x1_rot, x2_rot, x3_rot, x4_rot = \
                 int(math.cos(angle) * (x1_ori - world_x / 10) - math.sin(angle) * (y1_ori - world_y / 10) + world_x / 10), \
                 int(math.cos(angle) * (x2_ori - world_x / 10) - math.sin(angle) * (y2_ori - world_y / 10) + world_x / 10), \
@@ -155,10 +155,10 @@ def read_txt(left_right_dir):
         back = np.zeros((Const.grid_height, Const.grid_width), np.uint8)
         img = cv2.cvtColor(back, cv2.COLOR_GRAY2BGR)
         img = cv2.imread("/home/dzc/Data/4carreal_0318blend/bevimgs/%s.jpg" % idx)
-        print(od_xmax, od_ymax)
+        # print(od_xmax, od_ymax)
         for k in range(4):
             cv2.rectangle(img, (od_xmax[k], od_ymax[k]), (od_xmin[k], od_ymin[k]), (255, 0, 0), thickness=2)
-            cv2.fillPoly(img, cordss[k], (255, 255, 0))
+            # cv2.fillPoly(img, cordss[k], (255, 255, 0))
         cv2.imwrite("/home/dzc/Desktop/CASIA/proj/mvRPN-det/4carreal_object_detection/test/%d.jpg" % m, img)
 
         annotation.write(json.dumps(datas, indent=4))
