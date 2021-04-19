@@ -8,7 +8,8 @@ from torchvision.models.vgg import vgg11
 from detectors.models.resnet import resnet18
 import matplotlib
 from detectors.models.mobilenet import MobileNetV3_Small, MobileNetV3_Large
-from .region_proposal_network import RegionProposalNetwork
+from detectors.models.region_proposal_network import RegionProposalNetwork
+import cv2
 matplotlib.use('Agg')
 
 class Reshape(nn.Module):
@@ -19,7 +20,7 @@ class Reshape(nn.Module):
         return x.view(1, self.shape[0])
 
 class PerspTransDetector(nn.Module):
-    def __init__(self, dataset = None, arch='resnet-18'):
+    def __init__(self, dataset = None):
         super().__init__()
         self.num_cam = dataset.num_cam
         self.img_shape, self.reducedgrid_shape = dataset.img_shape, dataset.reducedgrid_shape
@@ -38,12 +39,9 @@ class PerspTransDetector(nn.Module):
         self.proj_mats = [torch.from_numpy(map_zoom_mat @ imgcoord2worldgrid_matrices[cam] @ img_zoom_mat)
                           for cam in range(self.num_cam)]
 
-        if arch == 'resnet18':
-            self.backbone = nn.Sequential(*list(resnet18(replace_stride_with_dilation=[False, False, False]).children())[:-2]).to('cuda:1')
-            self.rpn = RegionProposalNetwork(in_channels=1026, mid_channels=1026, ratios=[1], anchor_scales=[4]).to('cuda:0')
+        self.backbone = nn.Sequential(*list(resnet18(replace_stride_with_dilation=[False, False, False]).children())[:-2]).to('cuda:1')
+        self.rpn = RegionProposalNetwork(in_channels=1026, mid_channels=1026, ratios=[1], anchor_scales=[4]).to('cuda:0')
 
-        else:
-            raise Exception('architecture currently support [vgg11, resnet18]')
         # 2.5cm -> 0.5m: 20x
 
     def forward(self, imgs, epoch = None, visualize=False, train = True):
@@ -53,13 +51,17 @@ class PerspTransDetector(nn.Module):
 
         for cam in range(self.num_cam):
             img_feature =self.backbone(imgs[:, cam].to('cuda:1'))
+            img_feature = F.interpolate(img_feature, self.upsample_shape, mode='bilinear')
             proj_mat = self.proj_mats[cam].repeat([B, 1, 1]).float().to('cuda:1')
             world_feature = kornia.warp_perspective(img_feature.to('cuda:1'), proj_mat, self.reducedgrid_shape)
             world_feature = kornia.vflip(world_feature)
             world_features.append(world_feature.to('cuda:0'))
         world_features = torch.cat(world_features + [self.coord_map.repeat([B, 1, 1, 1]).to('cuda:0')], dim=1)
-
+        # vis_feature(world_features, max_num=5, out_path='/home/dzc/Desktop/CASIA/proj/mvRPN-det/images/')
         rpn_locs, rpn_scores, anchor = self.rpn(world_features)
+
+        # vis_feature(world_features, max_num=5, out_path='/home/dzc/Desktop/CASIA/proj/mvRPN-det/images/')
+
         return rpn_locs, rpn_scores, anchor
 
 
@@ -87,3 +89,15 @@ class PerspTransDetector(nn.Module):
             ret = torch.cat([ret, rr], dim=1)
         return ret
 
+def vis_feature(x, max_num=5, out_path='/home/dzc/Desktop/CASIA/proj/mvRPN-det/images/'):
+    for i in range(0, x.shape[1]):
+        if i >= max_num:
+            break
+        feature = x[0, i, :, :].view(x.shape[-2], x.shape[-1])
+        print(feature.shape)
+        feature = feature.detach().cpu().numpy()
+        feature = 1.0 / (1 + np.exp(-1 * feature))
+        feature = np.round(feature * 255).astype(np.uint8)
+        feature_img = cv2.applyColorMap(feature, cv2.COLORMAP_JET)
+        dst_path = os.path.join(out_path, str(i) + '.jpg')
+        cv2.imwrite(dst_path, feature_img)

@@ -51,7 +51,6 @@ class RegionProposalNetwork(nn.Module):
         self.anchor_base = generate_anchor_base(
             anchor_scales=anchor_scales, ratios=ratios)
         self.feat_stride = feat_stride
-        self.proposal_layer = ProposalCreator(self, **proposal_creator_params)
         n_anchor = self.anchor_base.shape[0]
         self.conv1 = nn.Conv2d(in_channels, mid_channels, 3, 1, 1)
         self.score = nn.Conv2d(mid_channels, n_anchor * 2, 1, 1, 0)
@@ -103,13 +102,8 @@ class RegionProposalNetwork(nn.Module):
         anchor = _enumerate_shifted_anchor(
             np.array(self.anchor_base),
             self.feat_stride, hh, ww)
-        # print("shifted_anchor ", anchor)
-        # n_anchor = anchor.shape[0] // (hh * ww)
         h = F.relu(self.conv1(x))
-
         rpn_locs = self.loc(h)
-        # UNNOTE: check whether need contiguous
-        # A: Yes
         rpn_locs = rpn_locs.permute(0, 2, 3, 1).contiguous().view(n, -1, 4)
         rpn_scores = self.score(h)
         rpn_scores = rpn_scores.permute(0, 2, 3, 1).contiguous()

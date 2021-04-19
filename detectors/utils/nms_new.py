@@ -1,37 +1,77 @@
 import torch
+import numpy as np
 
-
-# Original author: Francisco Massa:
-# https://github.com/fmassa/object-detection.torch
-# Ported to PyTorch by Max deGroot (02/01/2017)
-def nms_new(points, scores, dist_thres=12.5, pts_consider=400, left=1):
-    """Apply non-maximum suppression at test time to avoid detecting too many
-    overlapping bounding boxes for a given object.
-    Args:
-        points: (tensor) The location preds for the img, Shape: [num_priors,2].
-        scores: (tensor) The class predscores for the img, Shape:[num_priors].
-        dist_thres: (float) The overlap thresh for suppressing unnecessary boxes.
-        top_k: (int) The Maximum number of box preds to consider.
-    Return:
-        The indices of the kept boxes with respect to num_priors.
-    """
-
-    keep = torch.zeros_like(scores).long()
-    if points.numel() == 0:
+def nms_new(bboxes, confidence,consider = 300, left=4):
+    bbox = bboxes.squeeze().astype(int)
+    confidence = confidence.squeeze()
+    keep = torch.zeros(confidence.shape).long()
+    if len(bbox) == 0:
         return keep
-    v, indices = scores.sort(0)  # sort in ascending order
-    top_k = min(pts_consider, len(indices))
-    indices = indices[-top_k:]  # indices of the top-k largest vals
-    count = 0
-    while indices.numel() > 0 and count < left:
-        idx = indices[-1]  # index of current largest val
-        keep[count] = idx
-        count += 1
-        if indices.numel() == 1:
-            break
-        indices = indices[:-1]  # remove kept element from view
-        target_point = points[idx, :]
-        remaining_points = points[indices, :]
-        dists = torch.norm(target_point - remaining_points, dim=1)  # store result in distances
-        indices = indices[dists > dist_thres]
-    return keep, count
+
+    v, indices = confidence.sort(0)  # sort in ascending order
+    indices = indices[-consider:]  # indices of the top-k largest vals
+
+    bbox_keep = []
+    indices_keep = []
+    i = 1
+    while len(bbox_keep) < left and indices.numel() > 0 and i < consider:
+        if len(bbox_keep) == 0:
+            bbox_keep.append(bbox[indices[-i]])
+        elif keep_box(bbox_keep, bbox[indices[-i]], iou_threash=0.1):
+            bbox_keep.append(bbox[indices[-i]])
+            indices_keep.append((indices[-i]).item())
+        i += 1
+    return bbox_keep, confidence[indices_keep]
+
+def bbox_iou(bbox_a, bbox_b):
+    """Calculate the Intersection of Unions (IoUs) between bounding boxes.
+
+    IoU is calculated as a ratio of area of the intersection
+    and area of the union.
+
+    This function accepts both :obj:`numpy.ndarray` and :obj:`cupy.ndarray` as
+    inputs. Please note that both :obj:`bbox_a` and :obj:`bbox_b` need to be
+    same type.
+    The output is same type as the type of the inputs.
+
+    Args:
+        bbox_a (array): An array whose shape is :math:`(N, 4)`.
+            :math:`N` is the number of bounding boxes.
+            The dtype should be :obj:`numpy.float32`.
+        bbox_b (array): An array similar to :obj:`bbox_a`,
+            whose shape is :math:`(K, 4)`.
+            The dtype should be :obj:`numpy.float32`.
+
+    Returns:
+        array:
+        An array whose shape is :math:`(N, K)`. \
+        An element at index :math:`(n, k)` contains IoUs between \
+        :math:`n` th bounding box in :obj:`bbox_a` and :math:`k` th bounding \
+        box in :obj:`bbox_b`.
+
+    """
+    # print(bbox_a, bbox_b)
+
+    bbox_a = np.array(bbox_a).reshape((1,4))
+    bbox_b = np.array(bbox_b).reshape((1,4))
+
+    if bbox_a.shape[1] != 4 or bbox_b.shape[1] != 4:
+        raise IndexError
+    # top left
+    tl = np.maximum(bbox_a[:, None, :2], bbox_b[:, :2])
+    # bottom right
+    br = np.minimum(bbox_a[:, None, 2:], bbox_b[:, 2:])
+
+    area_i = np.prod(br - tl, axis=2) * (tl < br).all(axis=2)
+    area_a = np.prod(bbox_a[:, 2:] - bbox_a[:, :2], axis=1)
+    area_b = np.prod(bbox_b[:, 2:] - bbox_b[:, :2], axis=1)
+    return area_i / (area_a[:, None] + area_b - area_i)
+
+def keep_box(boxes, target, iou_threash=0.4):
+    res = True
+    for box in boxes:
+        res = res and (bbox_iou(box, target)[0][0] < iou_threash)
+        if not res:
+            return res
+    return res
+    pass

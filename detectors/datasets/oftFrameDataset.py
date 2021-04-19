@@ -24,16 +24,16 @@ class oftFrameDataset(VisionDataset):
         self.root, self.num_cam, self.num_frame = base.root, base.num_cam, base.num_frame
         self.img_shape, self.worldgrid_shape = base.img_shape, base.worldgrid_shape  # H,W; N_row,N_col
         self.reducedgrid_shape = list(map(lambda x: int(x / self.grid_reduce), self.worldgrid_shape))
-        if train:
-            frame_range = range(int(self.num_frame * (1 - train_ratio)), self.num_frame)
-        else:
-            frame_range = range(0, int(self.num_frame * (1 - train_ratio)))
-
-
         # if train:
-        #     frame_range = range(0, 1000)
+        #     frame_range = range(int(self.num_frame * (1 - train_ratio)), self.num_frame)
         # else:
-        #     frame_range = range(3500, 3600)
+        #     frame_range = range(0, int(self.num_frame * (1 - train_ratio)))
+
+
+        if train:
+            frame_range = range(400, 1500)
+        else:
+            frame_range = range(3500, 3600)
 
         self.upsample_shape = list(map(lambda x: int(x / self.img_reduce), self.img_shape))
         img_reduce_local = np.array(self.img_shape) / np.array(self.upsample_shape)
