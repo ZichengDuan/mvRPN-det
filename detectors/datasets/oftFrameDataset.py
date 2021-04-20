@@ -10,7 +10,6 @@ import warnings
 
 import cv2
 from EX_CONST import Const
-import kornia
 warnings.filterwarnings("ignore")
 
 class oftFrameDataset(VisionDataset):
@@ -24,11 +23,6 @@ class oftFrameDataset(VisionDataset):
         self.root, self.num_cam, self.num_frame = base.root, base.num_cam, base.num_frame
         self.img_shape, self.worldgrid_shape = base.img_shape, base.worldgrid_shape  # H,W; N_row,N_col
         self.reducedgrid_shape = list(map(lambda x: int(x / self.grid_reduce), self.worldgrid_shape))
-        # if train:
-        #     frame_range = range(int(self.num_frame * (1 - train_ratio)), self.num_frame)
-        # else:
-        #     frame_range = range(0, int(self.num_frame * (1 - train_ratio)))
-
 
         if train:
             frame_range = range(400, 1500)
@@ -47,11 +41,12 @@ class oftFrameDataset(VisionDataset):
                           for cam in range(2)]
 
         self.bboxes = {}
+        self.dir = {}
         self.img_fpaths = self.base.get_image_fpaths(frame_range)
         self.gt_fpath = os.path.join(self.root, 'gt.txt')
         self.prepare_gt()
         self.prepare_bbox(frame_range)
-        # self.prepre_offset_maps(frame_range)
+        self.prepare_dir(frame_range)
 
     def prepare_gt(self):
         og_gt = []
@@ -86,8 +81,6 @@ class oftFrameDataset(VisionDataset):
         np.savetxt(self.gt_fpath, og_gt, '%d')
 
     def prepare_bbox(self, frame_range):
-        # 生成4 * 12 * 7那么大的confmap
-
         for fname in sorted(os.listdir(os.path.join(self.root, 'od_annotations'))):
             frame_box = []
             frame = int(fname.split('.')[0])
@@ -102,6 +95,18 @@ class oftFrameDataset(VisionDataset):
                     frame_box.append([ymin_od, xmin_od, ymax_od, xmax_od])
                 self.bboxes[frame] = frame_box
 
+    def prepare_dir(self, frame_range):
+        for fname in sorted(os.listdir(os.path.join(self.root, 'od_annotations'))):
+            frame_dir = []
+            frame = int(fname.split('.')[0])
+            if frame in frame_range:
+                with open(os.path.join(self.root, 'od_annotations', fname)) as json_file:
+                    cars = [json.load(json_file)][0]
+                for i, car in enumerate(cars):
+                    dir = int(car["direc"])
+                    frame_dir.append(dir)
+                self.dir[frame] = frame_dir
+
 
     def __getitem__(self, index):
         frame = list(self.bboxes.keys())[index]
@@ -113,8 +118,9 @@ class oftFrameDataset(VisionDataset):
                 img = self.transform(img)
             imgs.append(img)
         imgs = torch.stack(imgs)
-        bbox = self.bboxes[frame]
-        return imgs, bbox, frame
+        bboxes = torch.tensor(self.bboxes[frame])
+        dirs = torch.tensor(self.dir[frame])
+        return imgs, bboxes, dirs, frame
 
     def __len__(self):
         return len(self.bboxes.keys())
@@ -126,8 +132,6 @@ def get_imgcoord2worldgrid_matrices(intrinsic_matrices, extrinsic_matrices, worl
 
         worldgrid2imgcoord_mat = worldcoord2imgcoord_mat @ worldgrid2worldcoord_mat
         imgcoord2worldgrid_mat = np.linalg.inv(worldgrid2imgcoord_mat)
-        # image of shape C,H,W (C,N_row,N_col); indexed as x,y,w,h (x,y,n_col,n_row)
-        # matrix of shape N_row, N_col; indexed as x,y,n_row,n_col
         permutation_mat = np.array([[1, 0, 0], [0, 1, 0], [0, 0, 1]])
         projection_matrices[cam] = permutation_mat @ imgcoord2worldgrid_mat
     return projection_matrices
@@ -139,4 +143,3 @@ if __name__ == "__main__":
     dataset = oftFrameDataset(base)
     h6, l1, s1 = dataset.prepare_proj_conf_map(210, 0, world_shape= world_shape)
     coords = l1.generate_coords()
-    # print(coords)

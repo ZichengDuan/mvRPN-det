@@ -354,9 +354,9 @@ class ProposalCreator:
 
     def __init__(self,
                  parent_model,
-                 nms_thresh=0.7,
+                 nms_thresh=1,
                  n_train_pre_nms=12000,
-                 n_train_post_nms=2000,
+                 n_train_post_nms=1000,
                  n_test_pre_nms=6000,
                  n_test_post_nms=300,
                  min_size=16
@@ -420,6 +420,7 @@ class ProposalCreator:
         roi = loc2bbox(anchor, loc)
 
         # Clip predicted boxes to image.
+        # print(img_size)
         roi[:, slice(0, 4, 2)] = np.clip(
             roi[:, slice(0, 4, 2)], 0, img_size[0])
         roi[:, slice(1, 4, 2)] = np.clip(

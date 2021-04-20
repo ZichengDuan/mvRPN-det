@@ -11,13 +11,14 @@ from detectors.utils.nms_new import nms_new
 import torch.nn as nn
 import warnings
 from detectors.loss.gaussian_mse import GaussianMSE
-from .models.utils.creator_tool import AnchorTargetCreator
+from .models.utils.creator_tool import AnchorTargetCreator, ProposalTargetCreator
 from .utils import array_tool as at
 from EX_CONST import Const
 from tensorboardX import SummaryWriter
 from detectors.models.utils.bbox_tools import loc2bbox
 from PIL import Image
 warnings.filterwarnings("ignore")
+import cv2
 
 class BaseTrainer(object):
     def __init__(self):
@@ -31,103 +32,158 @@ class OFTtrainer(BaseTrainer):
         self.MSELoss = nn.MSELoss()
         self.L1Loss = nn.SmoothL1Loss()
         self.anchor_target_creator = AnchorTargetCreator()
+        self.proposal_target_creator = ProposalTargetCreator()
         self.rpn_sigma = 3.
+        self.loc_normalize_mean = (0., 0., 0., 0.),
+        self.loc_normalize_std = (0.1, 0.1, 0.2, 0.2)
 
     def train(self, epoch, data_loader, optimizer, writer):
         self.model.train()
 
-
         # -----------------init local params----------------------
         Loss = 0
-        # -------------------------------------------------------
-        for batch_idx, (imgs, gt_bbox, frame) in enumerate(data_loader):
+        for batch_idx, (imgs, gt_bbox, dirs, frame) in enumerate(data_loader):
             optimizer.zero_grad()
-
-            for i in range(len(gt_bbox)):
-                for j in range(len(gt_bbox[0])):
-                    gt_bbox[i][j] = gt_bbox[i][j].item()
-            gt_bbox = np.array(gt_bbox)
-            # _, _, _, H, W = imgs.shape
-            # img_size = (H, W)
             img_size = (Const.grid_height, Const.grid_width)
-            rpn_locs, rpn_scores, anchor = self.model(imgs)
+            rpn_locs, rpn_scores, anchor, rois, roi_indices = self.model(imgs)
 
             rpn_loc = rpn_locs[0]
             rpn_score = rpn_scores[0]
-
+            gt_bbox = gt_bbox[0]
+            dir = dirs[0]
+            roi = rois
+            # -----------------RPN Loss----------------------
             gt_rpn_loc, gt_rpn_label = self.anchor_target_creator(
                 at.tonumpy(gt_bbox),
                 anchor,
                 img_size)
 
-            rpn_loc_loss = nn.MSELoss()(rpn_loc, torch.tensor(gt_rpn_loc, dtype=torch.float).to("cuda:0"))
+            # rpn_loc_loss = nn.MSELoss()(rpn_loc, torch.tensor(gt_rpn_loc, dtype=torch.float).to("cuda:0"))
 
-            # rpn_loc_loss = _fast_rcnn_loc_loss(
-            #     rpn_loc,
-            #     gt_rpn_loc,
-            #     gt_rpn_label,
-            #     self.rpn_sigma)
+            rpn_loc_loss = _fast_rcnn_loc_loss(
+                rpn_loc,
+                gt_rpn_loc,
+                gt_rpn_label,
+                self.rpn_sigma)
 
             gt_rpn_label = torch.tensor(gt_rpn_label).long()
-            # NOTE: default value of ignore_index is -100 ...
             rpn_cls_loss = nn.CrossEntropyLoss(ignore_index=-1)(rpn_score, gt_rpn_label.to("cuda:0"))
 
-            Loss = rpn_loc_loss / 10 + rpn_cls_loss
+            # ----------------ROI------------------------------
+            # 先投影到原来的图上，再搞生成对应的8个角度的label？还是说先在bev下生成八个角度的label，再
+            sample_roi, gt_roi_loc, gt_roi_label = self.proposal_target_creator(
+                roi,
+                at.tonumpy(gt_bbox),
+                at.tonumpy(dir),
+                self.loc_normalize_mean,
+                self.loc_normalize_std)
+            # NOTE it's all zero because now it only support for batch=1 now
+            sample_roi_index = torch.zeros(len(sample_roi))
+            # print(sample_roi.shape)
 
+
+            loss = rpn_loc_loss / 6 + rpn_cls_loss
+            Loss += (loss + rpn_cls_loss + rpn_loc_loss)
             # ------------------------------------------------------------
-            Loss.backward()
+            loss.backward()
             optimizer.step()
+            niter = epoch * len(data_loader) + batch_idx
 
-            writer.add_scalar("Total Loss", Loss, batch_idx)
-            writer.add_scalar("rpn_loc_loss", rpn_loc_loss / 10, batch_idx)
-            writer.add_scalar("rpn_cls_loss", rpn_cls_loss, batch_idx)
+            writer.add_scalar("Training Total Loss", Loss / (batch_idx + 1), niter)
+            writer.add_scalar("Training rpn_loc_loss", rpn_loc_loss / (6 * (batch_idx + 1)), niter)
+            writer.add_scalar("Training rpn_cls_loss", rpn_cls_loss / (batch_idx + 1), niter)
 
             if batch_idx % 10 == 0:
-                print(Loss, rpn_loc_loss / 10, rpn_cls_loss)
+                print("Training Total Loss: ", Loss.detach().cpu() / (batch_idx + 1),
+                      "Training Loc Loss: ", rpn_loc_loss.detach().cpu() / 6 * (batch_idx + 1),
+                      "Training Cls Loss: ", rpn_cls_loss.detach().cpu() / (batch_idx + 1))
+
+
 
             # ------------loc -> bbox--------------
             bbox = loc2bbox(anchor, rpn_loc.detach().cpu().numpy())
             rpn_score = nn.Softmax()(rpn_score)
             conf_scores = rpn_score[:, 1].view(1, -1).squeeze()
             # print("dzc", max(conf_scores.squeeze()))
-            left_bbox, left_conf = nms_new(bbox, conf_scores.detach().cpu(), left=4)
-            tmp = np.zeros((Const.grid_height, Const.grid_width), dtype=np.uint8())
-            import cv2
-            tmp = cv2.cvtColor(tmp, cv2.COLOR_GRAY2BGR)
+            left_bbox, left_conf = nms_new(bbox, conf_scores.detach().cpu(), left=4, threshold=0.1)
 
-            for idx, bbx in enumerate(left_bbox):
-                cv2.rectangle(tmp, (int(bbx[1]), int(bbx[0])), (int(bbx[3]), int(bbx[2])), color=(255, 255, 0))
+            tmp = cv2.imread("/home/dzc/Data/4carreal_0318blend/bevimgs/%d.jpg" % frame)
 
-            # for idx, bbx in enumerate(bbox):
-            #     cv2.rectangle(tmp, (int(bbx[1]), int(bbx[0])), (int(bbx[3]), int(bbx[2])), color=(255, 255, 0))
+            # for idx, bbx in enumerate(left_bbox):
+            #     cv2.rectangle(tmp, (int(bbx[1]), int(bbx[0])), (int(bbx[3]), int(bbx[2])), color=(255, 255, 0), thickness=2)
+
+            for idx, bbx in enumerate(sample_roi):
+                # cv2.rectangle(tmp, (int(bbx[1]), int(bbx[0])), (int(bbx[3]), int(bbx[2])), color=(255, 255, 0), thickness=1)
+                cv2.circle(tmp, (int(bbx[3]) - int(bbx[1]), int(bbx[2]) - int(bbx[0])), 1, color=(255, 255, 0))
 
             for idx, bbxx in enumerate(gt_bbox):
-                cv2.rectangle(tmp, (int(bbxx[1]), int(bbxx[0])), (int(bbxx[3]), int(bbxx[2])), color=(255, 0, 0), thickness=2)
-            # for idxx in range(len(gt_rpn_label)):
-            #     if gt_rpn_label[idxx].item() == 1:
-            #         cv2.rectangle(tmp, (anchor[idxx][1], anchor[idxx][0]), (anchor[idxx][3], anchor[idxx][2]), color=(255, 255, 255))
+                cv2.rectangle(tmp, (int(bbxx[1]), int(bbxx[0])), (int(bbxx[3]), int(bbxx[2])), color=(255, 0, 0), thickness=3)
 
-            cv2.imwrite("/home/dzc/Desktop/CASIA/proj/mvRPN-det/dzc.jpg", tmp)
+            cv2.imwrite("/home/dzc/Desktop/CASIA/proj/mvRPN-det/train_res.jpg", tmp)
 
-            image_PIL = Image.open("/home/dzc/Desktop/CASIA/proj/mvRPN-det/dzc.jpg")
-            tmp = np.array(image_PIL)
-
-            writer.add_image('pred bboxes', tmp, dataformats='HWC')
-
-
-
-    def test(self, data_loader):
+    def test(self,epoch, data_loader, writer):
         self.model.eval()
-        for batch_idx, (imgs, bbox, frame) in enumerate(data_loader):
+        for batch_idx, (imgs, bbox, dirs, frame) in enumerate(data_loader):
             with torch.no_grad():
-                rpn_locs, rpn_scores, anchor = self.model(imgs)
+                rpn_locs, rpn_scores, anchor, rois, roi_indices = self.model(imgs)
+
+            img_size = (Const.grid_height, Const.grid_width)
+            rpn_locs, rpn_scores, anchor = self.model(imgs)
 
             rpn_loc = rpn_locs[0]
             rpn_score = rpn_scores[0]
+            gt_bbox = gt_bbox[0]
 
-            # ------------loc -> bbox--------------
+            gt_rpn_loc, gt_rpn_label = self.anchor_target_creator(
+                at.tonumpy(gt_bbox),
+                anchor,
+                img_size)
 
+            # rpn_loc_loss = nn.MSELoss()(rpn_loc, torch.tensor(gt_rpn_loc, dtype=torch.float).to("cuda:0"))
 
+            rpn_loc_loss = _fast_rcnn_loc_loss(
+                rpn_loc,
+                gt_rpn_loc,
+                gt_rpn_label,
+                self.rpn_sigma)
+
+            gt_rpn_label = torch.tensor(gt_rpn_label).long()
+            # NOTE: default value of ignore_index is -100 ...
+            rpn_cls_loss = nn.CrossEntropyLoss(ignore_index=-1)(rpn_score, gt_rpn_label.to("cuda:0"))
+
+            Loss = rpn_loc_loss / 6 + rpn_cls_loss
+
+            # ------------------------------------------------------------
+            Loss.backward()
+            niter = epoch * len(data_loader) + batch_idx
+
+            writer.add_scalar("Test Total Loss", Loss, niter)
+            writer.add_scalar("Test rpn_loc_loss", rpn_loc_loss / 6, niter)
+            writer.add_scalar("Test rpn_cls_loss", rpn_cls_loss, niter)
+
+            if batch_idx % 10 == 0:
+                print(Loss, rpn_loc_loss / 6, rpn_cls_loss)
+
+            bbox = loc2bbox(anchor, rpn_loc.detach().cpu().numpy())
+            rpn_score = nn.Softmax()(rpn_score)
+            conf_scores = rpn_score[:, 1].view(1, -1).squeeze()
+            left_bbox, left_conf = nms_new(bbox, conf_scores.detach().cpu(), left=4)
+
+            tmp = cv2.imread("/home/dzc/Data/4carreal_0318blend/bevimgs/%d.jpg" % frame)
+
+            for idx, bbx in enumerate(left_bbox):
+                cv2.rectangle(tmp, (int(bbx[1]), int(bbx[0])), (int(bbx[3]), int(bbx[2])), color=(255, 255, 0),
+                              thickness=2)
+
+            for idx, bbxx in enumerate(gt_bbox):
+                cv2.rectangle(tmp, (int(bbxx[1]), int(bbxx[0])), (int(bbxx[3]), int(bbxx[2])), color=(255, 0, 0),
+                              thickness=2)
+
+            cv2.imwrite("/home/dzc/Desktop/CASIA/proj/mvRPN-det/test_res.jpg", tmp)
+            image_PIL = Image.open("/home/dzc/Desktop/CASIA/proj/mvRPN-det/test_res.jpg")
+            tmp = np.array(image_PIL)
+
+            writer.add_image('Testing Pred Bboxes', tmp, dataformats='HWC')
 
 
 def _smooth_l1_loss(x, t, in_weight, sigma):

@@ -1,7 +1,8 @@
 import torch
 import numpy as np
 
-def nms_new(bboxes, confidence,consider = 300, left=4):
+
+def nms_new(bboxes, confidence, left=4, threshold=0.1):
     bbox = bboxes.squeeze().astype(int)
     confidence = confidence.squeeze()
     keep = torch.zeros(confidence.shape).long()
@@ -9,19 +10,22 @@ def nms_new(bboxes, confidence,consider = 300, left=4):
         return keep
 
     v, indices = confidence.sort(0)  # sort in ascending order
-    indices = indices[-consider:]  # indices of the top-k largest vals
 
     bbox_keep = []
     indices_keep = []
     i = 1
-    while len(bbox_keep) < left and indices.numel() > 0 and i < consider:
+    while len(bbox_keep) < left and len(indices) > 0:
         if len(bbox_keep) == 0:
-            bbox_keep.append(bbox[indices[-i]])
-        elif keep_box(bbox_keep, bbox[indices[-i]], iou_threash=0.1):
-            bbox_keep.append(bbox[indices[-i]])
-            indices_keep.append((indices[-i]).item())
+            bbox_keep.append(bbox[indices[-1]])
+        elif keep_box(bbox_keep, bbox[indices[-1]], iou_threash=threshold):
+            bbox_keep.append(bbox[indices[-1]])
+            indices_keep.append((indices[-1]).item())
+        # confidence = confidence[:-1]
+        indices = indices[:-1]
         i += 1
+        # print(i, len(indices))
     return bbox_keep, confidence[indices_keep]
+
 
 def bbox_iou(bbox_a, bbox_b):
     """Calculate the Intersection of Unions (IoUs) between bounding boxes.
@@ -52,8 +56,8 @@ def bbox_iou(bbox_a, bbox_b):
     """
     # print(bbox_a, bbox_b)
 
-    bbox_a = np.array(bbox_a).reshape((1,4))
-    bbox_b = np.array(bbox_b).reshape((1,4))
+    bbox_a = np.array(bbox_a).reshape((1, 4))
+    bbox_b = np.array(bbox_b).reshape((1, 4))
 
     if bbox_a.shape[1] != 4 or bbox_b.shape[1] != 4:
         raise IndexError
@@ -66,6 +70,7 @@ def bbox_iou(bbox_a, bbox_b):
     area_a = np.prod(bbox_a[:, 2:] - bbox_a[:, :2], axis=1)
     area_b = np.prod(bbox_b[:, 2:] - bbox_b[:, :2], axis=1)
     return area_i / (area_a[:, None] + area_b - area_i)
+
 
 def keep_box(boxes, target, iou_threash=0.4):
     res = True

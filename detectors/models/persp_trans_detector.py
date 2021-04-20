@@ -10,6 +10,7 @@ import matplotlib
 from detectors.models.mobilenet import MobileNetV3_Small, MobileNetV3_Large
 from detectors.models.region_proposal_network import RegionProposalNetwork
 import cv2
+from EX_CONST import Const
 matplotlib.use('Agg')
 
 class Reshape(nn.Module):
@@ -58,11 +59,11 @@ class PerspTransDetector(nn.Module):
             world_features.append(world_feature.to('cuda:0'))
         world_features = torch.cat(world_features + [self.coord_map.repeat([B, 1, 1, 1]).to('cuda:0')], dim=1)
         # vis_feature(world_features, max_num=5, out_path='/home/dzc/Desktop/CASIA/proj/mvRPN-det/images/')
-        rpn_locs, rpn_scores, anchor = self.rpn(world_features)
+        rpn_locs, rpn_scores, anchor, rois, roi_indices = self.rpn(world_features, Const.grid_size)
 
         # vis_feature(world_features, max_num=5, out_path='/home/dzc/Desktop/CASIA/proj/mvRPN-det/images/')
 
-        return rpn_locs, rpn_scores, anchor
+        return rpn_locs, rpn_scores, anchor, rois, roi_indices
 
 
     def get_imgcoord2worldgrid_matrices(self, intrinsic_matrices, extrinsic_matrices, worldgrid2worldcoord_mat):

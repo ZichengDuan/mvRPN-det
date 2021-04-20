@@ -51,6 +51,7 @@ class RegionProposalNetwork(nn.Module):
         self.anchor_base = generate_anchor_base(
             anchor_scales=anchor_scales, ratios=ratios)
         self.feat_stride = feat_stride
+        self.proposal_layer = ProposalCreator(self, **proposal_creator_params)
         n_anchor = self.anchor_base.shape[0]
         self.conv1 = nn.Conv2d(in_channels, mid_channels, 3, 1, 1)
         self.score = nn.Conv2d(mid_channels, n_anchor * 2, 1, 1, 0)
@@ -59,7 +60,7 @@ class RegionProposalNetwork(nn.Module):
         normal_init(self.score, 0, 0.01)
         normal_init(self.loc, 0, 0.01)
 
-    def forward(self, x):
+    def forward(self, x, img_size, scale=1.):
         """Forward Region Proposal Network.
 
         Here are notations.
@@ -80,7 +81,11 @@ class RegionProposalNetwork(nn.Module):
         Returns:
             (~torch.autograd.Variable, ~torch.autograd.Variable, array, array, array):
 
-            This is a tuple of five following values.
+            This is a tuple of five following valueslice(0, 4, 2)] = np.clip(
+        #     roi[:, slice(0, 4, 2)], 0, img_size[0])
+        # roi[:, slice(1, 4, 2)] = np.clip(
+        #     roi[:, slice(1, 4, 2)], 0, img_size[1])
+.
 
             * **rpn_locs**: Predicted bounding box offsets and scales for \
                 anchors. Its shape is :math:`(N, H W A, 4)`.
@@ -102,15 +107,37 @@ class RegionProposalNetwork(nn.Module):
         anchor = _enumerate_shifted_anchor(
             np.array(self.anchor_base),
             self.feat_stride, hh, ww)
+
+        n_anchor = anchor.shape[0] // (hh * ww)
         h = F.relu(self.conv1(x))
         rpn_locs = self.loc(h)
         rpn_locs = rpn_locs.permute(0, 2, 3, 1).contiguous().view(n, -1, 4)
         rpn_scores = self.score(h)
         rpn_scores = rpn_scores.permute(0, 2, 3, 1).contiguous()
         # rpn_softmax_scores = F.softmax(rpn_scores.view(n, hh, ww, n_anchor, 2), dim=4)
+        rpn_softmax_scores = F.softmax(rpn_scores.view(n, hh, ww, n_anchor, 2), dim=4)
+        rpn_fg_scores = rpn_softmax_scores[:, :, :, :, 1].contiguous()
+        rpn_fg_scores = rpn_fg_scores.view(n, -1)
         rpn_scores = rpn_scores.view(n, -1, 2)
 
-        return rpn_locs, rpn_scores, anchor
+        rois = list()
+        roi_indices = list()
+        for i in range(n):
+            roi = self.proposal_layer(
+                rpn_locs[i].cpu().data.numpy(),
+                rpn_fg_scores[i].cpu().data.numpy(),
+                anchor, img_size,
+                scale=scale)
+            batch_index = i * np.ones((len(roi),), dtype=np.int32)
+            rois.append(roi)
+            roi_indices.append(batch_index)
+
+        rois = np.concatenate(rois, axis=0)
+        roi_indices = np.concatenate(roi_indices, axis=0)
+
+
+
+        return rpn_locs, rpn_scores, anchor, rois, roi_indices
 
 
 def _enumerate_shifted_anchor(anchor_base, feat_stride, height, width):

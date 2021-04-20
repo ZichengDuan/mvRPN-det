@@ -70,7 +70,7 @@ def main(args):
 
             loss = trainer.train(epoch, train_loader, optimizer, writer)
             print('Testing...')
-            # trainer.test(test_loader)
+            # trainer.test(epoch, test_loader, writer)
             # torch.save(model.state_dict(), os.path.join('/home/dzc/Desktop/CASIA/proj/mvdet/MVDet/finalModels/mvdet_model.pth'))
     writer.close()
 if __name__ == '__main__':
@@ -83,7 +83,7 @@ if __name__ == '__main__':
     parser.add_argument('-j', '--num_workers', type=int, default=8)
     parser.add_argument('-b', '--batch_size', type=int, default=1, metavar='N',
                         help='input batch size for training (default: 1)')
-    parser.add_argument('--epochs', type=int, default=4, metavar='N', help='number of epochs to train (default: 10)')
+    parser.add_argument('--epochs', type=int, default=3, metavar='N', help='number of epochs to train (default: 10)')
     parser.add_argument('--lr', type=float, default=0.0001, metavar='LR', help='learning rate (default: 0.1)')
     parser.add_argument('--weight_decay', type=float, default=1e-5)
     parser.add_argument('--momentum', type=float, default=0.5, metavar='M', help='SGD momentum (default: 0.5)')
