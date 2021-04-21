@@ -100,8 +100,8 @@ def read_txt(left_right_dir):
             right_xmax, right_xmin, right_ymax, right_ymin = int(right_xmax), int(right_xmin), int(right_ymax), int(right_ymin)
 
             # -----------------------------------------
-            x1_ori, x2_ori, x3_ori, x4_ori = world_x / 10 + 30, world_x / 10 + 30, world_x / 10 - 30, world_x / 10 - 30
-            y1_ori, y2_ori, y3_ori, y4_ori = world_y / 10 + 30, world_y / 10 - 30, world_y / 10 - 30, world_y / 10 + 30
+            x1_ori, x2_ori, x3_ori, x4_ori = world_x / 10 + 26, world_x / 10 + 26, world_x / 10 - 26, world_x / 10 - 26
+            y1_ori, y2_ori, y3_ori, y4_ori = world_y / 10 + 26, world_y / 10 - 26, world_y / 10 - 26, world_y / 10 + 26
             # print("ori: ", x1_ori, x2_ori, x3_ori, x4_ori)
             x1_rot, x2_rot, x3_rot, x4_rot = \
                 int(math.cos(angle) * (x1_ori - world_x / 10) - math.sin(angle) * (y1_ori - world_y / 10) + world_x / 10), \
