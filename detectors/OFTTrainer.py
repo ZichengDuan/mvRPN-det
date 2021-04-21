@@ -42,7 +42,7 @@ class OFTtrainer(BaseTrainer):
 
         # -----------------init local params----------------------
         Loss = 0
-        for batch_idx, (imgs, gt_bbox, dirs, frame, extrin, intrin) in enumerate(data_loader):
+        for batch_idx, (imgs, gt_bbox, gt_left_bbox, gt_right_bbox, dirs, frame, extrin, intrin) in enumerate(data_loader):
             optimizer.zero_grad()
             img_size = (Const.grid_height, Const.grid_width)
             rpn_locs, rpn_scores, anchor, rois, roi_indices = self.model(imgs)
@@ -50,6 +50,8 @@ class OFTtrainer(BaseTrainer):
             rpn_loc = rpn_locs[0]
             rpn_score = rpn_scores[0]
             gt_bbox = gt_bbox[0]
+            gt_left_bbox = gt_left_bbox[0]
+            gt_right_bbox = gt_right_bbox[0]
             dir = dirs[0]
             roi = rois
             # -----------------RPN Loss----------------------
@@ -70,6 +72,7 @@ class OFTtrainer(BaseTrainer):
             rpn_cls_loss = nn.CrossEntropyLoss(ignore_index=-1)(rpn_score, gt_rpn_label.to("cuda:0"))
 
             # ----------------ROI------------------------------
+            # 还需要在双视角下的回归gt，以及筛选过后的分类gt，gt_left_loc, gt_left_label, gt_right_loc, gt_right_label
             sample_roi, gt_roi_loc, gt_roi_label = self.proposal_target_creator(
                 roi,
                 at.tonumpy(gt_bbox),
@@ -116,28 +119,38 @@ class OFTtrainer(BaseTrainer):
             # for idx, bbxx in enumerate(gt_bbox):
             #     cv2.rectangle(tmp, (int(bbxx[1]), int(bbxx[0])), (int(bbxx[3]), int(bbxx[2])), color=(255, 0, 0), thickness=3)
             #
-            # cv2.imwrite("/home/dzc/Desktop/CASIA/proj/mvRPN-det/train_res.jpg", tmp)
+            # cv2.imwrite("/home/dzc/Desktop/CASIA/proj/mvRPN-det/images/train_res.jpg", tmp)
 
             # ----------------生成3D外接框，并投影回原图，先拿左图为例子------------------
 
-            roi_3d = generate_3d_bbox(gt_bbox)
+            roi_3d = generate_3d_bbox(sample_roi)
 
             left_2d_bbox, right_2d_bbox = getprojected_3dbox(roi_3d, extrin, intrin)
             left_img = cv2.imread("/home/dzc/Data/4carreal_0318blend/img/left1/%d.jpg" % frame)
-            print(left_2d_bbox.shape)
+            right_img = cv2.imread("/home/dzc/Data/4carreal_0318blend/img/right2/%d.jpg" % frame)
             # for car in left_2d_bbox:
             #     for n in range(len(car)):
             #         for m in range(len(car)):
             #             if abs(n - m) == 1 or abs(n - m) == 4:
             #                 cv2.line(left_img, (car[n][0], car[n][1]), (car[m][0], car[m][1]), color=(255, 255, 0), thickness=1)
 
-            for car in left_2d_bbox:
-                xmax = max(car[:, 0])
-                xmin = min(car[:, 0])
-                ymax = max(car[:, 1])
-                ymin = min(car[:, 1])
-                cv2.rectangle(left_img, (xmin, ymin), (xmax, ymax), color = (255, 255, 0), thickness = 2)
-            cv2.imwrite("/home/dzc/Desktop/CASIA/proj/mvRPN-det/left_img.jpg", left_img)
+            # for car in left_2d_bbox:
+            #     xmax = max(car[:, 0])
+            #     xmin = min(car[:, 0])
+            #     ymax = max(car[:, 1])
+            #     ymin = min(car[:, 1])
+            #     cv2.rectangle(left_img, (xmin, ymin), (xmax, ymax), color = (255, 255, 0), thickness = 1)
+            # cv2.imwrite("/home/dzc/Desktop/CASIA/proj/mvRPN-det/images/left_img.jpg", left_img)
+            #
+            # for car in right_2d_bbox:
+            #     xmax = max(car[:, 0])
+            #     xmin = min(car[:, 0])
+            #     ymax = max(car[:, 1])
+            #     ymin = min(car[:, 1])
+            #     cv2.rectangle(right_img, (xmin, ymin), (xmax, ymax), color = (255, 255, 0), thickness = 2)
+            # cv2.imwrite("/home/dzc/Desktop/CASIA/proj/mvRPN-det/images/right_img.jpg", right_img)
+
+
 def test(self,epoch, data_loader, writer):
         self.model.eval()
         for batch_idx, (imgs, bbox, dirs, frame) in enumerate(data_loader):

@@ -42,7 +42,9 @@ class oftFrameDataset(VisionDataset):
         self.proj_mats = [torch.from_numpy(map_zoom_mat @ imgcoord2worldgrid_matrices[cam] @ img_zoom_mat)
                           for cam in range(2)]
 
-        self.bboxes = {}
+        self.bev_bboxes = {}
+        self.left_bboxes = {}
+        self.right_bboxes = {}
         self.dir = {}
         self.img_fpaths = self.base.get_image_fpaths(frame_range)
         self.gt_fpath = os.path.join(self.root, 'gt.txt')
@@ -84,7 +86,9 @@ class oftFrameDataset(VisionDataset):
 
     def prepare_bbox(self, frame_range):
         for fname in sorted(os.listdir(os.path.join(self.root, 'od_annotations'))):
-            frame_box = []
+            frame_bev_box = []
+            frame_left_box = []
+            frame_right_box = []
             frame = int(fname.split('.')[0])
             if frame in frame_range:
                 with open(os.path.join(self.root, 'od_annotations', fname)) as json_file:
@@ -94,8 +98,22 @@ class oftFrameDataset(VisionDataset):
                     xmin_od = int(car["xmin_od"])
                     ymax_od = int(car["ymax_od"])
                     xmax_od = int(car["xmax_od"])
-                    frame_box.append([ymin_od, xmin_od, ymax_od, xmax_od])
-                self.bboxes[frame] = frame_box
+                    frame_bev_box.append([ymin_od, xmin_od, ymax_od, xmax_od])
+
+                    for j in range(self.num_cam):
+                        ymin = car["views"][j]["ymin"]
+                        xmin = car["views"][j]["xmin"]
+                        ymax = car["views"][j]["ymax"]
+                        xmax = car["views"][j]["xmax"]
+                        if j == 0:
+                            frame_left_box.append([ymin, xmin, ymax, xmax])
+                        else:
+                            frame_right_box.append([ymin, xmin, ymax, xmax])
+
+                self.bev_bboxes[frame] = frame_bev_box
+                self.left_bboxes[frame] = frame_left_box
+                self.right_bboxes[frame] = frame_right_box
+
 
     def prepare_dir(self, frame_range):
         for fname in sorted(os.listdir(os.path.join(self.root, 'od_annotations'))):
@@ -109,9 +127,8 @@ class oftFrameDataset(VisionDataset):
                     frame_dir.append(dir)
                 self.dir[frame] = frame_dir
 
-
     def __getitem__(self, index):
-        frame = list(self.bboxes.keys())[index]
+        frame = list(self.bev_bboxes.keys())[index]
         imgs = []
         for cam in range(self.num_cam):
             fpath = self.img_fpaths[cam][frame]
@@ -120,12 +137,14 @@ class oftFrameDataset(VisionDataset):
                 img = self.transform(img)
             imgs.append(img)
         imgs = torch.stack(imgs)
-        bboxes = torch.tensor(self.bboxes[frame])
+        bev_bboxes = torch.tensor(self.bev_bboxes[frame])
+        left_bboxes = torch.tensor(self.left_bboxes[frame])
+        right_bboxes = torch.tensor(self.right_bboxes[frame])
         dirs = torch.tensor(self.dir[frame])
-        return imgs, bboxes, dirs, frame, self.extrinsic_matrix, self.intrinsic_matrix
+        return imgs, bev_bboxes, left_bboxes, right_bboxes, dirs, frame, self.extrinsic_matrix, self.intrinsic_matrix
 
     def __len__(self):
-        return len(self.bboxes.keys())
+        return len(self.bev_bboxes.keys())
 
 def get_imgcoord2worldgrid_matrices(intrinsic_matrices, extrinsic_matrices, worldgrid2worldcoord_mat):
     projection_matrices = {}
@@ -137,6 +156,7 @@ def get_imgcoord2worldgrid_matrices(intrinsic_matrices, extrinsic_matrices, worl
         permutation_mat = np.array([[1, 0, 0], [0, 1, 0], [0, 0, 1]])
         projection_matrices[cam] = permutation_mat @ imgcoord2worldgrid_mat
     return projection_matrices
+
 
 if __name__ == "__main__":
     data_path = os.path.expanduser('/home/dzc/Data/4cardata')
