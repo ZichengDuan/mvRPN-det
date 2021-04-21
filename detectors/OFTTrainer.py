@@ -125,11 +125,18 @@ class OFTtrainer(BaseTrainer):
             left_2d_bbox, right_2d_bbox = getprojected_3dbox(roi_3d, extrin, intrin)
             left_img = cv2.imread("/home/dzc/Data/4carreal_0318blend/img/left1/%d.jpg" % frame)
             print(left_2d_bbox.shape)
+            # for car in left_2d_bbox:
+            #     for n in range(len(car)):
+            #         for m in range(len(car)):
+            #             if abs(n - m) == 1 or abs(n - m) == 4:
+            #                 cv2.line(left_img, (car[n][0], car[n][1]), (car[m][0], car[m][1]), color=(255, 255, 0), thickness=1)
+
             for car in left_2d_bbox:
-                for n in range(len(car)):
-                    for m in range(len(car)):
-                        if abs(n - m) == 1 or abs(n - m) == 4:
-                            cv2.line(left_img, (car[n][0], car[n][1]), (car[m][0], car[m][1]), color=(255, 255, 0), thickness=1)
+                xmax = max(car[:, 0])
+                xmin = min(car[:, 0])
+                ymax = max(car[:, 1])
+                ymin = min(car[:, 1])
+                cv2.rectangle(left_img, (xmin, ymin), (xmax, ymax), color = (255, 255, 0), thickness = 2)
             cv2.imwrite("/home/dzc/Desktop/CASIA/proj/mvRPN-det/left_img.jpg", left_img)
 def test(self,epoch, data_loader, writer):
         self.model.eval()
