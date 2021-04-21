@@ -64,7 +64,8 @@ def read_txt(left_right_dir):
                 angle += 2 * np.pi
 
             # direc = int(angle/ (np.pi / 4))
-            direc = int(cont_left[-2])
+            direc_left = int(cont_left[-2])
+            direc_right = int(cont_right[-2])
             # print(angle, direc)
 
             ## 出去一部分
@@ -139,7 +140,8 @@ def read_txt(left_right_dir):
             data = json.loads(json.dumps(data))
             data["VehicleID"] = pID
             data["type"] = l_lhs
-            data["direc"] = int(direc)
+            data["direc_left"] = int(direc_left)
+            data["direc_right"] = int(direc_right)
             data["angle"] = angle
             data["wx"] = world_x
             data["wy"] = world_y
