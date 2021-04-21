@@ -23,11 +23,13 @@ class oftFrameDataset(VisionDataset):
         self.root, self.num_cam, self.num_frame = base.root, base.num_cam, base.num_frame
         self.img_shape, self.worldgrid_shape = base.img_shape, base.worldgrid_shape  # H,W; N_row,N_col
         self.reducedgrid_shape = list(map(lambda x: int(x / self.grid_reduce), self.worldgrid_shape))
+        self.extrinsic_matrix = base.extrinsic_matrices
+        self.intrinsic_matrix = base.intrinsic_matrices
 
         if train:
-            frame_range = range(400, 1500)
+            frame_range = list(range(0, 1500)) + list(range(2000, 3600))
         else:
-            frame_range = range(3500, 3600)
+            frame_range = range(1500, 1999)
 
         self.upsample_shape = list(map(lambda x: int(x / self.img_reduce), self.img_shape))
         img_reduce_local = np.array(self.img_shape) / np.array(self.upsample_shape)
@@ -120,7 +122,7 @@ class oftFrameDataset(VisionDataset):
         imgs = torch.stack(imgs)
         bboxes = torch.tensor(self.bboxes[frame])
         dirs = torch.tensor(self.dir[frame])
-        return imgs, bboxes, dirs, frame
+        return imgs, bboxes, dirs, frame, self.extrinsic_matrix, self.intrinsic_matrix
 
     def __len__(self):
         return len(self.bboxes.keys())

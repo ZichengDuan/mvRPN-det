@@ -31,6 +31,7 @@ class Const:
     #------------------------------
     nms_left = 4
 
-    nms_consider = 400
+    # nms_consider = 400
+    #
+    # nms_threshold = 0
 
-    nms_threshold = 0

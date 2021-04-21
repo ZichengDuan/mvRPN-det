@@ -42,7 +42,7 @@ class OFTtrainer(BaseTrainer):
 
         # -----------------init local params----------------------
         Loss = 0
-        for batch_idx, (imgs, gt_bbox, dirs, frame) in enumerate(data_loader):
+        for batch_idx, (imgs, gt_bbox, dirs, frame, extrin, intrin) in enumerate(data_loader):
             optimizer.zero_grad()
             img_size = (Const.grid_height, Const.grid_width)
             rpn_locs, rpn_scores, anchor, rois, roi_indices = self.model(imgs)
@@ -70,16 +70,13 @@ class OFTtrainer(BaseTrainer):
             rpn_cls_loss = nn.CrossEntropyLoss(ignore_index=-1)(rpn_score, gt_rpn_label.to("cuda:0"))
 
             # ----------------ROI------------------------------
-            # 先投影到原来的图上，再搞生成对应的8个角度的label？还是说先在bev下生成八个角度的label，再
             sample_roi, gt_roi_loc, gt_roi_label = self.proposal_target_creator(
                 roi,
                 at.tonumpy(gt_bbox),
                 at.tonumpy(dir),
                 self.loc_normalize_mean,
                 self.loc_normalize_std)
-            # NOTE it's all zero because now it only support for batch=1 now
             sample_roi_index = torch.zeros(len(sample_roi))
-            # print(sample_roi.shape)
 
 
             loss = rpn_loc_loss / 6 + rpn_cls_loss
@@ -94,34 +91,47 @@ class OFTtrainer(BaseTrainer):
             writer.add_scalar("Training rpn_cls_loss", rpn_cls_loss / (batch_idx + 1), niter)
 
             if batch_idx % 10 == 0:
-                print("Training Total Loss: ", Loss.detach().cpu() / (batch_idx + 1),
-                      "Training Loc Loss: ", rpn_loc_loss.detach().cpu() / 6 * (batch_idx + 1),
-                      "Training Cls Loss: ", rpn_cls_loss.detach().cpu() / (batch_idx + 1))
+                print("Training Total Loss: ", Loss.detach().cpu().item() / (batch_idx + 1),
+                      "Training Loc Loss: ", rpn_loc_loss.detach().cpu().item() / 6 * (batch_idx + 1),
+                      "Training Cls Loss: ", rpn_cls_loss.detach().cpu().item() / (batch_idx + 1))
 
 
 
             # ------------loc -> bbox--------------
-            bbox = loc2bbox(anchor, rpn_loc.detach().cpu().numpy())
-            rpn_score = nn.Softmax()(rpn_score)
-            conf_scores = rpn_score[:, 1].view(1, -1).squeeze()
-            # print("dzc", max(conf_scores.squeeze()))
-            left_bbox, left_conf = nms_new(bbox, conf_scores.detach().cpu(), left=4, threshold=0.1)
+            # bbox = loc2bbox(anchor, rpn_loc.detach().cpu().numpy())
+            # rpn_score = nn.Softmax()(rpn_score)
+            # conf_scores = rpn_score[:, 1].view(1, -1).squeeze()
+            # # print("dzc", max(conf_scores.squeeze()))
+            # left_bbox, left_conf = nms_new(bbox, conf_scores.detach().cpu(), left=4, threshold=0.1)
+            #
+            # tmp = cv2.imread("/home/dzc/Data/4carreal_0318blend/bevimgs/%d.jpg" % frame)
+            #
+            # # for idx, bbx in enumerate(left_bbox):
+            # #     cv2.rectangle(tmp, (int(bbx[1]), int(bbx[0])), (int(bbx[3]), int(bbx[2])), color=(255, 255, 0), thickness=2)
+            #
+            # for idx, bbx in enumerate(sample_roi):
+            #     # cv2.rectangle(tmp, (int(bbx[1]), int(bbx[0])), (int(bbx[3]), int(bbx[2])), color=(255, 255, 0), thickness=1)
+            #     cv2.circle(tmp, (int((bbx[3] + bbx[1]) / 2), (int((bbx[2] + bbx[0]) / 2))), 1, color=(255, 255, 0))
+            #
+            # for idx, bbxx in enumerate(gt_bbox):
+            #     cv2.rectangle(tmp, (int(bbxx[1]), int(bbxx[0])), (int(bbxx[3]), int(bbxx[2])), color=(255, 0, 0), thickness=3)
+            #
+            # cv2.imwrite("/home/dzc/Desktop/CASIA/proj/mvRPN-det/train_res.jpg", tmp)
 
-            tmp = cv2.imread("/home/dzc/Data/4carreal_0318blend/bevimgs/%d.jpg" % frame)
+            # ----------------生成3D外接框，并投影回原图，先拿左图为例子------------------
 
-            # for idx, bbx in enumerate(left_bbox):
-            #     cv2.rectangle(tmp, (int(bbx[1]), int(bbx[0])), (int(bbx[3]), int(bbx[2])), color=(255, 255, 0), thickness=2)
+            roi_3d = generate_3d_bbox(gt_bbox)
 
-            for idx, bbx in enumerate(sample_roi):
-                # cv2.rectangle(tmp, (int(bbx[1]), int(bbx[0])), (int(bbx[3]), int(bbx[2])), color=(255, 255, 0), thickness=1)
-                cv2.circle(tmp, (int(bbx[3]) - int(bbx[1]), int(bbx[2]) - int(bbx[0])), 1, color=(255, 255, 0))
-
-            for idx, bbxx in enumerate(gt_bbox):
-                cv2.rectangle(tmp, (int(bbxx[1]), int(bbxx[0])), (int(bbxx[3]), int(bbxx[2])), color=(255, 0, 0), thickness=3)
-
-            cv2.imwrite("/home/dzc/Desktop/CASIA/proj/mvRPN-det/train_res.jpg", tmp)
-
-    def test(self,epoch, data_loader, writer):
+            left_2d_bbox, right_2d_bbox = getprojected_3dbox(roi_3d, extrin, intrin)
+            left_img = cv2.imread("/home/dzc/Data/4carreal_0318blend/img/left1/%d.jpg" % frame)
+            print(left_2d_bbox.shape)
+            for car in left_2d_bbox:
+                for n in range(len(car)):
+                    for m in range(len(car)):
+                        if abs(n - m) == 1 or abs(n - m) == 4:
+                            cv2.line(left_img, (car[n][0], car[n][1]), (car[m][0], car[m][1]), color=(255, 255, 0), thickness=1)
+            cv2.imwrite("/home/dzc/Desktop/CASIA/proj/mvRPN-det/left_img.jpg", left_img)
+def test(self,epoch, data_loader, writer):
         self.model.eval()
         for batch_idx, (imgs, bbox, dirs, frame) in enumerate(data_loader):
             with torch.no_grad():
@@ -209,3 +219,43 @@ def _fast_rcnn_loc_loss(pred_loc, gt_loc, gt_label, sigma):
     # Normalize by total number of negtive and positive rois.
     loc_loss /= ((gt_label >= 0).sum().float())  # ignore gt_label==-1 for rpn_loss
     return loc_loss
+
+def generate_3d_bbox(pred_bboxs):
+    # 输出以左下角为原点的3d坐标
+    n_bbox = pred_bboxs.shape[0]
+    boxes_3d = [] #
+    for i in range(pred_bboxs.shape[0]):
+        ymax, xmax, ymin, xmin = pred_bboxs[i]
+        pt0 = [xmax, Const.grid_height - ymin, 0]
+        pt1 = [xmin, Const.grid_height - ymin, 0]
+        pt2 = [xmin, Const.grid_height - ymax, 0]
+        pt3 = [xmax, Const.grid_height - ymax, 0]
+        pt_h_0 = [xmax, Const.grid_height - ymin, Const.car_height]
+        pt_h_1 = [xmin, Const.grid_height - ymin, Const.car_height]
+        pt_h_2 = [xmin, Const.grid_height - ymax, Const.car_height]
+        pt_h_3 = [xmax, Const.grid_height - ymax, Const.car_height]
+        boxes_3d.append([pt0, pt1, pt2, pt3, pt_h_0, pt_h_1, pt_h_2, pt_h_3])
+    return np.array(boxes_3d).reshape((n_bbox, 8, 3))
+
+def getimage_pt(points3d, extrin, intrin):
+    # 此处输入的是以左下角为原点的坐标，输出的是opencv格式的左上角为原点的坐标
+    newpoints3d = np.vstack((points3d, 1.0))
+    Zc = np.dot(extrin, newpoints3d)[-1]
+    imagepoints = (np.dot(intrin, np.dot(extrin, newpoints3d)) / Zc).astype(np.int)
+    return [imagepoints[0, 0], imagepoints[1, 0]]
+
+def getprojected_3dbox(points3ds, extrin, intrin):
+    left_bboxes = []
+    right_bboxes = []
+    for i in range(points3ds.shape[0]):
+        left_bbox_2d = []
+        right_bbox_2d = []
+        for pt in points3ds[i]:
+            left = getimage_pt(pt.reshape(3, 1), extrin[0][0], intrin[0][0])
+            right = getimage_pt(pt.reshape(3, 1), extrin[1][0], intrin[1][0])
+            left_bbox_2d.append(left)
+            right_bbox_2d.append(right)
+        left_bboxes.append(left_bbox_2d)
+        right_bboxes.append(right_bbox_2d)
+
+    return np.array(left_bboxes).reshape((points3ds.shape[0], 8, 2)), np.array(right_bboxes).reshape((points3ds.shape[0], 8, 2))
