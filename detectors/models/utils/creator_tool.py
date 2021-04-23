@@ -1,3 +1,4 @@
+import cv2
 import numpy as np
 import cupy as cp
 
@@ -31,6 +32,205 @@ class ProposalTargetCreator(object):
 
     def __init__(self,
                  n_sample=256,
+                 pos_ratio=0.25, pos_iou_thresh=0.5,
+                 neg_iou_thresh_hi=0.5, neg_iou_thresh_lo=0.0
+                 ):
+        self.n_sample = n_sample
+        self.pos_ratio = pos_ratio
+        self.pos_iou_thresh = pos_iou_thresh
+        self.neg_iou_thresh_hi = neg_iou_thresh_hi
+        self.neg_iou_thresh_lo = neg_iou_thresh_lo  # NOTE:default 0.1 in py-faster-rcnn
+
+    def __call__(self, roi, gt_bev_bbox, left_label, right_label, left_gt_bbox, right_gt_bbox, extrin, intrin, frame,
+                 loc_normalize_mean=(0., 0., 0., 0.),
+                 loc_normalize_std=(0.1, 0.1, 0.2, 0.2)):
+        """Assigns ground truth to sampled proposals.
+
+        This function samples total of :obj:`self.n_sample` RoIs
+        from the combination of :obj:`roi` and :obj:`bbox`.
+        The RoIs are assigned with the ground truth class labels as well as
+        bounding box offsets and scales to match the ground truth bounding
+        boxes. As many as :obj:`pos_ratio * self.n_sample` RoIs are
+        sampled as foregrounds.
+
+        Offsets and scales of bounding boxes are calculated using
+        :func:`model.utils.bbox_tools.bbox2loc`.
+        Also, types of input arrays and output arrays are same.
+
+        Here are notations.
+
+        * :math:`S` is the total number of sampled RoIs, which equals \
+            :obj:`self.n_sample`.
+        * :math:`L` is number of object classes possibly including the \
+            background.
+
+        Args:
+            roi (array): Region of Interests (RoIs) from which we sample.
+                Its shape is :math:`(R, 4)`
+            bbox (array): The coordinates of ground truth bounding boxes.
+                Its shape is :math:`(R', 4)`.
+            label (array): Ground truth bounding box labels. Its shape
+                is :math:`(R',)`. Its range is :math:`[0, L - 1]`, where
+                :math:`L` is the number of foreground classes.
+            loc_normalize_mean (tuple of four floats): Mean values to normalize
+                coordinates of bouding boxes.
+            loc_normalize_std (tupler of four floats): Standard deviation of
+                the coordinates of bounding boxes.
+
+        Returns:
+            (array, array, array):
+
+            * **sample_roi**: Regions of interests that are sampled. \
+                Its shape is :math:`(S, 4)`.
+            * **gt_roi_loc**: Offsets and scales to match \
+                the sampled RoIs to the ground truth bounding boxes. \
+                Its shape is :math:`(S, 4)`.
+            * **gt_roi_label**: Labels assigned to sampled RoIs. Its shape is \
+                :math:`(S,)`. Its range is :math:`[0, L]`. The label with \
+                value 0 is the background.
+
+        """
+        left_remove_idx = []
+        right_remove_idx = []
+        for i in range(len(left_gt_bbox)):
+            if left_gt_bbox[i][0] == -1 and left_gt_bbox[i][1] == -1 and left_gt_bbox[i][2] == -1 and left_gt_bbox[i][3] == -1:
+                left_remove_idx.append(i)
+            if right_gt_bbox[i][0] == -1 and right_gt_bbox[i][1] == -1 and right_gt_bbox[i][2] == -1 and right_gt_bbox[i][3] == -1:
+                right_remove_idx.append(i)
+        # 得出左右两边需要删掉的那个框，再考虑剩下的事情
+
+        gt_left_bev_bbox = np.delete(gt_bev_bbox, left_remove_idx, axis=0)
+        gt_right_bev_bbox = np.delete(gt_bev_bbox, right_remove_idx, axis=0)
+        left_gt_bbox = np.delete(left_gt_bbox, left_remove_idx, axis=0)
+        right_gt_bbox = np.delete(right_gt_bbox, right_remove_idx, axis=0)
+
+        # left
+        # print(gt_left_bev_bbox.shape)
+        left_n_bbox, _ = gt_left_bev_bbox.shape
+        left_roi = np.concatenate((roi, gt_left_bev_bbox), axis=0)
+        left_pos_roi_per_image = np.round(self.n_sample * self.pos_ratio)
+        left_iou = bbox_iou(left_roi, gt_left_bev_bbox) # R， 4每个roi和gt的iou
+        left_gt_assignment = left_iou.argmax(axis=1) # 每个roi对应iou最大的一个gt框的索引值
+        left_max_iou = left_iou.max(axis=1) # 每个roi对应iou最大的一个gt框的置信度值
+        # Offset range of classes from [0, n_fg_class - 1] to [1, n_fg_class].
+        # The label with value 0 is the background.
+        gt_roi_label_left = left_label[left_gt_assignment] + 1 # 每一个roi对应的gt及其gt的分类
+
+        # Select foreground RoIs as those with >= pos_iou_thresh IoU.
+        left_pos_index = np.where(left_max_iou >= self.pos_iou_thresh)[0]
+        left_pos_roi_per_this_image = int(min(left_pos_roi_per_image, left_pos_index.size))
+        if left_pos_index.size > 0:
+            left_pos_index = np.random.choice(
+                left_pos_index, size=left_pos_roi_per_this_image, replace=False)
+
+        # Select background RoIs as those within
+        # [neg_iou_thresh_lo, neg_iou_thresh_hi).
+        left_neg_index = np.where((left_max_iou < self.neg_iou_thresh_hi) &
+                             (left_max_iou >= self.neg_iou_thresh_lo))[0]
+        left_neg_roi_per_this_image = self.n_sample - left_pos_roi_per_this_image
+        left_neg_roi_per_this_image = int(min(left_neg_roi_per_this_image,
+                                         left_neg_index.size))
+        if left_neg_index.size > 0:
+            left_neg_index = np.random.choice(
+                left_neg_index, size=left_neg_roi_per_this_image, replace=False)
+
+        # The indices that we're selecting (both positive and negative).
+        left_keep_index = np.append(left_pos_index, left_neg_index)
+        left_gt_label = gt_roi_label_left[left_keep_index]
+        left_gt_label[left_pos_roi_per_this_image:] = 0  # negative labels --> 0
+
+        left_sample_roi = left_roi[left_keep_index]
+
+        # -------------------------------right--------------------------------------
+        right_n_bbox, _ = gt_right_bev_bbox.shape
+        right_roi = np.concatenate((roi, gt_right_bev_bbox), axis=0)
+        right_pos_roi_per_image = np.round(self.n_sample * self.pos_ratio)
+        right_iou = bbox_iou(right_roi, gt_right_bev_bbox)  # R， 4每个roi和gt的iou
+        right_gt_assignment = right_iou.argmax(axis=1)  # 每个roi对应iou最大的一个gt框的索引值
+        right_max_iou = right_iou.max(axis=1)  # 每个roi对应iou最大的一个gt框的置信度值
+        # Offset range of classes from [0, n_fg_class - 1] to [1, n_fg_class].
+        # The label with value 0 is the background.
+        gt_roi_label_right = right_label[right_gt_assignment] + 1
+
+        # Select foreground RoIs as those with >= pos_iou_thresh IoU.
+        right_pos_index = np.where(right_max_iou >= self.pos_iou_thresh)[0]
+        right_pos_roi_per_this_image = int(min(right_pos_roi_per_image, right_pos_index.size))
+        if right_pos_index.size > 0:
+            right_pos_index = np.random.choice(
+                right_pos_index, size=right_pos_roi_per_this_image, replace=False)
+
+        # Select background RoIs as those within
+        # [neg_iou_thresh_lo, neg_iou_thresh_hi).
+        right_neg_index = np.where((right_max_iou < self.neg_iou_thresh_hi) &
+                             (right_max_iou >= self.neg_iou_thresh_lo))[0]
+        right_neg_roi_per_this_image = self.n_sample - right_pos_roi_per_this_image
+        right_neg_roi_per_this_image = int(min(right_neg_roi_per_this_image,
+                                         right_neg_index.size))
+        if right_neg_index.size > 0:
+            right_neg_index = np.random.choice(
+                right_neg_index, size=right_neg_roi_per_this_image, replace=False)
+
+        # The indices that we're selecting (both positive and negative).
+        right_keep_index = np.append(right_pos_index, right_neg_index)
+
+        right_gt_label = gt_roi_label_right[right_keep_index]
+        right_gt_label[right_pos_roi_per_this_image:] = 0  # negative labels --> 0
+
+        right_sample_roi = right_roi[right_keep_index]
+        # ------------------------开始转换坐标-------------------------
+        left_roi_3d = generate_3d_bbox(left_sample_roi)
+        left_2d_bbox = getprojected_3dbox(left_roi_3d, extrin[0][0], intrin[0][0])
+        left_2d_bbox = get_outter(left_2d_bbox)
+
+        right_roi_3d = generate_3d_bbox(right_sample_roi)
+        right_2d_bbox = getprojected_3dbox(right_roi_3d, extrin[1][0], intrin[1][0])
+        right_2d_bbox = get_outter(right_2d_bbox)
+        # print(left_2d_bbox.shape)
+        left_gt_roi_loc = bbox2loc(left_2d_bbox, left_gt_bbox[left_gt_assignment[left_keep_index]])
+
+        left_img = cv2.imread("/home/dzc/Data/4carreal_0318blend/img/left1/%d.jpg" % frame)
+        for idx, bbx in enumerate(left_gt_bbox[left_gt_assignment[left_keep_index]]):
+            cv2.rectangle(left_img, (int(bbx[1]), int(bbx[0])), (int(bbx[3]), int(bbx[2])), color=(255, 255, 0), thickness=3)
+        for idx, bbx in enumerate(left_2d_bbox):
+            cv2.rectangle(left_img, (int(bbx[1]), int(bbx[0])), (int(bbx[3]), int(bbx[2])), color=(192, 0, 120), thickness=1)
+        cv2.imwrite("/home/dzc/Desktop/CASIA/proj/mvRPN-det/images/left_img_%d.jpg" % frame, left_img)
+        left_gt_loc = ((left_gt_roi_loc - np.array(loc_normalize_mean, np.float32)
+                       ) / np.array(loc_normalize_std, np.float32))
+        # print(left_gt_loc, right_2d_bbox)
+        # Compute offsets and scales to match sampled RoIs to the GTs.
+        # print((gt_bev_bbox[gt_assignment[keep_index]]).shape)
+        right_gt_roi_loc = bbox2loc(right_2d_bbox, right_gt_bbox[right_gt_assignment[right_keep_index]])
+        right_gt_loc = ((right_gt_roi_loc - np.array(loc_normalize_mean, np.float32)
+                       ) / np.array(loc_normalize_std, np.float32))
+
+        return left_2d_bbox, left_sample_roi, left_gt_loc, left_gt_label, right_2d_bbox, right_sample_roi, right_gt_loc, right_gt_label
+
+class ProposalTargetCreator_ori(object):
+    """Assign ground truth bounding boxes to given RoIs.
+
+    The :meth:`__call__` of this class generates training targets
+    for each object proposal.
+    This is used to train Faster RCNN [#]_.
+
+    .. [#] Shaoqing Ren, Kaiming He, Ross Girshick, Jian Sun. \
+    Faster R-CNN: Towards Real-Time Object Detection with \
+    Region Proposal Networks. NIPS 2015.
+
+    Args:
+        n_sample (int): The number of sampled regions.
+        pos_ratio (float): Fraction of regions that is labeled as a
+            foreground.
+        pos_iou_thresh (float): IoU threshold for a RoI to be considered as a
+            foreground.
+        neg_iou_thresh_hi (float): RoI is considered to be the background
+            if IoU is in
+            [:obj:`neg_iou_thresh_hi`, :obj:`neg_iou_thresh_hi`).
+        neg_iou_thresh_lo (float): See above.
+
+    """
+
+    def __init__(self,
+                 n_sample=128,
                  pos_ratio=0.25, pos_iou_thresh=0.5,
                  neg_iou_thresh_hi=0.5, neg_iou_thresh_lo=0.0
                  ):
@@ -126,12 +326,13 @@ class ProposalTargetCreator(object):
         sample_roi = roi[keep_index]
 
         # Compute offsets and scales to match sampled RoIs to the GTs.
+        # print(sample_roi.shape, bbox[gt_assignment[keep_index]].shape)
         gt_roi_loc = bbox2loc(sample_roi, bbox[gt_assignment[keep_index]])
+
         gt_roi_loc = ((gt_roi_loc - np.array(loc_normalize_mean, np.float32)
                        ) / np.array(loc_normalize_std, np.float32))
-
+        print(gt_roi_loc)
         return sample_roi, gt_roi_loc, gt_roi_label
-
 
 class AnchorTargetCreator(object):
     """Assign the ground truth bounding boxes to anchors.
@@ -453,3 +654,48 @@ class ProposalCreator:
             keep = keep[:n_post_nms]
         roi = roi[keep]
         return roi
+
+def generate_3d_bbox(pred_bboxs):
+    # 输出以左下角为原点的3d坐标
+    n_bbox = pred_bboxs.shape[0]
+    boxes_3d = [] #
+    for i in range(pred_bboxs.shape[0]):
+        ymax, xmax, ymin, xmin = pred_bboxs[i]
+        pt0 = [xmax, Const.grid_height - ymin, 0]
+        pt1 = [xmin, Const.grid_height - ymin, 0]
+        pt2 = [xmin, Const.grid_height - ymax, 0]
+        pt3 = [xmax, Const.grid_height - ymax, 0]
+        pt_h_0 = [xmax, Const.grid_height - ymin, Const.car_height]
+        pt_h_1 = [xmin, Const.grid_height - ymin, Const.car_height]
+        pt_h_2 = [xmin, Const.grid_height - ymax, Const.car_height]
+        pt_h_3 = [xmax, Const.grid_height - ymax, Const.car_height]
+        boxes_3d.append([pt0, pt1, pt2, pt3, pt_h_0, pt_h_1, pt_h_2, pt_h_3])
+    return np.array(boxes_3d).reshape((n_bbox, 8, 3))
+
+def getimage_pt(points3d, extrin, intrin):
+    # 此处输入的是以左下角为原点的坐标，输出的是opencv格式的左上角为原点的坐标
+    newpoints3d = np.vstack((points3d, 1.0))
+    Zc = np.dot(extrin, newpoints3d)[-1]
+    imagepoints = (np.dot(intrin, np.dot(extrin, newpoints3d)) / Zc).astype(np.int)
+    return [imagepoints[0, 0], imagepoints[1, 0]]
+
+def getprojected_3dbox(points3ds, extrin, intrin):
+    bboxes = []
+    for i in range(points3ds.shape[0]):
+        bbox_2d = []
+        for pt in points3ds[i]:
+            left = getimage_pt(pt.reshape(3, 1), extrin, intrin)
+            bbox_2d.append(left)
+        bboxes.append(bbox_2d)
+
+    return np.array(bboxes).reshape((points3ds.shape[0], 8, 2))
+
+def get_outter(projected_3dboxes):
+    outter_boxes = []
+    for boxes in projected_3dboxes:
+        xmax = max(boxes[:, 0])
+        xmin = min(boxes[:, 0])
+        ymax = max(boxes[:, 1])
+        ymin = min(boxes[:, 1])
+        outter_boxes.append([ymin, xmin, ymax, xmax])
+    return np.array(outter_boxes, dtype=np.float)

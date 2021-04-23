@@ -118,8 +118,8 @@ def bbox2loc(src_bbox, dst_bbox):
         The second axis contains four values :math:`t_y, t_x, t_h, t_w`.
 
     """
-
     height = src_bbox[:, 2] - src_bbox[:, 0]
+
     width = src_bbox[:, 3] - src_bbox[:, 1]
     ctr_y = src_bbox[:, 0] + 0.5 * height
     ctr_x = src_bbox[:, 1] + 0.5 * width

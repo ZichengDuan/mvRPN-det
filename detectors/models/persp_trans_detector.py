@@ -6,6 +6,7 @@ import torch.nn.functional as F
 import kornia
 from torchvision.models.vgg import vgg11
 from detectors.models.resnet import resnet18
+from torchvision.models.vgg import vgg16
 import matplotlib
 from detectors.models.mobilenet import MobileNetV3_Small, MobileNetV3_Large
 from detectors.models.region_proposal_network import RegionProposalNetwork
@@ -42,16 +43,20 @@ class PerspTransDetector(nn.Module):
 
         self.backbone = nn.Sequential(*list(resnet18(replace_stride_with_dilation=[False, False, False]).children())[:-2]).to('cuda:1')
         self.rpn = RegionProposalNetwork(in_channels=1026, mid_channels=1026, ratios=[1], anchor_scales=[4]).to('cuda:0')
-
-        # 2.5cm -> 0.5m: 20x
+        vgg = vgg16()
+        classifier = vgg.classifier
+        del classifier[6]
+        classifier = nn.Sequential(*classifier).to('cuda:1')
+        self.classifier = classifier
 
     def forward(self, imgs, epoch = None, visualize=False, train = True):
         B, N, C, H, W = imgs.shape
         assert N == self.num_cam
         world_features = []
-
+        img_featuremap = []
         for cam in range(self.num_cam):
             img_feature =self.backbone(imgs[:, cam].to('cuda:1'))
+            img_featuremap.append(F.interpolate(img_feature, scale_factor=2, mode='bilinear'))
             img_feature = F.interpolate(img_feature, self.upsample_shape, mode='bilinear')
             proj_mat = self.proj_mats[cam].repeat([B, 1, 1]).float().to('cuda:1')
             world_feature = kornia.warp_perspective(img_feature.to('cuda:1'), proj_mat, self.reducedgrid_shape)
@@ -63,7 +68,7 @@ class PerspTransDetector(nn.Module):
 
         # vis_feature(world_features, max_num=5, out_path='/home/dzc/Desktop/CASIA/proj/mvRPN-det/images/')
 
-        return rpn_locs, rpn_scores, anchor, rois, roi_indices
+        return rpn_locs, rpn_scores, anchor, rois, roi_indices, img_featuremap
 
 
     def get_imgcoord2worldgrid_matrices(self, intrinsic_matrices, extrinsic_matrices, worldgrid2worldcoord_mat):

@@ -45,7 +45,8 @@ class oftFrameDataset(VisionDataset):
         self.bev_bboxes = {}
         self.left_bboxes = {}
         self.right_bboxes = {}
-        self.dir = {}
+        self.left_dir = {}
+        self.right_dir = {}
         self.img_fpaths = self.base.get_image_fpaths(frame_range)
         self.gt_fpath = os.path.join(self.root, 'gt.txt')
         self.prepare_gt()
@@ -117,15 +118,20 @@ class oftFrameDataset(VisionDataset):
 
     def prepare_dir(self, frame_range):
         for fname in sorted(os.listdir(os.path.join(self.root, 'od_annotations'))):
-            frame_dir = []
+            frame_left_dir = []
+            frame_right_dir = []
             frame = int(fname.split('.')[0])
             if frame in frame_range:
                 with open(os.path.join(self.root, 'od_annotations', fname)) as json_file:
                     cars = [json.load(json_file)][0]
                 for i, car in enumerate(cars):
-                    dir = int(car["direc"])
-                    frame_dir.append(dir)
-                self.dir[frame] = frame_dir
+                    left_dir = int(car["direc_left"])
+                    right_dir = int(car["direc_right"])
+                    frame_left_dir.append(left_dir)
+                    frame_right_dir.append(right_dir)
+
+                self.left_dir[frame] = frame_left_dir
+                self.right_dir[frame] = frame_right_dir
 
     def __getitem__(self, index):
         frame = list(self.bev_bboxes.keys())[index]
@@ -140,8 +146,9 @@ class oftFrameDataset(VisionDataset):
         bev_bboxes = torch.tensor(self.bev_bboxes[frame])
         left_bboxes = torch.tensor(self.left_bboxes[frame])
         right_bboxes = torch.tensor(self.right_bboxes[frame])
-        dirs = torch.tensor(self.dir[frame])
-        return imgs, bev_bboxes, left_bboxes, right_bboxes, dirs, frame, self.extrinsic_matrix, self.intrinsic_matrix
+        left_dirs = torch.tensor(self.left_dir[frame])
+        right_dirs = torch.tensor(self.right_dir[frame])
+        return imgs, bev_bboxes, left_bboxes, right_bboxes, left_dirs, right_dirs, frame, self.extrinsic_matrix, self.intrinsic_matrix
 
     def __len__(self):
         return len(self.bev_bboxes.keys())

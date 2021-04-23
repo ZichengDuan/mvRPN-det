@@ -17,6 +17,8 @@ from detectors.utils.draw_curve import draw_curve
 from detectors.utils.image_utils import img_color_denormalize
 from detectors.OFTTrainer import OFTtrainer
 import warnings
+import itertools
+from detectors.models.VGG16Head import VGG16RoIHead
 from tensorboardX import SummaryWriter
 warnings.filterwarnings("ignore")
 
@@ -51,14 +53,16 @@ def main(args):
 
     # model
     model = PerspTransDetector(train_set)
+    classifier = model.classifier
+    roi_head = VGG16RoIHead(9,  7, 1/16, classifier)
 
-    optimizer = optim.Adam(model.parameters(), lr=args.lr, weight_decay=args.weight_decay)
+    optimizer = optim.Adam(params=itertools.chain(model.parameters(), roi_head.parameters()), lr=args.lr, weight_decay=args.weight_decay)
     print('Settings:')
     print(vars(args))
 
     # draw curve
 
-    trainer = OFTtrainer(model, denormalize)
+    trainer = OFTtrainer(model, roi_head, denormalize)
 
     # learn
     if args.resume is None or args.resume == 1:
