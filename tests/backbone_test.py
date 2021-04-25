@@ -20,7 +20,7 @@ my_cls = nn.Sequential(nn.Linear(25088, 1024, bias=True),
                        nn.Linear(1024, 1024, bias=True),
                        nn.ReLU(inplace=True),
                        nn.Dropout(p=0.5, inplace=False),
-                       nn.Linear(in_features=1024, out_features=1000, bias=True)).to("cuda:0")
+                       ).to("cuda:1")
 
 input = torch.zeros((256, 512, 7,7)).to("cuda:0")
 vgg = vgg16()

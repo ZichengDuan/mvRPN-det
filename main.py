@@ -56,7 +56,7 @@ def main(args):
     classifier = model.classifier
     roi_head = VGG16RoIHead(9,  7, 1/16, classifier)
 
-    optimizer = optim.Adam(params=itertools.chain(model.parameters(), roi_head.parameters()), lr=args.lr, weight_decay=args.weight_decay)
+    optimizer = optim.Adam(params=itertools.chain(model.parameters(), classifier.parameters(), roi_head.parameters()), lr=args.lr, weight_decay=args.weight_decay)
     print('Settings:')
     print(vars(args))
 

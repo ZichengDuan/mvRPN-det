@@ -75,7 +75,7 @@ class OFTtrainer(BaseTrainer):
                 self.rpn_sigma)
 
             gt_rpn_label = torch.tensor(gt_rpn_label).long()
-            rpn_cls_loss = nn.CrossEntropyLoss(ignore_index=-1)(rpn_score, gt_rpn_label.to("cuda:0"))
+            rpn_cls_loss = nn.CrossEntropyLoss(ignore_index=-1)(rpn_score, gt_rpn_label.to("cuda:1"))
 
             # ----------------ROI------------------------------
             # 还需要在双视角下的回归gt，以及筛选过后的分类gt，gt_left_loc, gt_left_label, gt_right_loc, gt_right_label
@@ -111,11 +111,12 @@ class OFTtrainer(BaseTrainer):
 
 
             left_roi_loc_loss = _fast_rcnn_loc_loss(
-                left_roi_loc.to(left_gt_loc.device).contiguous(),
+                left_roi_loc.contiguous(),
                 left_gt_loc,
                 left_gt_label.data,
                 1)
 
+            # 所有的roi也要转成
 
             # sample_roi, gt_roi_loc, gt_roi_label = self.proposal_target_creator_ori(
             #     roi,
@@ -124,7 +125,7 @@ class OFTtrainer(BaseTrainer):
             #     self.loc_normalize_mean,
             #     self.loc_normalize_std)
             # ----------------------RPN Loss-----------------------------
-            loss = rpn_loc_loss + rpn_cls_loss
+            loss = rpn_loc_loss + rpn_cls_loss + left_roi_loc_loss
             Loss += loss
             RPN_CLS_LOSS += rpn_cls_loss
             RPN_LOC_LOSS += rpn_loc_loss
@@ -142,7 +143,8 @@ class OFTtrainer(BaseTrainer):
             if batch_idx % 10 == 0:
                 print("Training Total Loss: ", Loss.detach().cpu().item() / (batch_idx + 1),
                       "Training Loc Loss: ", RPN_LOC_LOSS.detach().cpu().item() / (batch_idx + 1),
-                      "Training Cls Loss: ", RPN_CLS_LOSS.detach().cpu().item() / (batch_idx + 1))
+                      "Training Cls Loss: ", RPN_CLS_LOSS.detach().cpu().item() / (batch_idx + 1),
+                      "Training Left_ROI_LOC Loss: ", LEFT_ROI_LOC_LOSS.detach().cpu().item() / (batch_idx + 1))
 
             # 给两个图上的框指定gt的loc，目前已经有gt_roi_label_left, gt_roi_label_right,
 
@@ -272,9 +274,9 @@ def _smooth_l1_loss(x, t, in_weight, sigma):
     return y.sum()
 
 def _fast_rcnn_loc_loss(pred_loc, gt_loc, gt_label, sigma):
-    in_weight = torch.zeros(gt_loc.shape).to("cuda:0")
-    gt_loc = torch.tensor(gt_loc).to("cuda:0")
-    gt_label = torch.tensor(gt_label).to("cuda:0")
+    in_weight = torch.zeros(gt_loc.shape).to("cuda:1")
+    gt_loc = torch.tensor(gt_loc).to("cuda:1")
+    gt_label = torch.tensor(gt_label).to("cuda:1")
 
     # print(in_weight.shape, gt_loc.shape, gt_label.shape)
     # Localization loss is calculated only for positive rois.

@@ -23,8 +23,8 @@ class VGG16RoIHead(nn.Module):
         super(VGG16RoIHead, self).__init__()
 
         self.classifier = classifier
-        self.cls_loc = nn.Linear(4096, n_class * 4).to("cuda:1")
-        self.score = nn.Linear(4096, n_class).to("cuda:1")
+        self.cls_loc = nn.Linear(1024, n_class * 4).to("cuda:1")
+        self.score = nn.Linear(1024, n_class).to("cuda:1")
 
         normal_init(self.cls_loc, 0, 0.001)
         normal_init(self.score, 0, 0.01)
@@ -59,9 +59,8 @@ class VGG16RoIHead(nn.Module):
         xy_indices_and_rois = indices_and_rois[:, [0, 2, 1, 4, 3]]
         indices_and_rois = xy_indices_and_rois.contiguous().to(x.device)
         # print(x.shape, x.device, indices_and_rois.shape, indices_and_rois.device)
-        pool = self.roi(x, indices_and_rois)
+        pool = self.roi(x, indices_and_rois).to("cuda:1")
         pool = pool.view(pool.size(0), -1)
-
         # print(self.classifier)
         fc7 = self.classifier(pool)
         roi_cls_locs = self.cls_loc(fc7)

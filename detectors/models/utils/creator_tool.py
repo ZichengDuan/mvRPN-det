@@ -31,7 +31,7 @@ class ProposalTargetCreator(object):
     """
 
     def __init__(self,
-                 n_sample=256,
+                 n_sample=128,
                  pos_ratio=0.25, pos_iou_thresh=0.5,
                  neg_iou_thresh_hi=0.5, neg_iou_thresh_lo=0.0
                  ):
@@ -188,12 +188,12 @@ class ProposalTargetCreator(object):
         # print(left_2d_bbox.shape)
         left_gt_roi_loc = bbox2loc(left_2d_bbox, left_gt_bbox[left_gt_assignment[left_keep_index]])
 
-        left_img = cv2.imread("/home/dzc/Data/4carreal_0318blend/img/left1/%d.jpg" % frame)
-        for idx, bbx in enumerate(left_gt_bbox[left_gt_assignment[left_keep_index]]):
-            cv2.rectangle(left_img, (int(bbx[1]), int(bbx[0])), (int(bbx[3]), int(bbx[2])), color=(255, 255, 0), thickness=3)
-        for idx, bbx in enumerate(left_2d_bbox):
-            cv2.rectangle(left_img, (int(bbx[1]), int(bbx[0])), (int(bbx[3]), int(bbx[2])), color=(192, 0, 120), thickness=1)
-        cv2.imwrite("/home/dzc/Desktop/CASIA/proj/mvRPN-det/images/left_img_%d.jpg" % frame, left_img)
+        # left_img = cv2.imread("/home/dzc/Data/4carreal_0318blend/img/left1/%d.jpg" % frame)
+        # for idx, bbx in enumerate(left_gt_bbox[left_gt_assignment[left_keep_index]]):
+        #     cv2.rectangle(left_img, (int(bbx[1]), int(bbx[0])), (int(bbx[3]), int(bbx[2])), color=(255, 255, 0), thickness=3)
+        # for idx, bbx in enumerate(left_2d_bbox):
+        #     cv2.rectangle(left_img, (int(bbx[1]), int(bbx[0])), (int(bbx[3]), int(bbx[2])), color=(192, 0, 120), thickness=1)
+        # cv2.imwrite("/home/dzc/Desktop/CASIA/proj/mvRPN-det/images/left_img_%d.jpg" % frame, left_img)
         left_gt_loc = ((left_gt_roi_loc - np.array(loc_normalize_mean, np.float32)
                        ) / np.array(loc_normalize_std, np.float32))
         # print(left_gt_loc, right_2d_bbox)
