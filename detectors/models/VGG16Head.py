@@ -23,8 +23,8 @@ class VGG16RoIHead(nn.Module):
         super(VGG16RoIHead, self).__init__()
 
         self.classifier = classifier
-        self.cls_loc = nn.Linear(1024, n_class * 4).to("cuda:1")
-        self.score = nn.Linear(1024, n_class).to("cuda:1")
+        self.cls_loc = nn.Linear(2048, n_class * 4).to("cuda:1")
+        self.score = nn.Linear(2048, n_class).to("cuda:1")
 
         normal_init(self.cls_loc, 0, 0.001)
         normal_init(self.score, 0, 0.01)

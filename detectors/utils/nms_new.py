@@ -1,5 +1,38 @@
 import torch
 import numpy as np
+import cupy as cp
+from utils.nms import non_maximum_suppression
+from EX_CONST import Const
+
+def vis_nms(boxes, scores, iou_threshold):
+    boxes = torch.tensor(boxes)
+    scores = torch.tensor(scores)
+    print(boxes.shape, scores.shape)
+    return torch.ops.torchvision.nms(boxes, scores.reshape(-1, 1).squeeze(), iou_threshold)
+
+
+def _suppress(raw_cls_bbox, raw_prob):
+    bbox = list()
+    label = list()
+    score = list()
+    # skip cls_id = 0 because it is the background class
+    for l in range(1, Const.roi_classes + 1):
+        cls_bbox_l = raw_cls_bbox.reshape((-1, Const.roi_classes + 1, 4))[:, l, :]
+        prob_l = raw_prob[:, l]
+        mask = prob_l > 0.5
+        cls_bbox_l = cls_bbox_l[mask]
+        prob_l = prob_l[mask]
+        keep = non_maximum_suppression(
+            cp.array(cls_bbox_l), 0.8, prob_l)
+        keep = cp.asnumpy(keep)
+        bbox.append(cls_bbox_l[keep])
+        # The labels are in [0, self.n_class - 2].
+        label.append((l - 1) * np.ones((len(keep),)))
+        score.append(prob_l[keep])
+    bbox = np.concatenate(bbox, axis=0).astype(np.float32)
+    label = np.concatenate(label, axis=0).astype(np.int32)
+    score = np.concatenate(score, axis=0).astype(np.float32)
+    return bbox, label, score
 
 
 def nms_new(bboxes, confidence, left=4, threshold=0.1):
@@ -14,6 +47,10 @@ def nms_new(bboxes, confidence, left=4, threshold=0.1):
     bbox_keep = []
     indices_keep = []
     i = 1
+    print(indices)
+    # print(bbox[indices[-1]])
+    # print()
+    # print(bbox)
     while len(bbox_keep) < left and len(indices) > 0:
         if len(bbox_keep) == 0:
             bbox_keep.append(bbox[indices[-1]])

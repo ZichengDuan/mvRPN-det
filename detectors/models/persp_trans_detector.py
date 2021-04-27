@@ -37,16 +37,15 @@ class PerspTransDetector(nn.Module):
         img_zoom_mat = np.diag(np.append(img_reduce, [1]))
         # map
         map_zoom_mat = np.diag(np.append(np.ones([2]) / dataset.grid_reduce, [1]))
-        # projection matrices: img feat -> map feat
         self.proj_mats = [torch.from_numpy(map_zoom_mat @ imgcoord2worldgrid_matrices[cam] @ img_zoom_mat)
                           for cam in range(self.num_cam)]
 
         self.backbone = nn.Sequential(*list(resnet18(replace_stride_with_dilation=[False, False, False]).children())[:-2]).to('cuda:0')
         self.rpn = RegionProposalNetwork(in_channels=1026, mid_channels=1026, ratios=[1], anchor_scales=[4]).to('cuda:1')
-        my_cls = nn.Sequential(nn.Linear(25088, 1024, bias=True),
+        my_cls = nn.Sequential(nn.Linear(25088, 2048, bias=True),
                                nn.ReLU(inplace=True),
                                nn.Dropout(p=0.5, inplace=False),
-                               nn.Linear(1024, 1024, bias=True),
+                               nn.Linear(2048, 2048, bias=True),
                                nn.ReLU(inplace=True),
                                nn.Dropout(p=0.5, inplace=False),
                                ).to("cuda:1")
@@ -59,19 +58,19 @@ class PerspTransDetector(nn.Module):
         img_featuremap = []
         for cam in range(self.num_cam):
             img_feature =self.backbone(imgs[:, cam].to('cuda:0'))
-            img_featuremap.append(F.interpolate(img_feature, scale_factor=2, mode='bilinear'))
             img_feature = F.interpolate(img_feature, self.upsample_shape, mode='bilinear')
+            img_featuremap.append(img_feature)
             proj_mat = self.proj_mats[cam].repeat([B, 1, 1]).float().to('cuda:1')
             world_feature = kornia.warp_perspective(img_feature.to('cuda:1'), proj_mat, self.reducedgrid_shape)
             world_feature = kornia.vflip(world_feature)
             world_features.append(world_feature.to('cuda:1'))
         world_features = torch.cat(world_features + [self.coord_map.repeat([B, 1, 1, 1]).to('cuda:1')], dim=1)
-        # vis_feature(world_features, max_num=5, out_path='/home/dzc/Desktop/CASIA/proj/mvRPN-det/images/')
+        vis_feature(img_featuremap[0], max_num=5, out_path='/home/dzc/Desktop/CASIA/proj/mvRPN-det/images/')
         rpn_locs, rpn_scores, anchor, rois, roi_indices = self.rpn(world_features, Const.grid_size)
 
         # vis_feature(world_features, max_num=5, out_path='/home/dzc/Desktop/CASIA/proj/mvRPN-det/images/')
 
-        return rpn_locs, rpn_scores, anchor, rois, roi_indices, img_featuremap
+        return rpn_locs, rpn_scores, anchor, rois, roi_indices, img_featuremap, world_features
 
 
     def get_imgcoord2worldgrid_matrices(self, intrinsic_matrices, extrinsic_matrices, worldgrid2worldcoord_mat):
@@ -103,7 +102,6 @@ def vis_feature(x, max_num=5, out_path='/home/dzc/Desktop/CASIA/proj/mvRPN-det/i
         if i >= max_num:
             break
         feature = x[0, i, :, :].view(x.shape[-2], x.shape[-1])
-        print(feature.shape)
         feature = feature.detach().cpu().numpy()
         feature = 1.0 / (1 + np.exp(-1 * feature))
         feature = np.round(feature * 255).astype(np.uint8)

@@ -27,9 +27,9 @@ class oftFrameDataset(VisionDataset):
         self.intrinsic_matrix = base.intrinsic_matrices
 
         if train:
-            frame_range = list(range(0, 1500)) + list(range(2000, 3600))
+            frame_range = list(range(0, 1500))
         else:
-            frame_range = range(1500, 1999)
+            frame_range = range(1600, 1700)
 
         self.upsample_shape = list(map(lambda x: int(x / self.img_reduce), self.img_shape))
         img_reduce_local = np.array(self.img_shape) / np.array(self.upsample_shape)
@@ -127,8 +127,12 @@ class oftFrameDataset(VisionDataset):
                 for i, car in enumerate(cars):
                     left_dir = int(car["direc_left"])
                     right_dir = int(car["direc_right"])
-                    frame_left_dir.append(left_dir)
-                    frame_right_dir.append(right_dir)
+                    if Const.roi_classes != 1:
+                        frame_left_dir.append(left_dir)
+                        frame_right_dir.append(right_dir)
+                    else:
+                        frame_left_dir.append(0)
+                        frame_right_dir.append(0)
 
                 self.left_dir[frame] = frame_left_dir
                 self.right_dir[frame] = frame_right_dir

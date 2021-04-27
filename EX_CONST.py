@@ -14,6 +14,10 @@ class Const:
 
     grid_width = 800
 
+    ori_img_height = 480
+
+    ori_img_width = 640
+
     grid_size = [grid_height, grid_width]
 
     reduce = 3
@@ -34,4 +38,6 @@ class Const:
     # nms_consider = 400
     #
     # nms_threshold = 0
+
+    roi_classes = 1
 

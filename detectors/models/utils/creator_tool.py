@@ -104,10 +104,22 @@ class ProposalTargetCreator(object):
         left_gt_bbox = np.delete(left_gt_bbox, left_remove_idx, axis=0)
         right_gt_bbox = np.delete(right_gt_bbox, right_remove_idx, axis=0)
 
+        
+
         # left
-        # print(gt_left_bev_bbox.shape)
+        # 限定用于左侧的roi
+        roi_remain_idx = []
+        for id, bbox in enumerate(roi):
+            y = (bbox[0] + bbox[2]) / 2
+            x = (bbox[1] + bbox[3]) / 2
+            z = 0
+            pt2d = getimage_pt(np.array([x, Const.grid_height - y, z]).reshape(3,1), extrin[0][0], intrin[0][0])
+            if 0 < int(pt2d[0]) < 640 and 0 < int(pt2d[1]) < 480:
+                roi_remain_idx.append(id)
+        left_rois = roi[roi_remain_idx]
+
         left_n_bbox, _ = gt_left_bev_bbox.shape
-        left_roi = np.concatenate((roi, gt_left_bev_bbox), axis=0)
+        left_roi = np.concatenate((left_rois, gt_left_bev_bbox), axis=0)
         left_pos_roi_per_image = np.round(self.n_sample * self.pos_ratio)
         left_iou = bbox_iou(left_roi, gt_left_bev_bbox) # R， 4每个roi和gt的iou
         left_gt_assignment = left_iou.argmax(axis=1) # 每个roi对应iou最大的一个gt框的索引值
@@ -331,7 +343,6 @@ class ProposalTargetCreator_ori(object):
 
         gt_roi_loc = ((gt_roi_loc - np.array(loc_normalize_mean, np.float32)
                        ) / np.array(loc_normalize_std, np.float32))
-        print(gt_roi_loc)
         return sample_roi, gt_roi_loc, gt_roi_label
 
 class AnchorTargetCreator(object):

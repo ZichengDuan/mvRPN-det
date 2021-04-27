@@ -7,7 +7,7 @@ import torch.nn.functional as F
 import matplotlib
 matplotlib.use('Agg')
 import matplotlib.pyplot as plt
-from detectors.utils.nms_new import nms_new
+from detectors.utils.nms_new import nms_new, _suppress, vis_nms
 import torch.nn as nn
 import warnings
 from detectors.loss.gaussian_mse import GaussianMSE
@@ -36,7 +36,7 @@ class OFTtrainer(BaseTrainer):
         self.proposal_target_creator = ProposalTargetCreator()
         self.proposal_target_creator_ori = ProposalTargetCreator_ori()
         self.rpn_sigma = 3.
-        self.loc_normalize_mean = (0., 0., 0., 0.),
+        self.loc_normalize_mean = (0., 0., 0., 0.)
         self.loc_normalize_std = (0.1, 0.1, 0.2, 0.2)
 
     def train(self, epoch, data_loader, optimizer, writer):
@@ -47,10 +47,13 @@ class OFTtrainer(BaseTrainer):
         RPN_CLS_LOSS = 0
         RPN_LOC_LOSS = 0
         LEFT_ROI_LOC_LOSS = 0
+        LEFT_ROI_CLS_LOSS = 0
+        RIGHT_ROI_LOC_LOSS = 0
+        RIGHT_ROI_CLS_LOSS = 0
         for batch_idx, (imgs, gt_bbox, gt_left_bbox, gt_right_bbox, left_dirs, right_dirs, frame, extrin, intrin) in enumerate(data_loader):
             optimizer.zero_grad()
             img_size = (Const.grid_height, Const.grid_width)
-            rpn_locs, rpn_scores, anchor, rois, roi_indices, img_featuremaps = self.model(imgs)
+            rpn_locs, rpn_scores, anchor, rois, roi_indices, img_featuremaps, bev_featuremaps = self.model(imgs)
 
             rpn_loc = rpn_locs[0]
             rpn_score = rpn_scores[0]
@@ -59,7 +62,7 @@ class OFTtrainer(BaseTrainer):
             gt_right_bbox = gt_right_bbox[0]
             left_dir = left_dirs[0]
             right_dir = right_dirs[0]
-            roi = rois
+            roi = torch.tensor(rois)
             # -----------------RPN Loss----------------------
             gt_rpn_loc, gt_rpn_label = self.anchor_target_creator(
                 at.tonumpy(gt_bbox),
@@ -98,38 +101,93 @@ class OFTtrainer(BaseTrainer):
                 torch.tensor(left_2d_bbox).to(img_featuremaps[0].device),
                 left_sample_roi_index)
 
-            # print(left_roi_cls_loc.shape, left_roi_score.shape) # torch.Size([256, 36]) torch.Size([256, 9])
-
-            n_sample = left_roi_cls_loc.shape[0]
-            left_roi_cls_loc = left_roi_cls_loc.view(n_sample, -1, 4)
-            left_roi_loc = left_roi_cls_loc[torch.arange(0, n_sample).long().cuda(), at.totensor(left_gt_label).long()]
+            left_n_sample = left_roi_cls_loc.shape[0]
+            left_roi_cls_loc = left_roi_cls_loc.view(left_n_sample, -1, 4)
+            left_roi_loc = left_roi_cls_loc[torch.arange(0, left_n_sample).long().cuda(), at.totensor(left_gt_label).long()]
             left_gt_label = at.totensor(left_gt_label).long()
             left_gt_loc = at.totensor(left_gt_loc)
-
-            # print(left_roi_loc)
-            # print(left_gt_loc)
-
-
+            # print(left_roi_loc.shape, left_gt_loc.shape)
             left_roi_loc_loss = _fast_rcnn_loc_loss(
                 left_roi_loc.contiguous(),
                 left_gt_loc,
                 left_gt_label.data,
                 1)
 
-            # 所有的roi也要转成
+            left_roi_cls_loss = nn.CrossEntropyLoss()(left_roi_score, left_gt_label.to(left_roi_score.device))
 
+            # ---------------------------right_roi_pooling---------------------------------
+            right_roi_cls_loc, right_roi_score = self.roi_head(
+                img_featuremaps[1],
+                torch.tensor(right_2d_bbox).to(img_featuremaps[1].device),
+                right_sample_roi_index)
+
+            right_n_sample = right_roi_cls_loc.shape[0]
+            right_roi_cls_loc = right_roi_cls_loc.view(right_n_sample, -1, 4)
+            right_roi_loc = right_roi_cls_loc[
+                torch.arange(0, right_n_sample).long().cuda(), at.totensor(right_gt_label).long()]
+            right_gt_label = at.totensor(right_gt_label).long()
+            right_gt_loc = at.totensor(right_gt_loc)
+            # print(left_roi_loc.shape, left_gt_loc.shape)
+            right_roi_loc_loss = _fast_rcnn_loc_loss(
+                right_roi_loc.contiguous(),
+                right_gt_loc,
+                right_gt_label.data,
+                1)
+
+            right_roi_cls_loss = nn.CrossEntropyLoss()(right_roi_score, right_gt_label.to(right_roi_score.device))
+
+
+            # --------------------测试roi pooling------------------------
             # sample_roi, gt_roi_loc, gt_roi_label = self.proposal_target_creator_ori(
             #     roi,
             #     at.tonumpy(gt_bbox),
             #     at.tonumpy(left_dir),
             #     self.loc_normalize_mean,
             #     self.loc_normalize_std)
-            # ----------------------RPN Loss-----------------------------
-            loss = rpn_loc_loss + rpn_cls_loss + left_roi_loc_loss
+
+            # bev_img = cv2.imread("/home/dzc/Data/4carreal_0318blend/bevimgs/%d.jpg" % frame)
+            # for idx, bbxx in enumerate(sample_roi):
+            #     # cv2.rectangle(bev_img, (int(bbxx[1]), int(bbxx[0])), (int(bbxx[3]), int(bbxx[2])), color=(255, 0, 0), thickness=1)
+            #     cv2.circle(bev_img, (int((bbxx[3] + bbxx[1]) / 2), (int((bbxx[2] + bbxx[0]) / 2))), color=(255, 0, 0), thickness=2, radius=1)
+            #     if str(gt_roi_label[idx]) == "0":
+            #         cv2.putText(bev_img, str(gt_roi_label[idx]), (int((bbxx[3] + bbxx[1]) / 2), (int((bbxx[2] + bbxx[0]) / 2))),fontFace=cv2.FONT_HERSHEY_SIMPLEX, fontScale = 1, color=(255, 0, 0))
+            #     else:
+            #         cv2.putText(bev_img, str(gt_roi_label[idx]),
+            #                     (int((bbxx[3] + bbxx[1]) / 2), (int((bbxx[2] + bbxx[0]) / 2))),
+            #                     fontFace=cv2.FONT_HERSHEY_SIMPLEX, fontScale=1, color=(255, 0, 255))
+            # for idx, bbxx in enumerate(gt_bbox):
+            #     cv2.rectangle(bev_img, (int(bbxx[1]), int(bbxx[0])), (int(bbxx[3]), int(bbxx[2])), color=(255, 0, 255), thickness=3)
+            # cv2.imwrite("/home/dzc/Desktop/CASIA/proj/mvRPN-det/images/roi_img.jpg", bev_img)
+
+            # sample_roi_index = torch.zeros(len(sample_roi))
+            # roi_cls_loc, roi_score = self.roi_head(
+            #     bev_featuremaps,
+            #     sample_roi,
+            #     sample_roi_index)
+            #
+            # n_sample = roi_cls_loc.shape[0]
+            # roi_cls_loc = roi_cls_loc.view(n_sample, -1, 4)
+            # roi_loc = roi_cls_loc[torch.arange(0, n_sample).long().cuda(), \
+            #                       at.totensor(gt_roi_label).long()]
+            # gt_roi_label = at.totensor(gt_roi_label).long()
+            # gt_roi_loc = at.totensor(gt_roi_loc)
+            #
+            # roi_loc_loss = _fast_rcnn_loc_loss(
+            #     roi_loc.contiguous(),
+            #     gt_roi_loc,
+            #     gt_roi_label.data,
+            #     1)
+
+            # roi_cls_loss = nn.CrossEntropyLoss()(roi_score, gt_roi_label.to(roi_score.device))
+            # ----------------------Loss-----------------------------
+            loss = rpn_loc_loss + rpn_cls_loss + left_roi_loc_loss / 2 + left_roi_cls_loss + right_roi_loc_loss / 2 + right_roi_cls_loss
             Loss += loss
             RPN_CLS_LOSS += rpn_cls_loss
             RPN_LOC_LOSS += rpn_loc_loss
             LEFT_ROI_LOC_LOSS += left_roi_loc_loss
+            LEFT_ROI_CLS_LOSS += left_roi_cls_loss
+            LEFT_ROI_LOC_LOSS += left_roi_loc_loss
+            LEFT_ROI_CLS_LOSS += left_roi_cls_loss
             # ------------------------------------------------------------
             loss.backward()
             optimizer.step()
@@ -138,17 +196,17 @@ class OFTtrainer(BaseTrainer):
             writer.add_scalar("Training Total Loss", Loss / (batch_idx + 1), niter)
             writer.add_scalar("Training rpn_loc_loss", RPN_LOC_LOSS / (batch_idx + 1), niter)
             writer.add_scalar("Training rpn_cls_loss", RPN_CLS_LOSS / (batch_idx + 1), niter)
-            writer.add_scalar("Training left_roi_loc_loss", LEFT_ROI_LOC_LOSS / (batch_idx + 1), niter)
+            writer.add_scalar("Training ROI_Loc LOSS", ROI_LOC_LOSS / (batch_idx + 1), niter)
+            writer.add_scalar("Training ROI_Cls LOSS", ROI_CLS_LOSS / (batch_idx + 1), niter)
 
             if batch_idx % 10 == 0:
-                print("Training Total Loss: ", Loss.detach().cpu().item() / (batch_idx + 1),
+                print("Iteration: %d" % batch_idx, "Training Total Loss: ", Loss.detach().cpu().item() / (batch_idx + 1),
                       "Training Loc Loss: ", RPN_LOC_LOSS.detach().cpu().item() / (batch_idx + 1),
                       "Training Cls Loss: ", RPN_CLS_LOSS.detach().cpu().item() / (batch_idx + 1),
-                      "Training Left_ROI_LOC Loss: ", LEFT_ROI_LOC_LOSS.detach().cpu().item() / (batch_idx + 1))
+                      "Training ROI_Loc LOSS: ", (ROI_LOC_LOSS.detach().cpu().item() / 2) / (batch_idx + 1),
+                      "Training ROI_Cls LOSS: ", (ROI_CLS_LOSS.detach().cpu().item()) / (batch_idx + 1))
 
             # 给两个图上的框指定gt的loc，目前已经有gt_roi_label_left, gt_roi_label_right,
-
-
 
             # for car in left_2d_bbox:
             #     for n in range(len(car)):
@@ -162,7 +220,7 @@ class OFTtrainer(BaseTrainer):
             #     ymax = max(car[:, 1])
             #     ymin = min(car[:, 1])
             #     cv2.rectangle(left_img, (xmin, ymin), (xmax, ymax), color = (255, 255, 0), thickness = 1)
-            # cv2.imwrite("/home/dzc/Desktop/CASIA/proj/mvRPN-det/images/left_img.jpg", left_img)
+
             #
             # for car in right_2d_bbox:
             #     xmax = max(car[:, 0])
@@ -173,7 +231,7 @@ class OFTtrainer(BaseTrainer):
             # cv2.imwrite("/home/dzc/Desktop/CASIA/proj/mvRPN-det/images/right_img.jpg", right_img)
 
             # ------------loc -> bbox--------------
-            # bbox = loc2bbox(anchor, rpn_loc.detach().cpu().numpy())
+
             # rpn_score = nn.Softmax()(rpn_score)
             # conf_scores = rpn_score[:, 1].view(1, -1).squeeze()
             # # print("dzc", max(conf_scores.squeeze()))
@@ -198,70 +256,81 @@ class OFTtrainer(BaseTrainer):
 
             # ----------------生成3D外接框，并投影回原图，先拿左图为例子------------------
 
-def test(self,epoch, data_loader, writer):
+    def test(self,epoch, data_loader, writer):
         self.model.eval()
-        for batch_idx, (imgs, bbox, dirs, frame) in enumerate(data_loader):
+        for batch_idx, (imgs, gt_bbox, gt_left_bbox, gt_right_bbox, left_dirs, right_dirs, frame, extrin, intrin) in enumerate(data_loader):
             with torch.no_grad():
-                rpn_locs, rpn_scores, anchor, rois, roi_indices = self.model(imgs)
-
-            img_size = (Const.grid_height, Const.grid_width)
-            rpn_locs, rpn_scores, anchor = self.model(imgs)
+                rpn_locs, rpn_scores, anchor, rois, roi_indices, img_featuremaps, bev_featuremaps = self.model(imgs)
 
             rpn_loc = rpn_locs[0]
             rpn_score = rpn_scores[0]
             gt_bbox = gt_bbox[0]
+            gt_left_bbox = gt_left_bbox[0]
+            gt_right_bbox = gt_right_bbox[0]
+            roi = torch.tensor(rois)
 
-            gt_rpn_loc, gt_rpn_label = self.anchor_target_creator(
-                at.tonumpy(gt_bbox),
-                anchor,
-                img_size)
+            # roi_cls_locs, roi_scores = self.roi_head(
+            #     bev_featuremaps, rois, roi_indices)
 
-            # rpn_loc_loss = nn.MSELoss()(rpn_loc, torch.tensor(gt_rpn_loc, dtype=torch.float).to("cuda:0"))
+            # -----------投影------------
+            # 筛选出来能用的roi，在480、 640内
+            # 保留相应的roi和index
+            roi_remain_idx = []
+            for id, bbox in enumerate(roi):
+                y = (bbox[0] + bbox[2]) / 2
+                x = (bbox[1] + bbox[3]) / 2
+                z = 0
+                pt2d = getimage_pt(np.array([x, Const.grid_height - y, z]).reshape(3, 1), extrin[0][0], intrin[0][0])
+                if 0 < int(pt2d[0]) < Const.ori_img_width and 0 < int(pt2d[1]) < Const.ori_img_height:
+                    roi_remain_idx.append(id)
 
-            rpn_loc_loss = _fast_rcnn_loc_loss(
-                rpn_loc,
-                gt_rpn_loc,
-                gt_rpn_label,
-                self.rpn_sigma)
+            left_roi_3d = generate_3d_bbox(roi)
+            left_2d_bbox, _ = getprojected_3dbox(left_roi_3d, extrin, intrin)
+            left_2d_bbox = get_outter(left_2d_bbox)
 
-            gt_rpn_label = torch.tensor(gt_rpn_label).long()
-            # NOTE: default value of ignore_index is -100 ...
-            rpn_cls_loss = nn.CrossEntropyLoss(ignore_index=-1)(rpn_score, gt_rpn_label.to("cuda:0"))
-
-            Loss = rpn_loc_loss / 6 + rpn_cls_loss
+            left_2d_bbox = left_2d_bbox[roi_remain_idx]
+            # left_rois = roi[roi_remain_idx]
+            left_rois_indices = roi_indices[roi_remain_idx]
+            left_2d_bbox = torch.tensor(left_2d_bbox)
+            #---------------------------
+            left_roi_cls_loc, left_roi_score = self.roi_head(
+                img_featuremaps[0],
+                left_2d_bbox.to(img_featuremaps[0].device),
+                left_rois_indices)
 
             # ------------------------------------------------------------
-            Loss.backward()
-            niter = epoch * len(data_loader) + batch_idx
+            roi_cls_loc = left_roi_cls_loc.data
+            roi_score = left_roi_score.data
+            mean = torch.Tensor(self.loc_normalize_mean).to(roi_cls_loc.device). \
+                repeat(self.n_class)[None]
+            std = torch.Tensor(self.loc_normalize_std).to(roi_cls_loc.device). \
+                repeat(self.n_class)[None]
+            roi_cls_loc = (roi_cls_loc * std + mean)
+            roi_cls_loc = roi_cls_loc.view(-1, self.n_class, 4)
+            left_rois = left_2d_bbox.view(-1, 1, 4).expand_as(roi_cls_loc)
+            cls_bbox = loc2bbox(at.tonumpy(left_rois).reshape((-1, 4)),
+                                at.tonumpy(roi_cls_loc).reshape((-1, 4)))
 
-            writer.add_scalar("Test Total Loss", Loss, niter)
-            writer.add_scalar("Test rpn_loc_loss", rpn_loc_loss / 6, niter)
-            writer.add_scalar("Test rpn_cls_loss", rpn_cls_loss, niter)
+            prob = at.tonumpy(F.softmax(at.totensor(roi_score), dim=1))
 
-            if batch_idx % 10 == 0:
-                print(Loss, rpn_loc_loss / 6, rpn_cls_loss)
+            raw_cls_bbox = at.tonumpy(cls_bbox)
+            raw_prob = at.tonumpy(prob)
 
-            bbox = loc2bbox(anchor, rpn_loc.detach().cpu().numpy())
-            rpn_score = nn.Softmax()(rpn_score)
-            conf_scores = rpn_score[:, 1].view(1, -1).squeeze()
-            left_bbox, left_conf = nms_new(bbox, conf_scores.detach().cpu(), left=4)
+            bbox, label, score = _suppress(raw_cls_bbox, raw_prob)
 
-            tmp = cv2.imread("/home/dzc/Data/4carreal_0318blend/bevimgs/%d.jpg" % frame)
-
-            for idx, bbx in enumerate(left_bbox):
-                cv2.rectangle(tmp, (int(bbx[1]), int(bbx[0])), (int(bbx[3]), int(bbx[2])), color=(255, 255, 0),
+            left_img = cv2.imread("/home/dzc/Data/4carreal_0318blend/img/left1/%d.jpg" % frame)
+            for idx, bbx in enumerate(gt_left_bbox):
+                cv2.rectangle(left_img, (int(bbx[1]), int(bbx[0])), (int(bbx[3]), int(bbx[2])), color=(255, 255, 0),
+                              thickness=3)
+            for idx, bbxx in enumerate(bbox):
+                cv2.rectangle(left_img, (int(bbxx[1]), int(bbxx[0])), (int(bbxx[3]), int(bbxx[2])), color=(255, 0, 0),
                               thickness=2)
-
-            for idx, bbxx in enumerate(gt_bbox):
-                cv2.rectangle(tmp, (int(bbxx[1]), int(bbxx[0])), (int(bbxx[3]), int(bbxx[2])), color=(255, 0, 0),
-                              thickness=2)
-
-            cv2.imwrite("/home/dzc/Desktop/CASIA/proj/mvRPN-det/test_res.jpg", tmp)
-            image_PIL = Image.open("/home/dzc/Desktop/CASIA/proj/mvRPN-det/test_res.jpg")
-            tmp = np.array(image_PIL)
-
-            writer.add_image('Testing Pred Bboxes', tmp, dataformats='HWC')
-
+            cv2.imwrite("/home/dzc/Desktop/CASIA/proj/mvRPN-det/images/left_roi/%d.jpg" % frame, left_img)
+            
+    @property
+    def n_class(self):
+        # Total number of classes including the background.
+        return self.roi_head.n_class
 
 def _smooth_l1_loss(x, t, in_weight, sigma):
     sigma2 = sigma ** 2
@@ -330,3 +399,13 @@ def getprojected_3dbox(points3ds, extrin, intrin):
         right_bboxes.append(right_bbox_2d)
 
     return np.array(left_bboxes).reshape((points3ds.shape[0], 8, 2)), np.array(right_bboxes).reshape((points3ds.shape[0], 8, 2))
+
+def get_outter(projected_3dboxes):
+    outter_boxes = []
+    for boxes in projected_3dboxes:
+        xmax = max(boxes[:, 0])
+        xmin = min(boxes[:, 0])
+        ymax = max(boxes[:, 1])
+        ymin = min(boxes[:, 1])
+        outter_boxes.append([ymin, xmin, ymax, xmax])
+    return np.array(outter_boxes, dtype=np.float)
