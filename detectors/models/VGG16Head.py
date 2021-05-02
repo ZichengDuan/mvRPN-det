@@ -25,6 +25,7 @@ class VGG16RoIHead(nn.Module):
         self.classifier = classifier
         self.cls_loc = nn.Linear(2048, n_class * 4).to("cuda:1")
         self.score = nn.Linear(2048, n_class).to("cuda:1")
+        self.ang_regressor = nn.Linear(2048, n_class * 2).to("cuda:1")
 
         normal_init(self.cls_loc, 0, 0.001)
         normal_init(self.score, 0, 0.01)
@@ -65,7 +66,8 @@ class VGG16RoIHead(nn.Module):
         fc7 = self.classifier(pool)
         roi_cls_locs = self.cls_loc(fc7)
         roi_scores = self.score(fc7)
-        return roi_cls_locs, roi_scores
+        sin_cos = self.ang_regressor(fc7)
+        return roi_cls_locs, roi_scores, sin_cos
 
 
 def normal_init(m, mean, stddev, truncated=False):

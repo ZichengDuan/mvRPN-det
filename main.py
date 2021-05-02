@@ -77,6 +77,7 @@ def main(args):
             trainer.test(epoch, test_loader, writer)
             # torch.save(model.state_dict(), os.path.join('/home/dzc/Desktop/CASIA/proj/mvdet/MVDet/finalModels/mvdet_model.pth'))
     writer.close()
+
 if __name__ == '__main__':
     # settings
     parser = argparse.ArgumentParser(description='Multiview detector')

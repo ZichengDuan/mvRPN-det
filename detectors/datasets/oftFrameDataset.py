@@ -27,9 +27,9 @@ class oftFrameDataset(VisionDataset):
         self.intrinsic_matrix = base.intrinsic_matrices
 
         if train:
-            frame_range = list(range(0, 1500))
+            frame_range = range(0, 1500)
         else:
-            frame_range = range(1600, 1700)
+            frame_range = range(1700, 1800)
 
         self.upsample_shape = list(map(lambda x: int(x / self.img_reduce), self.img_shape))
         img_reduce_local = np.array(self.img_shape) / np.array(self.upsample_shape)
@@ -47,6 +47,9 @@ class oftFrameDataset(VisionDataset):
         self.right_bboxes = {}
         self.left_dir = {}
         self.right_dir = {}
+        self.left_angle = {}
+        self.right_angle = {}
+
         self.img_fpaths = self.base.get_image_fpaths(frame_range)
         self.gt_fpath = os.path.join(self.root, 'gt.txt')
         self.prepare_gt()
@@ -120,13 +123,22 @@ class oftFrameDataset(VisionDataset):
         for fname in sorted(os.listdir(os.path.join(self.root, 'od_annotations'))):
             frame_left_dir = []
             frame_right_dir = []
+            frame_left_ang = []
+            frame_right_ang = []
+            frame_wxy = []
             frame = int(fname.split('.')[0])
             if frame in frame_range:
                 with open(os.path.join(self.root, 'od_annotations', fname)) as json_file:
                     cars = [json.load(json_file)][0]
                 for i, car in enumerate(cars):
+                    wx = int(car["wx"])
+                    wy = int(car["wy"])
                     left_dir = int(car["direc_left"])
                     right_dir = int(car["direc_right"])
+                    bev_angle = float(car["angle"])
+
+                    frame_wxy.append([wx, wy])
+
                     if Const.roi_classes != 1:
                         frame_left_dir.append(left_dir)
                         frame_right_dir.append(right_dir)
@@ -134,8 +146,27 @@ class oftFrameDataset(VisionDataset):
                         frame_left_dir.append(0)
                         frame_right_dir.append(0)
 
+                    # 0~360
+                    if bev_angle < 0:
+                        bev_angle += 2 * np.pi
+
+                    # 左角度标签
+                    alpha = np.arctan(Const.grid_height - wy / wx)
+                    left_target = bev_angle - alpha if bev_angle - alpha > 0 else bev_angle - alpha + 2 * np.pi
+                    frame_left_ang.append(left_target)
+
+                    # 右角度标签, 颠倒一下正方向
+                    bev_angle = np.pi - bev_angle if np.pi - bev_angle > 0 else bev_angle + np.pi
+                    alpha = np.arctan(wy / Const.grid_width - wx)
+                    right_target = bev_angle - alpha if bev_angle - alpha > 0 else bev_angle - alpha + 2 * np.pi
+                    frame_right_ang.append(right_target)
+
+
+                self.world_xy[frame] = frame_wxy
                 self.left_dir[frame] = frame_left_dir
                 self.right_dir[frame] = frame_right_dir
+                self.left_angle[frame] = frame_left_ang
+                self.right_angle[frame] = frame_right_ang
 
     def __getitem__(self, index):
         frame = list(self.bev_bboxes.keys())[index]
@@ -152,7 +183,12 @@ class oftFrameDataset(VisionDataset):
         right_bboxes = torch.tensor(self.right_bboxes[frame])
         left_dirs = torch.tensor(self.left_dir[frame])
         right_dirs = torch.tensor(self.right_dir[frame])
-        return imgs, bev_bboxes, left_bboxes, right_bboxes, left_dirs, right_dirs, frame, self.extrinsic_matrix, self.intrinsic_matrix
+        left_angles = torch.tensor(self.left_angle[frame])
+        right_angles = torch.tensor(self.right_angle[frame])
+        bev_xy =torch.tensor(self.frame_wxy[frame])
+
+
+        return imgs, bev_xy, bev_bboxes, left_bboxes, right_bboxes, left_dirs, right_dirs, left_angles, right_angles, frame, self.extrinsic_matrix, self.intrinsic_matrix
 
     def __len__(self):
         return len(self.bev_bboxes.keys())

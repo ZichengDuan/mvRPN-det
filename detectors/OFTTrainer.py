@@ -50,10 +50,14 @@ class OFTtrainer(BaseTrainer):
         LEFT_ROI_CLS_LOSS = 0
         RIGHT_ROI_LOC_LOSS = 0
         RIGHT_ROI_CLS_LOSS = 0
-        for batch_idx, (imgs, gt_bbox, gt_left_bbox, gt_right_bbox, left_dirs, right_dirs, frame, extrin, intrin) in enumerate(data_loader):
+        for batch_idx, data in enumerate(data_loader):
             optimizer.zero_grad()
+            imgs, bev_xy, gt_bbox, gt_left_bbox, gt_right_bbox, left_dirs, right_dirs, left_angles, right_angles, frame, extrin, intrin = data
             img_size = (Const.grid_height, Const.grid_width)
             rpn_locs, rpn_scores, anchor, rois, roi_indices, img_featuremaps, bev_featuremaps = self.model(imgs)
+
+            # visualize angle
+
 
             rpn_loc = rpn_locs[0]
             rpn_score = rpn_scores[0]
@@ -82,11 +86,13 @@ class OFTtrainer(BaseTrainer):
 
             # ----------------ROI------------------------------
             # 还需要在双视角下的回归gt，以及筛选过后的分类gt，gt_left_loc, gt_left_label, gt_right_loc, gt_right_label
-            left_2d_bbox, left_sample_roi, left_gt_loc, left_gt_label, right_2d_bbox,right_sample_roi, right_gt_loc, right_gt_label = self.proposal_target_creator(
+            left_2d_bbox, left_sample_roi, left_gt_loc, left_gt_label, left_gt_angles, left_pos_index, right_2d_bbox,right_sample_roi, right_gt_loc, right_gt_label, right_gt_angles, right_pos_index = self.proposal_target_creator(
                 roi,
                 at.tonumpy(gt_bbox),
                 at.tonumpy(left_dir),
                 at.tonumpy(right_dir),
+                at.tonumpy(left_angles),
+                at.tonumpy(right_angles),
                 gt_left_bbox,
                 gt_right_bbox,
                 extrin, intrin, frame,
@@ -96,7 +102,7 @@ class OFTtrainer(BaseTrainer):
             right_sample_roi_index = torch.zeros(len(right_sample_roi))
 
             # ---------------------------left_roi_pooling---------------------------------
-            left_roi_cls_loc, left_roi_score = self.roi_head(
+            left_roi_cls_loc, left_roi_score, left_sin_cos = self.roi_head(
                 img_featuremaps[0],
                 torch.tensor(left_2d_bbox).to(img_featuremaps[0].device),
                 left_sample_roi_index)
@@ -115,8 +121,10 @@ class OFTtrainer(BaseTrainer):
 
             left_roi_cls_loss = nn.CrossEntropyLoss()(left_roi_score, left_gt_label.to(left_roi_score.device))
 
+            left_sin_cos = left_sin_cos[left_pos_index]
+            left_angle_loss = self.MSELoss(left_sin_cos, left_gt_angles)
             # ---------------------------right_roi_pooling---------------------------------
-            right_roi_cls_loc, right_roi_score = self.roi_head(
+            right_roi_cls_loc, right_roi_score, right_sin_cos = self.roi_head(
                 img_featuremaps[1],
                 torch.tensor(right_2d_bbox).to(img_featuremaps[1].device),
                 right_sample_roi_index)
@@ -136,6 +144,9 @@ class OFTtrainer(BaseTrainer):
 
             right_roi_cls_loss = nn.CrossEntropyLoss()(right_roi_score, right_gt_label.to(right_roi_score.device))
 
+            right_sin_cos = right_sin_cos[right_pos_index]
+
+            right_angle_loss = self.MSELoss(right_sin_cos, right_gt_angles)
 
             # --------------------测试roi pooling------------------------
             # sample_roi, gt_roi_loc, gt_roi_label = self.proposal_target_creator_ori(
@@ -184,28 +195,33 @@ class OFTtrainer(BaseTrainer):
             Loss += loss
             RPN_CLS_LOSS += rpn_cls_loss
             RPN_LOC_LOSS += rpn_loc_loss
-            LEFT_ROI_LOC_LOSS += left_roi_loc_loss
+            LEFT_ROI_LOC_LOSS += left_roi_loc_loss / 2
             LEFT_ROI_CLS_LOSS += left_roi_cls_loss
-            LEFT_ROI_LOC_LOSS += left_roi_loc_loss
-            LEFT_ROI_CLS_LOSS += left_roi_cls_loss
+            RIGHT_ROI_LOC_LOSS += right_roi_loc_loss / 2
+            RIGHT_ROI_CLS_LOSS += right_roi_cls_loss
             # ------------------------------------------------------------
             loss.backward()
             optimizer.step()
             niter = epoch * len(data_loader) + batch_idx
 
-            writer.add_scalar("Training Total Loss", Loss / (batch_idx + 1), niter)
-            writer.add_scalar("Training rpn_loc_loss", RPN_LOC_LOSS / (batch_idx + 1), niter)
-            writer.add_scalar("Training rpn_cls_loss", RPN_CLS_LOSS / (batch_idx + 1), niter)
-            writer.add_scalar("Training ROI_Loc LOSS", ROI_LOC_LOSS / (batch_idx + 1), niter)
-            writer.add_scalar("Training ROI_Cls LOSS", ROI_CLS_LOSS / (batch_idx + 1), niter)
+            writer.add_scalar("Total Loss", Loss / (batch_idx + 1), niter)
+            writer.add_scalar("rpn_loc_loss", RPN_LOC_LOSS / (batch_idx + 1), niter)
+            writer.add_scalar("rpn_cls_loss", RPN_CLS_LOSS / (batch_idx + 1), niter)
+            writer.add_scalar("LEFT ROI_Loc LOSS", LEFT_ROI_LOC_LOSS / (batch_idx + 1), niter)
+            writer.add_scalar("LEFT ROI_Cls LOSS", LEFT_ROI_CLS_LOSS / (batch_idx + 1), niter)
+            writer.add_scalar("RIGHT ROI_Loc LOSS", RIGHT_ROI_LOC_LOSS / (batch_idx + 1), niter)
+            writer.add_scalar("RIGHT ROI_Cls LOSS", RIGHT_ROI_CLS_LOSS / (batch_idx + 1), niter)
 
             if batch_idx % 10 == 0:
-                print("Iteration: %d" % batch_idx, "Training Total Loss: ", Loss.detach().cpu().item() / (batch_idx + 1),
-                      "Training Loc Loss: ", RPN_LOC_LOSS.detach().cpu().item() / (batch_idx + 1),
-                      "Training Cls Loss: ", RPN_CLS_LOSS.detach().cpu().item() / (batch_idx + 1),
-                      "Training ROI_Loc LOSS: ", (ROI_LOC_LOSS.detach().cpu().item() / 2) / (batch_idx + 1),
-                      "Training ROI_Cls LOSS: ", (ROI_CLS_LOSS.detach().cpu().item()) / (batch_idx + 1))
-
+                print("Iteration: %d\n" % batch_idx,
+                      "Total: %4f\n" % (Loss.detach().cpu().item() / (batch_idx + 1)),
+                      "Rpn Loc : %4f    || " % (RPN_LOC_LOSS.detach().cpu().item() / (batch_idx + 1)),
+                      "Rpn Cls : %4f    ||" % (RPN_CLS_LOSS.detach().cpu().item() / (batch_idx + 1)),
+                      "LEFT ROI_Loc: %4f    || " % ((LEFT_ROI_LOC_LOSS.detach().cpu().item() / 2) / (batch_idx + 1)),
+                      "LEFT ROI_Cls : %4f   ||" % ((LEFT_ROI_CLS_LOSS.detach().cpu().item()) / (batch_idx + 1)),
+                      "RIGHT ROI_Loc : %4f  || " % ((RIGHT_ROI_LOC_LOSS.detach().cpu().item() / 2) / (batch_idx + 1)),
+                      "RIGHT ROI_Cls : %4f" % ((RIGHT_ROI_CLS_LOSS.detach().cpu().item()) / (batch_idx + 1)))
+                print("----------------------------------------------------------------------------------------------------------------------------------------------------------------------")
             # 给两个图上的框指定gt的loc，目前已经有gt_roi_label_left, gt_roi_label_right,
 
             # for car in left_2d_bbox:
@@ -243,10 +259,15 @@ class OFTtrainer(BaseTrainer):
             #
             # for idx, bbx in enumerate(left_bbox):
             #     cv2.rectangle(bev_img, (int(bbx[1]), int(bbx[0])), (int(bbx[3]), int(bbx[2])), color=(255, 255, 0), thickness=1)
-            #
-            # for idx, bbxx in enumerate(gt_bbox):
-            #     cv2.rectangle(bev_img, (int(bbxx[1]), int(bbxx[0])), (int(bbxx[3]), int(bbxx[2])), color=(255, 0, 0), thickness=3)
-            #
+
+            # for idx, bbxx in enumerate(gt_left_bbox):
+            #     for item in bbxx:
+            #         # print(np.dot(intrin[0][0], extrin[0][0]))
+            #         # print(np.dot(item, np.dot(intrin[0][0], extrin[0][0])))
+
+
+
+
             # for idx, bbx in enumerate(left_2d_bbox):
             #     cv2.rectangle(left_img, (int(bbx[1]), int(bbx[0])), (int(bbx[3]), int(bbx[2])), color=(255, 255, 0), thickness=1)
             #     # cv2.circle(left_img, (int((bbx[3] + bbx[1]) / 2), (int((bbx[2] + bbx[0]) / 2))), 1, color=(255, 255, 0))
@@ -258,7 +279,8 @@ class OFTtrainer(BaseTrainer):
 
     def test(self,epoch, data_loader, writer):
         self.model.eval()
-        for batch_idx, (imgs, gt_bbox, gt_left_bbox, gt_right_bbox, left_dirs, right_dirs, frame, extrin, intrin) in enumerate(data_loader):
+        for batch_idx, data in enumerate(data_loader):
+            imgs, bev_xy, gt_bbox, gt_left_bbox, gt_right_bbox, left_dirs, right_dirs, left_angles, right_angles, frame, extrin, intrin = data
             with torch.no_grad():
                 rpn_locs, rpn_scores, anchor, rois, roi_indices, img_featuremaps, bev_featuremaps = self.model(imgs)
 
@@ -269,64 +291,133 @@ class OFTtrainer(BaseTrainer):
             gt_right_bbox = gt_right_bbox[0]
             roi = torch.tensor(rois)
 
-            # roi_cls_locs, roi_scores = self.roi_head(
-            #     bev_featuremaps, rois, roi_indices)
-
             # -----------投影------------
             # 筛选出来能用的roi，在480、 640内
             # 保留相应的roi和index
-            roi_remain_idx = []
+            left_roi_remain_idx = []
+            right_roi_remain_idx = []
             for id, bbox in enumerate(roi):
                 y = (bbox[0] + bbox[2]) / 2
                 x = (bbox[1] + bbox[3]) / 2
                 z = 0
-                pt2d = getimage_pt(np.array([x, Const.grid_height - y, z]).reshape(3, 1), extrin[0][0], intrin[0][0])
-                if 0 < int(pt2d[0]) < Const.ori_img_width and 0 < int(pt2d[1]) < Const.ori_img_height:
-                    roi_remain_idx.append(id)
+                left_pt2d = getimage_pt(np.array([x, Const.grid_height - y, z]).reshape(3, 1), extrin[0][0], intrin[0][0])
+                right_pt2d = getimage_pt(np.array([x, Const.grid_height - y, z]).reshape(3, 1), extrin[1][0], intrin[1][0])
+                if 0 < int(left_pt2d[0]) < Const.ori_img_width and 0 < int(left_pt2d[1]) < Const.ori_img_height:
+                    left_roi_remain_idx.append(id)
+                if 0 < int(right_pt2d[0]) < Const.ori_img_width and 0 < int(right_pt2d[1]) < Const.ori_img_height:
+                    right_roi_remain_idx.append(id)
 
-            left_roi_3d = generate_3d_bbox(roi)
+            left_roi_remain = roi[left_roi_remain_idx]
+            left_rois_indices = roi_indices[left_roi_remain_idx]
+            right_roi_remain = roi[right_roi_remain_idx]
+            right_rois_indices = roi_indices[right_roi_remain_idx]
+
+            left_roi_3d = generate_3d_bbox(left_roi_remain)
             left_2d_bbox, _ = getprojected_3dbox(left_roi_3d, extrin, intrin)
             left_2d_bbox = get_outter(left_2d_bbox)
-
-            left_2d_bbox = left_2d_bbox[roi_remain_idx]
-            # left_rois = roi[roi_remain_idx]
-            left_rois_indices = roi_indices[roi_remain_idx]
             left_2d_bbox = torch.tensor(left_2d_bbox)
-            #---------------------------
+
+            right_roi_3d = generate_3d_bbox(right_roi_remain)
+            _, right_2d_bbox = getprojected_3dbox(right_roi_3d, extrin, intrin)
+            right_2d_bbox = get_outter(right_2d_bbox)
+            right_2d_bbox = torch.tensor(right_2d_bbox)
+
+            #------------左右ROI pooling-----------
             left_roi_cls_loc, left_roi_score = self.roi_head(
                 img_featuremaps[0],
                 left_2d_bbox.to(img_featuremaps[0].device),
                 left_rois_indices)
 
-            # ------------------------------------------------------------
-            roi_cls_loc = left_roi_cls_loc.data
-            roi_score = left_roi_score.data
-            mean = torch.Tensor(self.loc_normalize_mean).to(roi_cls_loc.device). \
+            right_roi_cls_loc, right_roi_score = self.roi_head(
+                img_featuremaps[1],
+                right_2d_bbox.to(img_featuremaps[1].device),
+                right_rois_indices)
+
+            # -----------------------LEFT NMS---------------------------
+            left_roi_cls_loc = left_roi_cls_loc.data
+            left_roi_score = left_roi_score.data
+            mean = torch.Tensor(self.loc_normalize_mean).to(left_roi_cls_loc.device). \
                 repeat(self.n_class)[None]
-            std = torch.Tensor(self.loc_normalize_std).to(roi_cls_loc.device). \
+            std = torch.Tensor(self.loc_normalize_std).to(left_roi_cls_loc.device). \
                 repeat(self.n_class)[None]
-            roi_cls_loc = (roi_cls_loc * std + mean)
-            roi_cls_loc = roi_cls_loc.view(-1, self.n_class, 4)
-            left_rois = left_2d_bbox.view(-1, 1, 4).expand_as(roi_cls_loc)
-            cls_bbox = loc2bbox(at.tonumpy(left_rois).reshape((-1, 4)),
-                                at.tonumpy(roi_cls_loc).reshape((-1, 4)))
+            left_roi_cls_loc = (left_roi_cls_loc * std + mean)
+            left_roi_cls_loc = left_roi_cls_loc.view(-1, self.n_class, 4)
+            left_rois = left_2d_bbox.view(-1, 1, 4).expand_as(left_roi_cls_loc)
+            left_cls_bbox = loc2bbox(at.tonumpy(left_rois).reshape((-1, 4)),
+                                at.tonumpy(left_roi_cls_loc).reshape((-1, 4)))
 
-            prob = at.tonumpy(F.softmax(at.totensor(roi_score), dim=1))
+            left_prob = at.tonumpy(F.softmax(at.totensor(left_roi_score), dim=1))
 
-            raw_cls_bbox = at.tonumpy(cls_bbox)
-            raw_prob = at.tonumpy(prob)
+            left_raw_cls_bbox = at.tonumpy(left_cls_bbox)
+            left_raw_prob = at.tonumpy(left_prob)
+            # print(left_rois_indices.shape, left_roi_remain.shape, left_raw_prob.shape, left_raw_cls_bbox.shape)
+            left_bbox, left_label, left_score = _suppress(left_raw_cls_bbox, left_raw_prob)
 
-            bbox, label, score = _suppress(raw_cls_bbox, raw_prob)
+            # -----------------------RIGHT NMS---------------------------
+            right_roi_cls_loc = right_roi_cls_loc.data
+            right_roi_score = right_roi_score.data
+            mean = torch.Tensor(self.loc_normalize_mean).to(right_roi_cls_loc.device). \
+                repeat(self.n_class)[None]
+            std = torch.Tensor(self.loc_normalize_std).to(right_roi_cls_loc.device). \
+                repeat(self.n_class)[None]
+            right_roi_cls_loc = (right_roi_cls_loc * std + mean)
+            right_roi_cls_loc = right_roi_cls_loc.view(-1, self.n_class, 4)
+            right_rois = right_2d_bbox.view(-1, 1, 4).expand_as(right_roi_cls_loc)
+            right_cls_bbox = loc2bbox(at.tonumpy(right_rois).reshape((-1, 4)),
+                                at.tonumpy(right_roi_cls_loc).reshape((-1, 4)))
 
-            left_img = cv2.imread("/home/dzc/Data/4carreal_0318blend/img/left1/%d.jpg" % frame)
-            for idx, bbx in enumerate(gt_left_bbox):
-                cv2.rectangle(left_img, (int(bbx[1]), int(bbx[0])), (int(bbx[3]), int(bbx[2])), color=(255, 255, 0),
+            right_prob = at.tonumpy(F.softmax(at.totensor(right_roi_score), dim=1))
+
+            right_raw_cls_bbox = at.tonumpy(right_cls_bbox)
+            right_raw_prob = at.tonumpy(right_prob)
+
+            # right_bbox, right_label, right_score = _suppress(right_raw_cls_bbox, right_raw_prob)
+            # --------------------ROI prob 指导 RPN nms-------------------------
+            # 提出前景的概率和前景；类的框
+            left_front_prob = left_prob[:, 1]
+            left_bev_boxes, _ = nms_new(left_roi_remain, left_front_prob)
+            # -----------------------可视化---------------------------
+            # left_img = cv2.imread("/home/dzc/Data/4carreal_0318blend/img/left1/%d.jpg" % frame)
+            # for idx, bbx in enumerate(gt_left_bbox):
+            #     cv2.rectangle(left_img, (int(bbx[1]), int(bbx[0])), (int(bbx[3]), int(bbx[2])), color=(255, 255, 0),
+            #                   thickness=3)
+            #
+            # for idx, bbxx in enumerate(left_bbox):
+            #     cv2.rectangle(left_img, (int(bbxx[1]), int(bbxx[0])), (int(bbxx[3]), int(bbxx[2])), color=(255, 0, 0),
+            #                   thickness=2)
+            # cv2.imwrite("/home/dzc/Desktop/CASIA/proj/mvRPN-det/images/left_roi/%d.jpg" % frame, left_img)
+            #
+            #
+            # right_img = cv2.imread("/home/dzc/Data/4carreal_0318blend/img/right2/%d.jpg" % frame)
+            # for idx, bbx in enumerate(gt_right_bbox):
+            #     cv2.rectangle(right_img, (int(bbx[1]), int(bbx[0])), (int(bbx[3]), int(bbx[2])), color=(255, 255, 0),
+            #                   thickness=3)
+            #
+            # for idx, bbxx in enumerate(right_bbox):
+            #     cv2.rectangle(right_img, (int(bbxx[1]), int(bbxx[0])), (int(bbxx[3]), int(bbxx[2])), color=(255, 0, 0),
+            #                   thickness=2)
+            # cv2.imwrite("/home/dzc/Desktop/CASIA/proj/mvRPN-det/images/right_roi/%d.jpg" % frame, right_img)
+
+            bev_img = cv2.imread("/home/dzc/Data/4carreal_0318blend/bevimgs/%d.jpg" % frame)
+            for idx, bbx in enumerate(gt_bbox):
+                cv2.rectangle(bev_img, (int(bbx[1]), int(bbx[0])), (int(bbx[3]), int(bbx[2])), color=(255, 255, 0),
                               thickness=3)
-            for idx, bbxx in enumerate(bbox):
-                cv2.rectangle(left_img, (int(bbxx[1]), int(bbxx[0])), (int(bbxx[3]), int(bbxx[2])), color=(255, 0, 0),
+            for idx, bbxx in enumerate(left_bev_boxes):
+                cv2.rectangle(bev_img, (int(bbxx[1]), int(bbxx[0])), (int(bbxx[3]), int(bbxx[2])), color=(255, 0, 0),
                               thickness=2)
-            cv2.imwrite("/home/dzc/Desktop/CASIA/proj/mvRPN-det/images/left_roi/%d.jpg" % frame, left_img)
-            
+
+            # for idx, bbxx in enumerate(left_roi_remain):
+            #     cv2.rectangle(bev_img, (int(bbxx[1]), int(bbxx[0])), (int(bbxx[3]), int(bbxx[2])), color=(100, 0, 233),
+            #                   thickness=1)
+
+
+            #
+            # for idx, bbxx in enumerate(right_bbox):
+            #     cv2.rectangle(bev_img, (int(bbxx[1]), int(bbxx[0])), (int(bbxx[3]), int(bbxx[2])), color=(123, 123, 18),
+            #                   thickness=1)
+
+            cv2.imwrite("/home/dzc/Desktop/CASIA/proj/mvRPN-det/images/bev_rot/%d.jpg" % frame, bev_img)
+
     @property
     def n_class(self):
         # Total number of classes including the background.

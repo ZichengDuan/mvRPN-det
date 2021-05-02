@@ -65,7 +65,7 @@ class PerspTransDetector(nn.Module):
             world_feature = kornia.vflip(world_feature)
             world_features.append(world_feature.to('cuda:1'))
         world_features = torch.cat(world_features + [self.coord_map.repeat([B, 1, 1, 1]).to('cuda:1')], dim=1)
-        vis_feature(img_featuremap[0], max_num=5, out_path='/home/dzc/Desktop/CASIA/proj/mvRPN-det/images/')
+        # vis_feature(img_featuremap[0], max_num=5, out_path='/home/dzc/Desktop/CASIA/proj/mvRPN-det/images/')
         rpn_locs, rpn_scores, anchor, rois, roi_indices = self.rpn(world_features, Const.grid_size)
 
         # vis_feature(world_features, max_num=5, out_path='/home/dzc/Desktop/CASIA/proj/mvRPN-det/images/')

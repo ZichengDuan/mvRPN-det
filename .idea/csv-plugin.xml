@@ -10,6 +10,13 @@
             </Attribute>
           </value>
         </entry>
+        <entry key="/detectors/datasets/oftFrameDataset.py">
+          <value>
+            <Attribute>
+              <option name="separator" value="," />
+            </Attribute>
+          </value>
+        </entry>
         <entry key="/detectors/models/persp_trans_detector.py">
           <value>
             <Attribute>

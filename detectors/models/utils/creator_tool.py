@@ -41,55 +41,10 @@ class ProposalTargetCreator(object):
         self.neg_iou_thresh_hi = neg_iou_thresh_hi
         self.neg_iou_thresh_lo = neg_iou_thresh_lo  # NOTE:default 0.1 in py-faster-rcnn
 
-    def __call__(self, roi, gt_bev_bbox, left_label, right_label, left_gt_bbox, right_gt_bbox, extrin, intrin, frame,
+    def __call__(self, roi, gt_bev_bbox, left_label, right_label, left_angles, right_angles, left_gt_bbox, right_gt_bbox, extrin, intrin, frame,
                  loc_normalize_mean=(0., 0., 0., 0.),
                  loc_normalize_std=(0.1, 0.1, 0.2, 0.2)):
-        """Assigns ground truth to sampled proposals.
 
-        This function samples total of :obj:`self.n_sample` RoIs
-        from the combination of :obj:`roi` and :obj:`bbox`.
-        The RoIs are assigned with the ground truth class labels as well as
-        bounding box offsets and scales to match the ground truth bounding
-        boxes. As many as :obj:`pos_ratio * self.n_sample` RoIs are
-        sampled as foregrounds.
-
-        Offsets and scales of bounding boxes are calculated using
-        :func:`model.utils.bbox_tools.bbox2loc`.
-        Also, types of input arrays and output arrays are same.
-
-        Here are notations.
-
-        * :math:`S` is the total number of sampled RoIs, which equals \
-            :obj:`self.n_sample`.
-        * :math:`L` is number of object classes possibly including the \
-            background.
-
-        Args:
-            roi (array): Region of Interests (RoIs) from which we sample.
-                Its shape is :math:`(R, 4)`
-            bbox (array): The coordinates of ground truth bounding boxes.
-                Its shape is :math:`(R', 4)`.
-            label (array): Ground truth bounding box labels. Its shape
-                is :math:`(R',)`. Its range is :math:`[0, L - 1]`, where
-                :math:`L` is the number of foreground classes.
-            loc_normalize_mean (tuple of four floats): Mean values to normalize
-                coordinates of bouding boxes.
-            loc_normalize_std (tupler of four floats): Standard deviation of
-                the coordinates of bounding boxes.
-
-        Returns:
-            (array, array, array):
-
-            * **sample_roi**: Regions of interests that are sampled. \
-                Its shape is :math:`(S, 4)`.
-            * **gt_roi_loc**: Offsets and scales to match \
-                the sampled RoIs to the ground truth bounding boxes. \
-                Its shape is :math:`(S, 4)`.
-            * **gt_roi_label**: Labels assigned to sampled RoIs. Its shape is \
-                :math:`(S,)`. Its range is :math:`[0, L]`. The label with \
-                value 0 is the background.
-
-        """
         left_remove_idx = []
         right_remove_idx = []
         for i in range(len(left_gt_bbox)):
@@ -103,8 +58,6 @@ class ProposalTargetCreator(object):
         gt_right_bev_bbox = np.delete(gt_bev_bbox, right_remove_idx, axis=0)
         left_gt_bbox = np.delete(left_gt_bbox, left_remove_idx, axis=0)
         right_gt_bbox = np.delete(right_gt_bbox, right_remove_idx, axis=0)
-
-        
 
         # left
         # 限定用于左侧的roi
@@ -126,7 +79,10 @@ class ProposalTargetCreator(object):
         left_max_iou = left_iou.max(axis=1) # 每个roi对应iou最大的一个gt框的置信度值
         # Offset range of classes from [0, n_fg_class - 1] to [1, n_fg_class].
         # The label with value 0 is the background.
+        print(left_angles.shape, left_gt_assignment.shape)
+        gt_roi_angles_left = left_angles.reshape(-1)[left_gt_assignment]
         gt_roi_label_left = left_label[left_gt_assignment] + 1 # 每一个roi对应的gt及其gt的分类
+
 
         # Select foreground RoIs as those with >= pos_iou_thresh IoU.
         left_pos_index = np.where(left_max_iou >= self.pos_iou_thresh)[0]
@@ -151,6 +107,8 @@ class ProposalTargetCreator(object):
         left_gt_label = gt_roi_label_left[left_keep_index]
         left_gt_label[left_pos_roi_per_this_image:] = 0  # negative labels --> 0
 
+        left_gt_angles = gt_roi_angles_left[left_pos_index]
+
         left_sample_roi = left_roi[left_keep_index]
 
         # -------------------------------right--------------------------------------
@@ -163,6 +121,7 @@ class ProposalTargetCreator(object):
         # Offset range of classes from [0, n_fg_class - 1] to [1, n_fg_class].
         # The label with value 0 is the background.
         gt_roi_label_right = right_label[right_gt_assignment] + 1
+        gt_roi_angles_right = right_angles.reshape(-1)[right_gt_assignment]
 
         # Select foreground RoIs as those with >= pos_iou_thresh IoU.
         right_pos_index = np.where(right_max_iou >= self.pos_iou_thresh)[0]
@@ -187,6 +146,8 @@ class ProposalTargetCreator(object):
 
         right_gt_label = gt_roi_label_right[right_keep_index]
         right_gt_label[right_pos_roi_per_this_image:] = 0  # negative labels --> 0
+
+        right_gt_angles = gt_roi_angles_right[right_pos_index]
 
         right_sample_roi = right_roi[right_keep_index]
         # ------------------------开始转换坐标-------------------------
@@ -215,7 +176,7 @@ class ProposalTargetCreator(object):
         right_gt_loc = ((right_gt_roi_loc - np.array(loc_normalize_mean, np.float32)
                        ) / np.array(loc_normalize_std, np.float32))
 
-        return left_2d_bbox, left_sample_roi, left_gt_loc, left_gt_label, right_2d_bbox, right_sample_roi, right_gt_loc, right_gt_label
+        return left_2d_bbox, left_sample_roi, left_gt_loc, left_gt_label, left_gt_angles, left_pos_index, right_2d_bbox, right_sample_roi, right_gt_loc, right_gt_label, right_gt_angles, right_pos_index
 
 class ProposalTargetCreator_ori(object):
     """Assign ground truth bounding boxes to given RoIs.
