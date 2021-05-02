@@ -10,7 +10,7 @@ class Const:
 
     # 场地大小
 
-    grid_height = 448
+    grid_height = 449
 
     grid_width = 800
 

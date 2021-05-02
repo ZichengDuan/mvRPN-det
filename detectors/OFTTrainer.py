@@ -48,15 +48,37 @@ class OFTtrainer(BaseTrainer):
         RPN_LOC_LOSS = 0
         LEFT_ROI_LOC_LOSS = 0
         LEFT_ROI_CLS_LOSS = 0
+        LEFT_ANGLE_REG_LOSS = 0
         RIGHT_ROI_LOC_LOSS = 0
         RIGHT_ROI_CLS_LOSS = 0
+        RIGHT_ANGLE_REG_LOSS = 0
+
         for batch_idx, data in enumerate(data_loader):
             optimizer.zero_grad()
-            imgs, bev_xy, gt_bbox, gt_left_bbox, gt_right_bbox, left_dirs, right_dirs, left_angles, right_angles, frame, extrin, intrin = data
+            imgs, bev_xy, gt_bbox, gt_left_bbox, gt_right_bbox, left_dirs, right_dirs, left_sincos, right_sincos, frame, extrin, intrin = data
             img_size = (Const.grid_height, Const.grid_width)
             rpn_locs, rpn_scores, anchor, rois, roi_indices, img_featuremaps, bev_featuremaps = self.model(imgs)
 
             # visualize angle
+            #bev_img = cv2.imread("/home/dzc/Data/4carreal_0318blend/bevimgs/%d.jpg" % frame)
+            #for idx, pt in enumerate(bev_xy.squeeze()):
+                #print(pt)
+                #x, y = pt[0], pt[1]
+                #cv2.circle(bev_img, (x, y), radius=2, color=(255, 255, 0))
+                # cv2.line(bev_img, (0, Const.grid_height - 1), (x, y), color = (255, 255, 0))
+                #ray = np.arctan(y / (Const.grid_width - x))
+                #theta_l = right_angles.squeeze()[idx]
+                #theta = theta_l + ray
+
+                #x1_rot = x - 30
+                #y1_rot = Const.grid_height - y
+
+                #nrx = (x1_rot - x) * np.cos(theta) - (y1_rot - (Const.grid_height - y)) * np.sin(theta) + x
+                #nry = (x1_rot - x) * np.sin(theta) + (y1_rot - (Const.grid_height - y)) * np.cos(theta) + (Const.grid_height - y)
+
+                #cv2.arrowedLine(bev_img, (x, y), (nrx, Const.grid_height - nry), color=(255, 255, 0))
+                #cv2.line(bev_img, (Const.grid_width - 1, 0), (x, y), color = (155, 25, 0))
+            #cv2.imwrite("/home/dzc/Desktop/CASIA/proj/mvRPN-det/images/angle.jpg", bev_img)
 
 
             rpn_loc = rpn_locs[0]
@@ -86,13 +108,13 @@ class OFTtrainer(BaseTrainer):
 
             # ----------------ROI------------------------------
             # 还需要在双视角下的回归gt，以及筛选过后的分类gt，gt_left_loc, gt_left_label, gt_right_loc, gt_right_label
-            left_2d_bbox, left_sample_roi, left_gt_loc, left_gt_label, left_gt_angles, left_pos_index, right_2d_bbox,right_sample_roi, right_gt_loc, right_gt_label, right_gt_angles, right_pos_index = self.proposal_target_creator(
+            left_2d_bbox, left_sample_roi, left_gt_loc, left_gt_label, left_gt_sincos, left_pos_num, right_2d_bbox,right_sample_roi, right_gt_loc, right_gt_label, right_gt_sincos, right_pos_num = self.proposal_target_creator(
                 roi,
                 at.tonumpy(gt_bbox),
                 at.tonumpy(left_dir),
                 at.tonumpy(right_dir),
-                at.tonumpy(left_angles),
-                at.tonumpy(right_angles),
+                at.tonumpy(left_sincos),
+                at.tonumpy(right_sincos),
                 gt_left_bbox,
                 gt_right_bbox,
                 extrin, intrin, frame,
@@ -102,11 +124,10 @@ class OFTtrainer(BaseTrainer):
             right_sample_roi_index = torch.zeros(len(right_sample_roi))
 
             # ---------------------------left_roi_pooling---------------------------------
-            left_roi_cls_loc, left_roi_score, left_sin_cos = self.roi_head(
+            left_roi_cls_loc, left_roi_score, left_pred_sincos = self.roi_head(
                 img_featuremaps[0],
                 torch.tensor(left_2d_bbox).to(img_featuremaps[0].device),
                 left_sample_roi_index)
-
             left_n_sample = left_roi_cls_loc.shape[0]
             left_roi_cls_loc = left_roi_cls_loc.view(left_n_sample, -1, 4)
             left_roi_loc = left_roi_cls_loc[torch.arange(0, left_n_sample).long().cuda(), at.totensor(left_gt_label).long()]
@@ -118,13 +139,11 @@ class OFTtrainer(BaseTrainer):
                 left_gt_loc,
                 left_gt_label.data,
                 1)
-
             left_roi_cls_loss = nn.CrossEntropyLoss()(left_roi_score, left_gt_label.to(left_roi_score.device))
-
-            left_sin_cos = left_sin_cos[left_pos_index]
-            left_angle_loss = self.MSELoss(left_sin_cos, left_gt_angles)
+            left_pred_sincos = left_pred_sincos[:len(left_pos_num)]
+            left_sincos_loss = self.MSELoss(left_pred_sincos, torch.tensor(left_gt_sincos).to(left_pred_sincos.device))
             # ---------------------------right_roi_pooling---------------------------------
-            right_roi_cls_loc, right_roi_score, right_sin_cos = self.roi_head(
+            right_roi_cls_loc, right_roi_score, right_pred_sincos = self.roi_head(
                 img_featuremaps[1],
                 torch.tensor(right_2d_bbox).to(img_featuremaps[1].device),
                 right_sample_roi_index)
@@ -143,10 +162,8 @@ class OFTtrainer(BaseTrainer):
                 1)
 
             right_roi_cls_loss = nn.CrossEntropyLoss()(right_roi_score, right_gt_label.to(right_roi_score.device))
-
-            right_sin_cos = right_sin_cos[right_pos_index]
-
-            right_angle_loss = self.MSELoss(right_sin_cos, right_gt_angles)
+            right_pred_sincos = right_pred_sincos[:len(right_pos_num)]
+            right_sincos_loss = self.MSELoss(right_pred_sincos, torch.tensor(right_gt_sincos).to(right_pred_sincos.device))
 
             # --------------------测试roi pooling------------------------
             # sample_roi, gt_roi_loc, gt_roi_label = self.proposal_target_creator_ori(
@@ -191,14 +208,16 @@ class OFTtrainer(BaseTrainer):
 
             # roi_cls_loss = nn.CrossEntropyLoss()(roi_score, gt_roi_label.to(roi_score.device))
             # ----------------------Loss-----------------------------
-            loss = rpn_loc_loss + rpn_cls_loss + left_roi_loc_loss / 2 + left_roi_cls_loss + right_roi_loc_loss / 2 + right_roi_cls_loss
+            loss = rpn_loc_loss + rpn_cls_loss + left_roi_loc_loss / 2 + left_roi_cls_loss + right_roi_loc_loss / 2 + right_roi_cls_loss + left_sincos_loss + right_sincos_loss
             Loss += loss
             RPN_CLS_LOSS += rpn_cls_loss
             RPN_LOC_LOSS += rpn_loc_loss
             LEFT_ROI_LOC_LOSS += left_roi_loc_loss / 2
             LEFT_ROI_CLS_LOSS += left_roi_cls_loss
+            LEFT_ANGLE_REG_LOSS += right_sincos_loss
             RIGHT_ROI_LOC_LOSS += right_roi_loc_loss / 2
             RIGHT_ROI_CLS_LOSS += right_roi_cls_loss
+            RIGHT_ANGLE_REG_LOSS += right_sincos_loss
             # ------------------------------------------------------------
             loss.backward()
             optimizer.step()
@@ -209,8 +228,10 @@ class OFTtrainer(BaseTrainer):
             writer.add_scalar("rpn_cls_loss", RPN_CLS_LOSS / (batch_idx + 1), niter)
             writer.add_scalar("LEFT ROI_Loc LOSS", LEFT_ROI_LOC_LOSS / (batch_idx + 1), niter)
             writer.add_scalar("LEFT ROI_Cls LOSS", LEFT_ROI_CLS_LOSS / (batch_idx + 1), niter)
+            writer.add_scalar("LEFT_ANGLE_REG_LOSS", RIGHT_ROI_CLS_LOSS / (batch_idx + 1), niter)
             writer.add_scalar("RIGHT ROI_Loc LOSS", RIGHT_ROI_LOC_LOSS / (batch_idx + 1), niter)
             writer.add_scalar("RIGHT ROI_Cls LOSS", RIGHT_ROI_CLS_LOSS / (batch_idx + 1), niter)
+            writer.add_scalar("RIGHT_ANGLE_REG_LOSS", RIGHT_ROI_CLS_LOSS / (batch_idx + 1), niter)
 
             if batch_idx % 10 == 0:
                 print("Iteration: %d\n" % batch_idx,
@@ -219,8 +240,10 @@ class OFTtrainer(BaseTrainer):
                       "Rpn Cls : %4f    ||" % (RPN_CLS_LOSS.detach().cpu().item() / (batch_idx + 1)),
                       "LEFT ROI_Loc: %4f    || " % ((LEFT_ROI_LOC_LOSS.detach().cpu().item() / 2) / (batch_idx + 1)),
                       "LEFT ROI_Cls : %4f   ||" % ((LEFT_ROI_CLS_LOSS.detach().cpu().item()) / (batch_idx + 1)),
+                      "Left SinCos : %4f" % ((LEFT_ANGLE_REG_LOSS.detach().cpu().item()) / (batch_idx + 1)),
                       "RIGHT ROI_Loc : %4f  || " % ((RIGHT_ROI_LOC_LOSS.detach().cpu().item() / 2) / (batch_idx + 1)),
-                      "RIGHT ROI_Cls : %4f" % ((RIGHT_ROI_CLS_LOSS.detach().cpu().item()) / (batch_idx + 1)))
+                      "RIGHT ROI_Cls : %4f" % ((RIGHT_ROI_CLS_LOSS.detach().cpu().item()) / (batch_idx + 1)),
+                      "RIGHT SinCos : %4f" % ((RIGHT_ANGLE_REG_LOSS.detach().cpu().item()) / (batch_idx + 1)))
                 print("----------------------------------------------------------------------------------------------------------------------------------------------------------------------")
             # 给两个图上的框指定gt的loc，目前已经有gt_roi_label_left, gt_roi_label_right,
 

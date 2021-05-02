@@ -27,7 +27,7 @@ class oftFrameDataset(VisionDataset):
         self.intrinsic_matrix = base.intrinsic_matrices
 
         if train:
-            frame_range = range(0, 1500)
+            frame_range = range(400, 1500)
         else:
             frame_range = range(1700, 1800)
 
@@ -49,6 +49,7 @@ class oftFrameDataset(VisionDataset):
         self.right_dir = {}
         self.left_angle = {}
         self.right_angle = {}
+        self.world_xy = {}
 
         self.img_fpaths = self.base.get_image_fpaths(frame_range)
         self.gt_fpath = os.path.join(self.root, 'gt.txt')
@@ -131,8 +132,8 @@ class oftFrameDataset(VisionDataset):
                 with open(os.path.join(self.root, 'od_annotations', fname)) as json_file:
                     cars = [json.load(json_file)][0]
                 for i, car in enumerate(cars):
-                    wx = int(car["wx"])
-                    wy = int(car["wy"])
+                    wx = int(car["wx"]) // 10
+                    wy = int(car["wy"]) // 10
                     left_dir = int(car["direc_left"])
                     right_dir = int(car["direc_right"])
                     bev_angle = float(car["angle"])
@@ -151,15 +152,18 @@ class oftFrameDataset(VisionDataset):
                         bev_angle += 2 * np.pi
 
                     # 左角度标签
-                    alpha = np.arctan(Const.grid_height - wy / wx)
-                    left_target = bev_angle - alpha if bev_angle - alpha > 0 else bev_angle - alpha + 2 * np.pi
-                    frame_left_ang.append(left_target)
+                    alpha = np.arctan((Const.grid_height - wy) / wx)
+                    left_target = bev_angle - alpha if bev_angle - alpha > 0 else 2 * np.pi + (bev_angle - alpha)
+                    frame_left_ang.append([np.sin(left_target), np.cos(left_target)])
 
                     # 右角度标签, 颠倒一下正方向
-                    bev_angle = np.pi - bev_angle if np.pi - bev_angle > 0 else bev_angle + np.pi
-                    alpha = np.arctan(wy / Const.grid_width - wx)
-                    right_target = bev_angle - alpha if bev_angle - alpha > 0 else bev_angle - alpha + 2 * np.pi
-                    frame_right_ang.append(right_target)
+                    bev_angle -= np.pi
+                    if bev_angle < 0:
+                        bev_angle += 2 * np.pi
+                    # bev_angle = np.pi - bev_angle if np.pi - bev_angle > 0 else bev_angle + np.pi
+                    alpha = np.arctan(wy / (Const.grid_width - wx))
+                    right_target = bev_angle - alpha if bev_angle - alpha > 0 else 2 * np.pi + (bev_angle - alpha)
+                    frame_right_ang.append([np.sin(right_target), np.cos(right_target)])
 
 
                 self.world_xy[frame] = frame_wxy
@@ -185,7 +189,7 @@ class oftFrameDataset(VisionDataset):
         right_dirs = torch.tensor(self.right_dir[frame])
         left_angles = torch.tensor(self.left_angle[frame])
         right_angles = torch.tensor(self.right_angle[frame])
-        bev_xy =torch.tensor(self.frame_wxy[frame])
+        bev_xy =torch.tensor(self.world_xy[frame])
 
 
         return imgs, bev_xy, bev_bboxes, left_bboxes, right_bboxes, left_dirs, right_dirs, left_angles, right_angles, frame, self.extrinsic_matrix, self.intrinsic_matrix
