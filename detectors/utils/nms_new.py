@@ -35,19 +35,18 @@ def _suppress(raw_cls_bbox, raw_prob):
     return bbox, label, score
 
 
-def nms_new(bboxes, confidence, sincos, threshold=0.05, prob_threshold = 0.4):
+def nms_new(bboxes, confidence, sincos, threshold=0.05, prob_threshold = 0.5):
     bbox = bboxes.squeeze()
     sincos = sincos.squeeze()
     confidence = torch.tensor(confidence)
-    keep = torch.zeros(confidence.shape).long()
-    if len(bbox) == 0:
-        return keep
-
-    v, indices = confidence.sort(0)  # sort in ascending order
-
     bbox_keep = []
     indices_keep = []
     sincos_keep = []
+
+    if len(bbox) == 0:
+        return [], [], []
+
+    v, indices = confidence.sort(0)  # sort in ascending order
     i = 0
     while len(indices) > 0:
         # print(keep_box(bbox_keep, bbox[indices[-1]], iou_threash=threshold))

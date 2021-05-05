@@ -108,7 +108,10 @@ class OFTtrainer(BaseTrainer):
 
             # ----------------ROI------------------------------
             # 还需要在双视角下的回归gt，以及筛选过后的分类gt，gt_left_loc, gt_left_label, gt_right_loc, gt_right_label
-            left_2d_bbox, left_sample_roi, left_gt_loc, left_gt_label, left_gt_sincos, left_pos_num, right_2d_bbox,right_sample_roi, right_gt_loc, right_gt_label, right_gt_sincos, right_pos_num = self.proposal_target_creator(
+            left_2d_bbox, left_sample_roi, left_gt_loc, left_gt_label,\
+            left_gt_sincos, left_pos_num, right_2d_bbox,right_sample_roi,\
+            right_gt_loc, right_gt_label, right_gt_sincos, right_pos_num \
+                = self.proposal_target_creator(
                 roi,
                 at.tonumpy(gt_bbox),
                 at.tonumpy(left_dir),
@@ -456,27 +459,19 @@ class OFTtrainer(BaseTrainer):
                                   thickness=2)
                     center_x, center_y = (bbxx[1] + bbxx[3]) // 2, (bbxx[0] + bbxx[2]) // 2
                     ray = np.arctan(center_y / (Const.grid_width - center_x))
-                    angle = np.arctan(right_sincos_remain[idx].detach().cpu().numpy()[0] /
-                                      right_sincos_remain[idx].detach().cpu().numpy()[1])
-                    if right_sincos_remain[idx].detach().cpu().numpy()[0] > 0 and right_sincos_remain[idx].detach().cpu().numpy()[1] < 0:
-                        angle += np.pi
-                    elif right_sincos_remain[idx].detach().cpu().numpy()[0] < 0 and right_sincos_remain[idx].detach().cpu().numpy()[1] < 0:
-                        angle += np.pi
-                    elif right_sincos_remain[idx].detach().cpu().numpy()[0] < 0 and right_sincos_remain[idx].detach().cpu().numpy()[1] > 0:
-                        angle += 2 * np.pi
-
-                    theta_l = angle
+                    angle = right_sincos_remain[idx].detach().cpu().numpy()
+                    theta_l = angle * np.pi if angle > 0 else (angle * np.pi + 2 * np.pi)
                     theta = theta_l + ray
 
-                    x1_rot = center_x - 30
-                    y1_rot = Const.grid_height - center_y
+                    x_rot = center_x - 30
+                    y_rot = Const.grid_height - center_y
 
-                    nrx = (x1_rot - center_x) * np.cos(theta) - (y1_rot - (Const.grid_height - center_y)) * np.sin(theta) + center_x
-                    nry = (x1_rot - center_x) * np.sin(theta) + (y1_rot - (Const.grid_height - center_y)) * np.cos(theta) + (Const.grid_height - center_y)
+                    nrx = (x_rot - center_x) * np.cos(theta) - (y_rot - (Const.grid_height - center_y)) * np.sin(theta) + center_x
+                    nry = (x_rot - center_x) * np.sin(theta) + (y_rot - (Const.grid_height - center_y)) * np.cos(theta) + (Const.grid_height - center_y)
 
                     cv2.arrowedLine(bev_img, (center_x, center_y), (nrx, Const.grid_height - nry), color=(255, 255, 0), thickness=2)
 
-            cv2.imwrite("/home/dzc/Desktop/CASIA/proj/mvRPN-det/images/bev_angle/%d.jpg" % frame, bev_img)
+            cv2.imwrite("/home/dzc/Desktop/CASIA/proj/mvRPN-det/images/angle_regression/bev_angle/%d.jpg" % frame, bev_img)
     @property
     def n_class(self):
         # Total number of classes including the background.

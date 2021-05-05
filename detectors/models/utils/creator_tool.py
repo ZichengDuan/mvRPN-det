@@ -80,7 +80,7 @@ class ProposalTargetCreator(object):
         # Offset range of classes from [0, n_fg_class - 1] to [1, n_fg_class].
         # The label with value 0 is the background.
         # print(left_angles.shape, left_gt_assignment.shape)
-        gt_roi_angles_left = left_angles.reshape(-1, 2)[left_gt_assignment]
+        gt_roi_angles_left = left_angles.reshape(-1)[left_gt_assignment]
         gt_roi_label_left = left_label[left_gt_assignment] + 1 # 每一个roi对应的gt及其gt的分类
 
 
@@ -120,7 +120,7 @@ class ProposalTargetCreator(object):
         # Offset range of classes from [0, n_fg_class - 1] to [1, n_fg_class].
         # The label with value 0 is the background.
         gt_roi_label_right = right_label[right_gt_assignment] + 1
-        gt_roi_angles_right = right_angles.reshape(-1, 2)[right_gt_assignment]
+        gt_roi_angles_right = right_angles.reshape(-1)[right_gt_assignment]
 
         # Select foreground RoIs as those with >= pos_iou_thresh IoU.
         right_pos_index = np.where(right_max_iou >= self.pos_iou_thresh)[0]

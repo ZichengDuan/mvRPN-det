@@ -27,9 +27,9 @@ class oftFrameDataset(VisionDataset):
         self.intrinsic_matrix = base.intrinsic_matrices
 
         if train:
-            frame_range = list(range(0, 1000)) + list(range(1500, 2000))
+            frame_range = list(range(0, 1500))
         else:
-            frame_range = range(1000, 1500)
+            frame_range = range(500, 1000)
 
         self.upsample_shape = list(map(lambda x: int(x / self.img_reduce), self.img_shape))
         img_reduce_local = np.array(self.img_shape) / np.array(self.upsample_shape)
@@ -236,6 +236,7 @@ if __name__ == "__main__":
                 angle += np.pi * 2
 
             angle = np.rad2deg(angle)
+            left_result[int(angle.item() // 10)] += 1
             left_result[int(angle.item() // 10)] += 1
 
             if frame in range(600, 700) and i == 0:
