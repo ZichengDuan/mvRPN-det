@@ -155,16 +155,10 @@ class oftFrameDataset(VisionDataset):
                     # 左角度标签
                     alpha = np.arctan((Const.grid_height - wy) / wx)
                     left_target = bev_angle - alpha if bev_angle - alpha > 0 else 2 * np.pi + (bev_angle - alpha)
-                    # if frame in range(500, 600) and i == 2:
-                        # print(wx, wy)
-                        # print(np.rad2deg(bev_angle))
-                        # print(np.rad2deg(alpha))
-                        # print(np.rad2deg(left_target))
-                        # print(np.arctan(np.sin(left_target) / np.cos(left_target)))
-                    frame_left_ang.append([np.sin(left_target), np.cos(left_target)]) # 方案1, 回归sin cos
+                    left_target = left_target / np.pi if left_target <= np.pi else (left_target - 2 * np.pi) / np.pi
+                    frame_left_ang.append(left_target) # 方案1, 回归sin cos
 
                     frame_bev_angle.append(bev_angle)
-
 
                     # 右角度标签, 颠倒一下正方向
                     bev_angle -= np.pi
@@ -172,7 +166,8 @@ class oftFrameDataset(VisionDataset):
                         bev_angle += 2 * np.pi
                     alpha = np.arctan(wy / (Const.grid_width - wx))
                     right_target = bev_angle - alpha if bev_angle - alpha > 0 else 2 * np.pi + (bev_angle - alpha)
-                    frame_right_ang.append([np.sin(right_target), np.cos(right_target)]) # 方案1, 回归sin cos
+                    right_target = right_target / np.pi if right_target <= np.pi else (right_target - 2 * np.pi) / np.pi
+                    frame_right_ang.append(right_target) # 方案1, 回归sin cos
 
                 self.world_xy[frame] = frame_wxy
                 self.left_dir[frame] = frame_left_dir

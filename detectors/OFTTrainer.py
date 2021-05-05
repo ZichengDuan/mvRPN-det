@@ -141,7 +141,7 @@ class OFTtrainer(BaseTrainer):
                 1)
             left_roi_cls_loss = nn.CrossEntropyLoss()(left_roi_score, left_gt_label.to(left_roi_score.device))
             left_pred_sincos = left_pred_sincos[:left_pos_num]
-            left_sincos_loss = self.MSELoss(left_pred_sincos.float(), torch.tensor(left_gt_sincos).to(left_pred_sincos.device).float())
+            left_sincos_loss = self.L1Loss(left_pred_sincos.float(), torch.tensor(left_gt_sincos).to(left_pred_sincos.device).float())
             # ---------------------------right_roi_pooling---------------------------------
             right_roi_cls_loc, right_roi_score, right_pred_sincos = self.roi_head(
                 img_featuremaps[1],
@@ -163,7 +163,7 @@ class OFTtrainer(BaseTrainer):
 
             right_roi_cls_loss = nn.CrossEntropyLoss()(right_roi_score, right_gt_label.to(right_roi_score.device))
             right_pred_sincos = right_pred_sincos[:right_pos_num]
-            right_sincos_loss = self.MSELoss(right_pred_sincos.float(), torch.tensor(right_gt_sincos).to(right_pred_sincos.device).float())
+            right_sincos_loss = self.L1Loss(right_pred_sincos.float(), torch.tensor(right_gt_sincos).to(right_pred_sincos.device).float())
 
             # --------------------测试roi pooling------------------------
             # sample_roi, gt_roi_loc, gt_roi_label = self.proposal_target_creator_ori(
@@ -436,17 +436,10 @@ class OFTtrainer(BaseTrainer):
                                   thickness=2)
                     center_x, center_y = (bbxx[1] + bbxx[3]) // 2, (bbxx[0] + bbxx[2]) // 2
                     ray = np.arctan((Const.grid_height - center_y) / center_x)
-                    angle = np.arctan(left_sincos_remain[idx].detach().cpu().numpy()[0] / left_sincos_remain[idx].detach().cpu().numpy()[1])
-                    if left_sincos_remain[idx].detach().cpu().numpy()[0] > 0 and \
-                            left_sincos_remain[idx].detach().cpu().numpy()[1] < 0:
-                        angle += np.pi
-                    elif left_sincos_remain[idx].detach().cpu().numpy()[0] < 0 and \
-                            left_sincos_remain[idx].detach().cpu().numpy()[1] < 0:
-                        angle += np.pi
-                    elif left_sincos_remain[idx].detach().cpu().numpy()[0] < 0 and \
-                            left_sincos_remain[idx].detach().cpu().numpy()[1] > 0:
-                        angle += 2 * np.pi
-                    theta_l = angle
+
+                    angle = left_sincos_remain[idx].detach().cpu().numpy()
+                    theta_l = angle * np.pi if angle > 0 else (angle * np.pi + 2 * np.pi)
+
                     theta = theta_l + ray
 
                     x_rot = center_x + 40
