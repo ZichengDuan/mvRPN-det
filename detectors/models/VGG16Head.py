@@ -29,6 +29,7 @@ class VGG16RoIHead(nn.Module):
 
         normal_init(self.cls_loc, 0, 0.001)
         normal_init(self.score, 0, 0.01)
+        normal_init(self.ang_regressor, 0, 0.0001)
 
         self.n_class = n_class
         self.roi_size = roi_size

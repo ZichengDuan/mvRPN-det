@@ -17,6 +17,13 @@
             </Attribute>
           </value>
         </entry>
+        <entry key="/detectors/models/VGG16Head.py">
+          <value>
+            <Attribute>
+              <option name="separator" value="," />
+            </Attribute>
+          </value>
+        </entry>
         <entry key="/detectors/models/persp_trans_detector.py">
           <value>
             <Attribute>

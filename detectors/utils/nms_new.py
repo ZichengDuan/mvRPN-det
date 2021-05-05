@@ -35,8 +35,9 @@ def _suppress(raw_cls_bbox, raw_prob):
     return bbox, label, score
 
 
-def nms_new(bboxes, confidence, threshold=0.1, prob_threshold = 0.6):
+def nms_new(bboxes, confidence, sincos, threshold=0.05, prob_threshold = 0.4):
     bbox = bboxes.squeeze()
+    sincos = sincos.squeeze()
     confidence = torch.tensor(confidence)
     keep = torch.zeros(confidence.shape).long()
     if len(bbox) == 0:
@@ -46,22 +47,25 @@ def nms_new(bboxes, confidence, threshold=0.1, prob_threshold = 0.6):
 
     bbox_keep = []
     indices_keep = []
+    sincos_keep = []
     i = 0
     while len(indices) > 0:
         # print(keep_box(bbox_keep, bbox[indices[-1]], iou_threash=threshold))
         # print(v[-1], threshold)
         if len(bbox_keep) == 0:
             bbox_keep.append(bbox[indices[-1]])
+            sincos_keep.append(sincos[indices[-1]])
         elif keep_box(bbox_keep, bbox[indices[-1]], iou_threash=threshold):
             if v[-1] < prob_threshold:
-                return bbox_keep, confidence[indices_keep]
+                return bbox_keep, confidence[indices_keep], sincos_keep
             bbox_keep.append(bbox[indices[-1]])
             indices_keep.append((indices[-1]).item())
+            sincos_keep.append(sincos[indices[-1]])
         indices = indices[:-1]
         v = v[:-1]
         i += 1
 
-    return bbox_keep, confidence[indices_keep]
+    return bbox_keep, confidence[indices_keep], sincos_keep
 
 
 def bbox_iou(bbox_a, bbox_b):

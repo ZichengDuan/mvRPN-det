@@ -55,19 +55,19 @@ class OFTtrainer(BaseTrainer):
 
         for batch_idx, data in enumerate(data_loader):
             optimizer.zero_grad()
-            imgs, bev_xy, gt_bbox, gt_left_bbox, gt_right_bbox, left_dirs, right_dirs, left_sincos, right_sincos, frame, extrin, intrin = data
+            imgs, bev_xy,bev_angle, gt_bbox, gt_left_bbox, gt_right_bbox, left_dirs, right_dirs, left_sincos, right_sincos, frame, extrin, intrin = data
             img_size = (Const.grid_height, Const.grid_width)
             rpn_locs, rpn_scores, anchor, rois, roi_indices, img_featuremaps, bev_featuremaps = self.model(imgs)
 
             # visualize angle
-            #bev_img = cv2.imread("/home/dzc/Data/4carreal_0318blend/bevimgs/%d.jpg" % frame)
-            #for idx, pt in enumerate(bev_xy.squeeze()):
-                #print(pt)
-                #x, y = pt[0], pt[1]
+            # bev_img = cv2.imread("/home/dzc/Data/4carreal_0318blend/bevimgs/%d.jpg" % frame)
+            # for idx, pt in enumerate(bev_xy.squeeze()):
+                # print(pt)
+                # x, y = pt[0], pt[1]
                 #cv2.circle(bev_img, (x, y), radius=2, color=(255, 255, 0))
-                # cv2.line(bev_img, (0, Const.grid_height - 1), (x, y), color = (255, 255, 0))
+                #cv2.line(bev_img, (0, Const.grid_height - 1), (x, y), color = (255, 255, 0))
                 #ray = np.arctan(y / (Const.grid_width - x))
-                #theta_l = right_angles.squeeze()[idx]
+                #theta_l = right_sincos.squeeze()[idx]
                 #theta = theta_l + ray
 
                 #x1_rot = x - 30
@@ -140,8 +140,8 @@ class OFTtrainer(BaseTrainer):
                 left_gt_label.data,
                 1)
             left_roi_cls_loss = nn.CrossEntropyLoss()(left_roi_score, left_gt_label.to(left_roi_score.device))
-            left_pred_sincos = left_pred_sincos[:len(left_pos_num)]
-            left_sincos_loss = self.MSELoss(left_pred_sincos, torch.tensor(left_gt_sincos).to(left_pred_sincos.device))
+            left_pred_sincos = left_pred_sincos[:left_pos_num]
+            left_sincos_loss = self.MSELoss(left_pred_sincos.float(), torch.tensor(left_gt_sincos).to(left_pred_sincos.device).float())
             # ---------------------------right_roi_pooling---------------------------------
             right_roi_cls_loc, right_roi_score, right_pred_sincos = self.roi_head(
                 img_featuremaps[1],
@@ -162,8 +162,8 @@ class OFTtrainer(BaseTrainer):
                 1)
 
             right_roi_cls_loss = nn.CrossEntropyLoss()(right_roi_score, right_gt_label.to(right_roi_score.device))
-            right_pred_sincos = right_pred_sincos[:len(right_pos_num)]
-            right_sincos_loss = self.MSELoss(right_pred_sincos, torch.tensor(right_gt_sincos).to(right_pred_sincos.device))
+            right_pred_sincos = right_pred_sincos[:right_pos_num]
+            right_sincos_loss = self.MSELoss(right_pred_sincos.float(), torch.tensor(right_gt_sincos).to(right_pred_sincos.device).float())
 
             # --------------------测试roi pooling------------------------
             # sample_roi, gt_roi_loc, gt_roi_label = self.proposal_target_creator_ori(
@@ -208,16 +208,17 @@ class OFTtrainer(BaseTrainer):
 
             # roi_cls_loss = nn.CrossEntropyLoss()(roi_score, gt_roi_label.to(roi_score.device))
             # ----------------------Loss-----------------------------
-            loss = rpn_loc_loss + rpn_cls_loss + left_roi_loc_loss / 2 + left_roi_cls_loss + right_roi_loc_loss / 2 + right_roi_cls_loss + left_sincos_loss + right_sincos_loss
+            loss = rpn_loc_loss + rpn_cls_loss + left_roi_loc_loss / 2 + left_roi_cls_loss + left_sincos_loss / 4 + right_roi_loc_loss / 2 + right_roi_cls_loss + right_sincos_loss / 4
             Loss += loss
             RPN_CLS_LOSS += rpn_cls_loss
             RPN_LOC_LOSS += rpn_loc_loss
             LEFT_ROI_LOC_LOSS += left_roi_loc_loss / 2
             LEFT_ROI_CLS_LOSS += left_roi_cls_loss
-            LEFT_ANGLE_REG_LOSS += right_sincos_loss
+            LEFT_ANGLE_REG_LOSS += left_sincos_loss / 4
             RIGHT_ROI_LOC_LOSS += right_roi_loc_loss / 2
             RIGHT_ROI_CLS_LOSS += right_roi_cls_loss
-            RIGHT_ANGLE_REG_LOSS += right_sincos_loss
+            RIGHT_ANGLE_REG_LOSS += right_sincos_loss / 4
+
             # ------------------------------------------------------------
             loss.backward()
             optimizer.step()
@@ -303,7 +304,8 @@ class OFTtrainer(BaseTrainer):
     def test(self,epoch, data_loader, writer):
         self.model.eval()
         for batch_idx, data in enumerate(data_loader):
-            imgs, bev_xy, gt_bbox, gt_left_bbox, gt_right_bbox, left_dirs, right_dirs, left_angles, right_angles, frame, extrin, intrin = data
+            imgs, gt_bev_xy,bev_angle, gt_bbox, gt_left_bbox, gt_right_bbox, gt_left_dirs, gt_right_dirs, gt_left_sincos, gt_right_sincos, frame, extrin, intrin = data
+            img_size = (Const.grid_height, Const.grid_width)
             with torch.no_grad():
                 rpn_locs, rpn_scores, anchor, rois, roi_indices, img_featuremaps, bev_featuremaps = self.model(imgs)
 
@@ -346,59 +348,61 @@ class OFTtrainer(BaseTrainer):
             right_2d_bbox = torch.tensor(right_2d_bbox)
 
             #------------左右ROI pooling-----------
-            left_roi_cls_loc, left_roi_score = self.roi_head(
+            left_roi_cls_loc, left_roi_score, left_pred_sincos = self.roi_head(
                 img_featuremaps[0],
                 left_2d_bbox.to(img_featuremaps[0].device),
                 left_rois_indices)
 
-            right_roi_cls_loc, right_roi_score = self.roi_head(
+            right_roi_cls_loc, right_roi_score, right_pred_sincos = self.roi_head(
                 img_featuremaps[1],
                 right_2d_bbox.to(img_featuremaps[1].device),
                 right_rois_indices)
 
             # -----------------------LEFT NMS---------------------------
-            left_roi_cls_loc = left_roi_cls_loc.data
-            left_roi_score = left_roi_score.data
-            mean = torch.Tensor(self.loc_normalize_mean).to(left_roi_cls_loc.device). \
-                repeat(self.n_class)[None]
-            std = torch.Tensor(self.loc_normalize_std).to(left_roi_cls_loc.device). \
-                repeat(self.n_class)[None]
-            left_roi_cls_loc = (left_roi_cls_loc * std + mean)
-            left_roi_cls_loc = left_roi_cls_loc.view(-1, self.n_class, 4)
-            left_rois = left_2d_bbox.view(-1, 1, 4).expand_as(left_roi_cls_loc)
-            left_cls_bbox = loc2bbox(at.tonumpy(left_rois).reshape((-1, 4)),
-                                at.tonumpy(left_roi_cls_loc).reshape((-1, 4)))
+            # left_roi_cls_loc = left_roi_cls_loc.data
+            # left_roi_score = left_roi_score.data
+            # mean = torch.Tensor(self.loc_normalize_mean).to(left_roi_cls_loc.device). \
+            #     repeat(self.n_class)[None]
+            # std = torch.Tensor(self.loc_normalize_std).to(left_roi_cls_loc.device). \
+            #    repeat(self.n_class)[None]
+            # left_roi_cls_loc = (left_roi_cls_loc * std + mean)
+            # left_roi_cls_loc = left_roi_cls_loc.view(-1, self.n_class, 4)
+            # left_rois = left_2d_bbox.view(-1, 1, 4).expand_as(left_roi_cls_loc)
+            # left_cls_bbox = loc2bbox(at.tonumpy(left_rois).reshape((-1, 4)),
+            #                     at.tonumpy(left_roi_cls_loc).reshape((-1, 4)))
 
             left_prob = at.tonumpy(F.softmax(at.totensor(left_roi_score), dim=1))
 
-            left_raw_cls_bbox = at.tonumpy(left_cls_bbox)
-            left_raw_prob = at.tonumpy(left_prob)
+            # left_raw_cls_bbox = at.tonumpy(left_cls_bbox)
+            # left_raw_prob = at.tonumpy(left_prob)
             # print(left_rois_indices.shape, left_roi_remain.shape, left_raw_prob.shape, left_raw_cls_bbox.shape)
-            left_bbox, left_label, left_score = _suppress(left_raw_cls_bbox, left_raw_prob)
-
-            # -----------------------RIGHT NMS---------------------------
-            right_roi_cls_loc = right_roi_cls_loc.data
-            right_roi_score = right_roi_score.data
-            mean = torch.Tensor(self.loc_normalize_mean).to(right_roi_cls_loc.device). \
-                repeat(self.n_class)[None]
-            std = torch.Tensor(self.loc_normalize_std).to(right_roi_cls_loc.device). \
-                repeat(self.n_class)[None]
-            right_roi_cls_loc = (right_roi_cls_loc * std + mean)
-            right_roi_cls_loc = right_roi_cls_loc.view(-1, self.n_class, 4)
-            right_rois = right_2d_bbox.view(-1, 1, 4).expand_as(right_roi_cls_loc)
-            right_cls_bbox = loc2bbox(at.tonumpy(right_rois).reshape((-1, 4)),
-                                at.tonumpy(right_roi_cls_loc).reshape((-1, 4)))
-
-            right_prob = at.tonumpy(F.softmax(at.totensor(right_roi_score), dim=1))
-
-            right_raw_cls_bbox = at.tonumpy(right_cls_bbox)
-            right_raw_prob = at.tonumpy(right_prob)
-
-            # right_bbox, right_label, right_score = _suppress(right_raw_cls_bbox, right_raw_prob)
+            # left_bbox, left_label, left_score = _suppress(left_raw_cls_bbox, left_raw_prob)
             # --------------------ROI prob 指导 RPN nms-------------------------
             # 提出前景的概率和前景；类的框
             left_front_prob = left_prob[:, 1]
-            left_bev_boxes, _ = nms_new(left_roi_remain, left_front_prob)
+            left_bev_boxes, _, left_sincos_remain = nms_new(left_roi_remain, left_front_prob, left_pred_sincos)
+
+            # -----------------------RIGHT NMS---------------------------
+            # right_roi_cls_loc = right_roi_cls_loc.data
+            # right_roi_score = right_roi_score.data
+            # mean = torch.Tensor(self.loc_normalize_mean).to(right_roi_cls_loc.device). \
+            #    repeat(self.n_class)[None]
+            # std = torch.Tensor(self.loc_normalize_std).to(right_roi_cls_loc.device). \
+            #    repeat(self.n_class)[None]
+            # right_roi_cls_loc = (right_roi_cls_loc * std + mean)
+            # right_roi_cls_loc = right_roi_cls_loc.view(-1, self.n_class, 4)
+            # right_rois = right_2d_bbox.view(-1, 1, 4).expand_as(right_roi_cls_loc)
+            # right_cls_bbox = loc2bbox(at.tonumpy(right_rois).reshape((-1, 4)),
+            #                     at.tonumpy(right_roi_cls_loc).reshape((-1, 4)))
+
+            right_prob = at.tonumpy(F.softmax(at.totensor(right_roi_score), dim=1))
+
+            # right_raw_cls_bbox = at.tonumpy(right_cls_bbox)
+            # right_raw_prob = at.tonumpy(right_prob)
+
+            # right_bbox, right_label, right_score = _suppress(right_raw_cls_bbox, right_raw_prob)
+            right_front_prob = right_prob[:, 1]
+            right_bev_boxes, _, right_sincos_remain = nms_new(right_roi_remain, right_front_prob, right_pred_sincos)
             # -----------------------可视化---------------------------
             # left_img = cv2.imread("/home/dzc/Data/4carreal_0318blend/img/left1/%d.jpg" % frame)
             # for idx, bbx in enumerate(gt_left_bbox):
@@ -422,25 +426,64 @@ class OFTtrainer(BaseTrainer):
             # cv2.imwrite("/home/dzc/Desktop/CASIA/proj/mvRPN-det/images/right_roi/%d.jpg" % frame, right_img)
 
             bev_img = cv2.imread("/home/dzc/Data/4carreal_0318blend/bevimgs/%d.jpg" % frame)
-            for idx, bbx in enumerate(gt_bbox):
-                cv2.rectangle(bev_img, (int(bbx[1]), int(bbx[0])), (int(bbx[3]), int(bbx[2])), color=(255, 255, 0),
-                              thickness=3)
-            for idx, bbxx in enumerate(left_bev_boxes):
-                cv2.rectangle(bev_img, (int(bbxx[1]), int(bbxx[0])), (int(bbxx[3]), int(bbxx[2])), color=(255, 0, 0),
-                              thickness=2)
 
-            # for idx, bbxx in enumerate(left_roi_remain):
-            #     cv2.rectangle(bev_img, (int(bbxx[1]), int(bbxx[0])), (int(bbxx[3]), int(bbxx[2])), color=(100, 0, 233),
-            #                   thickness=1)
+            #for idx, bbx in enumerate(gt_bbox):
+                #cv2.rectangle(bev_img, (int(bbx[1]), int(bbx[0])), (int(bbx[3]), int(bbx[2])), color=(255, 255, 0),
+                              #thickness=3)
+            if left_bev_boxes is not []:
+                for idx, bbxx in enumerate(left_bev_boxes):
+                    cv2.rectangle(bev_img, (int(bbxx[1]), int(bbxx[0])), (int(bbxx[3]), int(bbxx[2])), color=(255, 0, 0),
+                                  thickness=2)
+                    center_x, center_y = (bbxx[1] + bbxx[3]) // 2, (bbxx[0] + bbxx[2]) // 2
+                    ray = np.arctan((Const.grid_height - center_y) / center_x)
+                    angle = np.arctan(left_sincos_remain[idx].detach().cpu().numpy()[0] / left_sincos_remain[idx].detach().cpu().numpy()[1])
+                    if left_sincos_remain[idx].detach().cpu().numpy()[0] > 0 and \
+                            left_sincos_remain[idx].detach().cpu().numpy()[1] < 0:
+                        angle += np.pi
+                    elif left_sincos_remain[idx].detach().cpu().numpy()[0] < 0 and \
+                            left_sincos_remain[idx].detach().cpu().numpy()[1] < 0:
+                        angle += np.pi
+                    elif left_sincos_remain[idx].detach().cpu().numpy()[0] < 0 and \
+                            left_sincos_remain[idx].detach().cpu().numpy()[1] > 0:
+                        angle += 2 * np.pi
+                    theta_l = angle
+                    theta = theta_l + ray
 
+                    x_rot = center_x + 40
+                    y_rot = Const.grid_height - center_y
 
-            #
-            # for idx, bbxx in enumerate(right_bbox):
-            #     cv2.rectangle(bev_img, (int(bbxx[1]), int(bbxx[0])), (int(bbxx[3]), int(bbxx[2])), color=(123, 123, 18),
-            #                   thickness=1)
+                    nrx = (x_rot - center_x) * np.cos(theta) - (y_rot - (Const.grid_height - center_y)) * np.sin(theta) + center_x
+                    nry = (x_rot - center_x) * np.sin(theta) + (y_rot - (Const.grid_height - center_y)) * np.cos(theta) + (Const.grid_height - center_y)
 
-            cv2.imwrite("/home/dzc/Desktop/CASIA/proj/mvRPN-det/images/bev_rot/%d.jpg" % frame, bev_img)
+                    cv2.arrowedLine(bev_img, (center_x, center_y), (nrx, Const.grid_height - nry), color=(255, 60, 199), thickness=2)
 
+                for idx, bbxx in enumerate(right_bev_boxes):
+                    cv2.rectangle(bev_img, (int(bbxx[1]), int(bbxx[0])), (int(bbxx[3]), int(bbxx[2])),
+                                  color=(255, 255, 0),
+                                  thickness=2)
+                    center_x, center_y = (bbxx[1] + bbxx[3]) // 2, (bbxx[0] + bbxx[2]) // 2
+                    ray = np.arctan(center_y / (Const.grid_width - center_x))
+                    angle = np.arctan(right_sincos_remain[idx].detach().cpu().numpy()[0] /
+                                      right_sincos_remain[idx].detach().cpu().numpy()[1])
+                    if right_sincos_remain[idx].detach().cpu().numpy()[0] > 0 and right_sincos_remain[idx].detach().cpu().numpy()[1] < 0:
+                        angle += np.pi
+                    elif right_sincos_remain[idx].detach().cpu().numpy()[0] < 0 and right_sincos_remain[idx].detach().cpu().numpy()[1] < 0:
+                        angle += np.pi
+                    elif right_sincos_remain[idx].detach().cpu().numpy()[0] < 0 and right_sincos_remain[idx].detach().cpu().numpy()[1] > 0:
+                        angle += 2 * np.pi
+
+                    theta_l = angle
+                    theta = theta_l + ray
+
+                    x1_rot = center_x - 30
+                    y1_rot = Const.grid_height - center_y
+
+                    nrx = (x1_rot - center_x) * np.cos(theta) - (y1_rot - (Const.grid_height - center_y)) * np.sin(theta) + center_x
+                    nry = (x1_rot - center_x) * np.sin(theta) + (y1_rot - (Const.grid_height - center_y)) * np.cos(theta) + (Const.grid_height - center_y)
+
+                    cv2.arrowedLine(bev_img, (center_x, center_y), (nrx, Const.grid_height - nry), color=(255, 255, 0), thickness=2)
+
+            cv2.imwrite("/home/dzc/Desktop/CASIA/proj/mvRPN-det/images/bev_angle/%d.jpg" % frame, bev_img)
     @property
     def n_class(self):
         # Total number of classes including the background.

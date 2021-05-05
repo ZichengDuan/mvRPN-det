@@ -27,9 +27,9 @@ class oftFrameDataset(VisionDataset):
         self.intrinsic_matrix = base.intrinsic_matrices
 
         if train:
-            frame_range = range(400, 1500)
+            frame_range = list(range(0, 1000)) + list(range(1500, 2000))
         else:
-            frame_range = range(1700, 1800)
+            frame_range = range(1000, 1500)
 
         self.upsample_shape = list(map(lambda x: int(x / self.img_reduce), self.img_shape))
         img_reduce_local = np.array(self.img_shape) / np.array(self.upsample_shape)
@@ -50,6 +50,7 @@ class oftFrameDataset(VisionDataset):
         self.left_angle = {}
         self.right_angle = {}
         self.world_xy = {}
+        self.bev_angle = {}
 
         self.img_fpaths = self.base.get_image_fpaths(frame_range)
         self.gt_fpath = os.path.join(self.root, 'gt.txt')
@@ -127,6 +128,7 @@ class oftFrameDataset(VisionDataset):
             frame_left_ang = []
             frame_right_ang = []
             frame_wxy = []
+            frame_bev_angle = []
             frame = int(fname.split('.')[0])
             if frame in frame_range:
                 with open(os.path.join(self.root, 'od_annotations', fname)) as json_file:
@@ -150,25 +152,32 @@ class oftFrameDataset(VisionDataset):
                     # 0~360
                     if bev_angle < 0:
                         bev_angle += 2 * np.pi
-
                     # 左角度标签
                     alpha = np.arctan((Const.grid_height - wy) / wx)
                     left_target = bev_angle - alpha if bev_angle - alpha > 0 else 2 * np.pi + (bev_angle - alpha)
-                    frame_left_ang.append([np.sin(left_target), np.cos(left_target)])
+                    # if frame in range(500, 600) and i == 2:
+                        # print(wx, wy)
+                        # print(np.rad2deg(bev_angle))
+                        # print(np.rad2deg(alpha))
+                        # print(np.rad2deg(left_target))
+                        # print(np.arctan(np.sin(left_target) / np.cos(left_target)))
+                    frame_left_ang.append([np.sin(left_target), np.cos(left_target)]) # 方案1, 回归sin cos
+
+                    frame_bev_angle.append(bev_angle)
+
 
                     # 右角度标签, 颠倒一下正方向
                     bev_angle -= np.pi
                     if bev_angle < 0:
                         bev_angle += 2 * np.pi
-                    # bev_angle = np.pi - bev_angle if np.pi - bev_angle > 0 else bev_angle + np.pi
                     alpha = np.arctan(wy / (Const.grid_width - wx))
                     right_target = bev_angle - alpha if bev_angle - alpha > 0 else 2 * np.pi + (bev_angle - alpha)
-                    frame_right_ang.append([np.sin(right_target), np.cos(right_target)])
-
+                    frame_right_ang.append([np.sin(right_target), np.cos(right_target)]) # 方案1, 回归sin cos
 
                 self.world_xy[frame] = frame_wxy
                 self.left_dir[frame] = frame_left_dir
                 self.right_dir[frame] = frame_right_dir
+                self.bev_angle[frame] = frame_bev_angle
                 self.left_angle[frame] = frame_left_ang
                 self.right_angle[frame] = frame_right_ang
 
@@ -190,9 +199,10 @@ class oftFrameDataset(VisionDataset):
         left_angles = torch.tensor(self.left_angle[frame])
         right_angles = torch.tensor(self.right_angle[frame])
         bev_xy =torch.tensor(self.world_xy[frame])
+        bev_angle = torch.tensor(self.bev_angle[frame])
 
 
-        return imgs, bev_xy, bev_bboxes, left_bboxes, right_bboxes, left_dirs, right_dirs, left_angles, right_angles, frame, self.extrinsic_matrix, self.intrinsic_matrix
+        return imgs, bev_xy, bev_angle, bev_bboxes, left_bboxes, right_bboxes, left_dirs, right_dirs, left_angles, right_angles, frame, self.extrinsic_matrix, self.intrinsic_matrix
 
     def __len__(self):
         return len(self.bev_bboxes.keys())
@@ -210,9 +220,98 @@ def get_imgcoord2worldgrid_matrices(intrinsic_matrices, extrinsic_matrices, worl
 
 
 if __name__ == "__main__":
-    data_path = os.path.expanduser('/home/dzc/Data/4cardata')
-    world_shape = [500, 808]
+    data_path = os.path.expanduser('/home/dzc/Data/4carreal_0318blend')
+    world_shape = Const.grid_size
     base = Robomaster_1_dataset(data_path, None, worldgrid_shape = world_shape)
     dataset = oftFrameDataset(base)
-    h6, l1, s1 = dataset.prepare_proj_conf_map(210, 0, world_shape= world_shape)
-    coords = l1.generate_coords()
+    data_loader = torch.utils.data.DataLoader(dataset, batch_size=1, shuffle=False,
+                                               num_workers=8, pin_memory=True, drop_last=True)
+    left_result = np.zeros((36,))
+    right_result = np.zeros((36,))
+    for batch_idx, data in enumerate(data_loader):
+        # print(batch_idx)
+        imgs, bev_xy, bev_angle, gt_bbox, gt_left_bbox, gt_right_bbox, left_dirs, right_dirs, left_sincos, right_sincos, frame, extrin, intrin = data
+        for i in range(4):
+            sin = left_sincos.squeeze()[i, 0]
+            cos = left_sincos.squeeze()[i, 1]
+            angle = np.arctan(sin / cos)
+            if (sin > 0 and cos < 0) or (sin < 0 and cos < 0):
+                angle += np.pi
+            if sin < 0 and cos > 0:
+                angle += np.pi * 2
+
+            angle = np.rad2deg(angle)
+            left_result[int(angle.item() // 10)] += 1
+
+            if frame in range(600, 700) and i == 0:
+                print("------------------")
+                print(frame)
+                print(angle.item())
+
+            sin = right_sincos.squeeze()[i, 0]
+            cos = right_sincos.squeeze()[i, 1]
+            angle = np.arctan(sin / cos)
+            if (sin > 0 and cos < 0) or (sin < 0 and cos < 0):
+                angle += np.pi
+            if sin < 0 and cos > 0:
+                angle += np.pi * 2
+
+            angle = np.rad2deg(angle)
+
+            right_result[int(angle.item() // 10)] += 1
+
+    import matplotlib.mlab as mlab
+    import matplotlib.pyplot as plt
+
+    X = np.arange(0, 36)
+    Y = left_result
+    fig = plt.figure()
+    plt.bar(X, Y, 0.4, color="green")
+    plt.xlabel("X-axis")
+    plt.ylabel("Y-axis")
+    plt.title("left")
+
+    # plt.show()
+    # plt.savefig("/home/dzc/Desktop/CASIA/proj/mvRPN-det/images/left_result.jpg")
+
+    X = np.arange(0, 36)
+    Y = right_result
+    fig = plt.figure()
+    plt.bar(X, Y, 0.4, color="green")
+    plt.xlabel("X-axis")
+    plt.ylabel("Y-axis")
+    plt.title("right")
+
+    # plt.show()
+    # plt.savefig("/home/dzc/Desktop/CASIA/proj/mvRPN-det/images/right_result.jpg")
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
