@@ -1,10 +1,14 @@
+import time
+
 import cv2
 import numpy as np
 import cupy as cp
+import torch
 
 from .bbox_tools import bbox2loc, bbox_iou, loc2bbox
 from .nms import non_maximum_suppression
 from EX_CONST import Const
+from torchvision.ops import boxes as box_ops
 
 class ProposalTargetCreator(object):
     """Assign ground truth bounding boxes to given RoIs.
@@ -70,6 +74,14 @@ class ProposalTargetCreator(object):
             if 0 < int(pt2d[0]) < 640 and 0 < int(pt2d[1]) < 480:
                 roi_remain_idx.append(id)
         left_rois = roi[roi_remain_idx]
+
+        # right_index_inside = np.where(
+        #     (roi[:, 0] >= 0) &
+        #     (roi[:, 1] >= 0) &
+        #     (roi[:, 2] <= 640) &
+        #     (roi[:, 3] <= Const.ori_img_width)
+        # )[0]
+
 
         left_n_bbox, _ = gt_left_bev_bbox.shape
         left_roi = np.concatenate((left_rois, gt_left_bev_bbox), axis=0)
@@ -151,11 +163,11 @@ class ProposalTargetCreator(object):
         right_sample_roi = right_roi[right_keep_index]
         # ------------------------开始转换坐标-------------------------
         left_roi_3d = generate_3d_bbox(left_sample_roi)
-        left_2d_bbox = getprojected_3dbox(left_roi_3d, extrin[0][0], intrin[0][0])
+        left_2d_bbox = getprojected_3dbox(left_roi_3d, extrin, intrin, isleft = True)
         left_2d_bbox = get_outter(left_2d_bbox)
 
         right_roi_3d = generate_3d_bbox(right_sample_roi)
-        right_2d_bbox = getprojected_3dbox(right_roi_3d, extrin[1][0], intrin[1][0])
+        right_2d_bbox = getprojected_3dbox(right_roi_3d, extrin, intrin, isleft = False)
         right_2d_bbox = get_outter(right_2d_bbox)
         # print(left_2d_bbox.shape)
         left_gt_roi_loc = bbox2loc(left_2d_bbox, left_gt_bbox[left_gt_assignment[left_keep_index]])
@@ -588,7 +600,7 @@ class ProposalCreator:
             n_post_nms = self.n_test_post_nms
 
         # Convert anchors into proposal via bbox transformations.
-        # roi = loc2bbox(anchor, loc)
+
         roi = loc2bbox(anchor, loc)
 
         # Clip predicted boxes to image.
@@ -608,19 +620,28 @@ class ProposalCreator:
 
         # Sort all (proposal, score) pairs by score from highest to lowest.
         # Take top pre_nms_topN (e.g. 6000).
+
         order = score.ravel().argsort()[::-1]
         if n_pre_nms > 0:
             order = order[:n_pre_nms]
         roi = roi[order, :]
+        score = score[order]
+
+        # s = time.time()
+        keep = box_ops.nms(torch.tensor(roi), torch.tensor(score.copy(), dtype = torch.tensor(roi).dtype), self.nms_thresh).numpy() # torchvision nms
+        # e = time.time()
+        # print(e - s)
 
         # Apply nms (e.g. threshold = 0.7).
         # Take after_nms_topN (e.g. 300).
 
         # unNOTE: somthing is wrong here!
         # TODO: remove cuda.to_gpu
-        keep = non_maximum_suppression(
-            cp.ascontiguousarray(cp.asarray(roi)),
-            thresh=self.nms_thresh)
+
+        # keep2 = non_maximum_suppression(
+        #     cp.ascontiguousarray(cp.asarray(roi)),
+        #     thresh=self.nms_thresh)
+
         if n_post_nms > 0:
             keep = keep[:n_post_nms]
         roi = roi[keep]
@@ -629,19 +650,22 @@ class ProposalCreator:
 def generate_3d_bbox(pred_bboxs):
     # 输出以左下角为原点的3d坐标
     n_bbox = pred_bboxs.shape[0]
-    boxes_3d = [] #
-    for i in range(pred_bboxs.shape[0]):
-        ymax, xmax, ymin, xmin = pred_bboxs[i]
-        pt0 = [xmax, Const.grid_height - ymin, 0]
-        pt1 = [xmin, Const.grid_height - ymin, 0]
-        pt2 = [xmin, Const.grid_height - ymax, 0]
-        pt3 = [xmax, Const.grid_height - ymax, 0]
-        pt_h_0 = [xmax, Const.grid_height - ymin, Const.car_height]
-        pt_h_1 = [xmin, Const.grid_height - ymin, Const.car_height]
-        pt_h_2 = [xmin, Const.grid_height - ymax, Const.car_height]
-        pt_h_3 = [xmax, Const.grid_height - ymax, Const.car_height]
-        boxes_3d.append([pt0, pt1, pt2, pt3, pt_h_0, pt_h_1, pt_h_2, pt_h_3])
-    return np.array(boxes_3d).reshape((n_bbox, 8, 3))
+    zeros = np.zeros((n_bbox, 1))
+    heights = np.zeros((n_bbox, 1)) * Const.car_height
+    ymax, xmax, ymin, xmin = pred_bboxs[:, 0].reshape(-1, 1), pred_bboxs[:, 1].reshape(-1, 1), pred_bboxs[:, 2].reshape(
+        -1, 1), pred_bboxs[:, 3].reshape(-1, 1)
+
+    pt0s = np.concatenate((xmax, Const.grid_height - ymin, zeros), axis=1).reshape(1, n_bbox, 3)
+    pt1s = np.concatenate((xmin, Const.grid_height - ymin, zeros), axis=1).reshape(1, n_bbox, 3)
+    pt2s = np.concatenate((xmin, Const.grid_height - ymax, zeros), axis=1).reshape(1, n_bbox, 3)
+    pt3s = np.concatenate((xmax, Const.grid_height - ymax, zeros), axis=1).reshape(1, n_bbox, 3)
+    pth0s = np.concatenate((xmax, Const.grid_height - ymin, heights), axis=1).reshape(1, n_bbox, 3)
+    pth1s = np.concatenate((xmin, Const.grid_height - ymin, heights), axis=1).reshape(1, n_bbox, 3)
+    pth2s = np.concatenate((xmin, Const.grid_height - ymax, heights), axis=1).reshape(1, n_bbox, 3)
+    pth3s = np.concatenate((xmax, Const.grid_height - ymax, heights), axis=1).reshape(1, n_bbox, 3)
+
+    res = np.vstack((pt0s, pt1s, pt2s, pt3s, pth0s, pth1s, pth2s, pth3s)).transpose(1, 0, 2)
+    return res
 
 def getimage_pt(points3d, extrin, intrin):
     # 此处输入的是以左下角为原点的坐标，输出的是opencv格式的左上角为原点的坐标
@@ -650,23 +674,41 @@ def getimage_pt(points3d, extrin, intrin):
     imagepoints = (np.dot(intrin, np.dot(extrin, newpoints3d)) / Zc).astype(np.int)
     return [imagepoints[0, 0], imagepoints[1, 0]]
 
-def getprojected_3dbox(points3ds, extrin, intrin):
-    bboxes = []
-    for i in range(points3ds.shape[0]):
-        bbox_2d = []
-        for pt in points3ds[i]:
-            left = getimage_pt(pt.reshape(3, 1), extrin, intrin)
-            bbox_2d.append(left)
-        bboxes.append(bbox_2d)
+def getprojected_3dbox(points3ds, extrin, intrin, isleft = True):
+    if isleft:
+        extrin_ = extrin[0].numpy()
+        intrin_ = intrin[0].numpy()
+    else:
+        extrin_ = extrin[1].numpy()
+        intrin_ = intrin[1].numpy()
 
-    return np.array(bboxes).reshape((points3ds.shape[0], 8, 2))
+    extrin_big = extrin_.repeat(points3ds.shape[0] * 8, axis=0)
+    intrin_big = intrin_.repeat(points3ds.shape[0] * 8, axis=0)
+
+    points3ds_big = points3ds.reshape(points3ds.shape[0], 8, 3, 1)
+    homog = np.ones((points3ds.shape[0], 8, 1, 1))
+    homo3dpts = np.concatenate((points3ds_big, homog), 2).reshape(points3ds.shape[0] * 8, 4, 1)
+    res = np.matmul(extrin_big, homo3dpts)
+    Zc = res[:, -1]
+    res2 = np.matmul(intrin_big, res)
+    imagepoints = (res2.reshape(-1, 3) / Zc).reshape((points3ds.shape[0], 8, 3))[:, :, :2].astype(int)
+
+    return imagepoints
 
 def get_outter(projected_3dboxes):
-    outter_boxes = []
-    for boxes in projected_3dboxes:
-        xmax = max(boxes[:, 0])
-        xmin = min(boxes[:, 0])
-        ymax = max(boxes[:, 1])
-        ymin = min(boxes[:, 1])
-        outter_boxes.append([ymin, xmin, ymax, xmax])
-    return np.array(outter_boxes, dtype=np.float)
+    projected_3dboxes = projected_3dboxes + 1e-3
+    zero_mask = np.zeros((projected_3dboxes.shape[0], projected_3dboxes.shape[1], 1))
+    one_mask = np.ones((projected_3dboxes.shape[0], projected_3dboxes.shape[1], 1))
+    huge_mask = one_mask * 1000
+    ymax_mask = np.concatenate((zero_mask, one_mask), axis=2)
+    xmax_mask = np.concatenate((one_mask, zero_mask), axis=2)
+    ymin_mask = np.concatenate((huge_mask, one_mask), axis=2)
+    xmin_mask = np.concatenate((one_mask, huge_mask), axis=2)
+    xmax = np.max((projected_3dboxes * xmax_mask), axis=(1, 2)).reshape(1, -1, 1)
+    ymax = np.max((projected_3dboxes * ymax_mask), axis=(1, 2)).reshape(1, -1, 1)
+    xmin = np.min((projected_3dboxes * xmin_mask), axis=(1, 2)).reshape(1, -1, 1)
+    ymin = np.min((projected_3dboxes * ymin_mask), axis=(1, 2)).reshape(1, -1, 1)
+    res = np.concatenate((ymin, xmin, ymax, xmax), axis=2)
+    res = np.array(res, dtype=int).squeeze()
+
+    return res

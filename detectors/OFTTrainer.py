@@ -17,7 +17,9 @@ from EX_CONST import Const
 from tensorboardX import SummaryWriter
 from detectors.models.utils.bbox_tools import loc2bbox
 from PIL import Image
+from torchvision.ops import boxes as box_ops
 warnings.filterwarnings("ignore")
+import time
 import cv2
 
 class BaseTrainer(object):
@@ -208,14 +210,14 @@ class OFTtrainer(BaseTrainer):
 
             # roi_cls_loss = nn.CrossEntropyLoss()(roi_score, gt_roi_label.to(roi_score.device))
             # ----------------------Loss-----------------------------
-            loss = rpn_loc_loss + rpn_cls_loss + left_roi_loc_loss / 2 + left_roi_cls_loss + left_sincos_loss / 4 + right_roi_loc_loss / 2 + right_roi_cls_loss + right_sincos_loss / 4
+            loss = rpn_loc_loss + rpn_cls_loss + left_roi_loc_loss + left_roi_cls_loss + left_sincos_loss / 4 + right_roi_loc_loss + right_roi_cls_loss + right_sincos_loss / 4
             Loss += loss
             RPN_CLS_LOSS += rpn_cls_loss
             RPN_LOC_LOSS += rpn_loc_loss
-            LEFT_ROI_LOC_LOSS += left_roi_loc_loss / 2
+            LEFT_ROI_LOC_LOSS += left_roi_loc_loss
             LEFT_ROI_CLS_LOSS += left_roi_cls_loss
             LEFT_ANGLE_REG_LOSS += left_sincos_loss / 4
-            RIGHT_ROI_LOC_LOSS += right_roi_loc_loss / 2
+            RIGHT_ROI_LOC_LOSS += right_roi_loc_loss
             RIGHT_ROI_CLS_LOSS += right_roi_cls_loss
             RIGHT_ANGLE_REG_LOSS += right_sincos_loss / 4
 
@@ -303,50 +305,83 @@ class OFTtrainer(BaseTrainer):
 
     def test(self,epoch, data_loader, writer):
         self.model.eval()
+        rpn_time = 0
+        trans_time = 0
+        roi_time = 0
+        nms_time = 0
+        total_time = 0
+        gene3d_time = 0
+        proj3d_time = 0
+        getoutter_time = 0
+
+
         for batch_idx, data in enumerate(data_loader):
             imgs, gt_bev_xy,bev_angle, gt_bbox, gt_left_bbox, gt_right_bbox, gt_left_dirs, gt_right_dirs, gt_left_sincos, gt_right_sincos, frame, extrin, intrin = data
-            img_size = (Const.grid_height, Const.grid_width)
+            total_start = time.time()
+            rpn_start = time.time()
             with torch.no_grad():
                 rpn_locs, rpn_scores, anchor, rois, roi_indices, img_featuremaps, bev_featuremaps = self.model(imgs)
-
-            rpn_loc = rpn_locs[0]
-            rpn_score = rpn_scores[0]
-            gt_bbox = gt_bbox[0]
-            gt_left_bbox = gt_left_bbox[0]
-            gt_right_bbox = gt_right_bbox[0]
+            rpn_end = time.time()
             roi = torch.tensor(rois)
 
             # -----------投影------------
             # 筛选出来能用的roi，在480、 640内
             # 保留相应的roi和index
-            left_roi_remain_idx = []
-            right_roi_remain_idx = []
-            for id, bbox in enumerate(roi):
-                y = (bbox[0] + bbox[2]) / 2
-                x = (bbox[1] + bbox[3]) / 2
-                z = 0
-                left_pt2d = getimage_pt(np.array([x, Const.grid_height - y, z]).reshape(3, 1), extrin[0][0], intrin[0][0])
-                right_pt2d = getimage_pt(np.array([x, Const.grid_height - y, z]).reshape(3, 1), extrin[1][0], intrin[1][0])
-                if 0 < int(left_pt2d[0]) < Const.ori_img_width and 0 < int(left_pt2d[1]) < Const.ori_img_height:
-                    left_roi_remain_idx.append(id)
-                if 0 < int(right_pt2d[0]) < Const.ori_img_width and 0 < int(right_pt2d[1]) < Const.ori_img_height:
-                    right_roi_remain_idx.append(id)
+            # box转换和保留
+            trans3d_start = time.time()
+            # for id, bbox in enumerate(roi):
+            #     y = (bbox[0] + bbox[2]) / 2
+            #     x = (bbox[1] + bbox[3]) / 2
+            #     z = 0
+            #     left_pt2d = getimage_pt(np.array([x, Const.grid_height - y, z]).reshape(3, 1), extrin[0][0], intrin[0][0])
+            #     right_pt2d = getimage_pt(np.array([x, Const.grid_height - y, z]).reshape(3, 1), extrin[1][0], intrin[1][0])
+            #     if 0 < int(left_pt2d[0]) < Const.ori_img_width and 0 < int(left_pt2d[1]) < Const.ori_img_height:
+            #         left_roi_remain_idx.append(id)
+            #     if 0 < int(right_pt2d[0]) < Const.ori_img_width and 0 < int(right_pt2d[1]) < Const.ori_img_height:
+            #         right_roi_remain_idx.append(id)
 
-            left_roi_remain = roi[left_roi_remain_idx]
-            left_rois_indices = roi_indices[left_roi_remain_idx]
-            right_roi_remain = roi[right_roi_remain_idx]
-            right_rois_indices = roi_indices[right_roi_remain_idx]
+            # left_roi_remain = roi[left_roi_remain_idx]
+            # left_rois_indices = roi_indices[left_roi_remain_idx]
+            # right_roi_remain = roi[right_roi_remain_idx]
+            # right_rois_indices = roi_indices[right_roi_remain_idx]
+            gene3d_start = time.time()
+            roi_3d = generate_3d_bbox(roi)
+            gene3d_end = time.time()
 
-            left_roi_3d = generate_3d_bbox(left_roi_remain)
-            left_2d_bbox, _ = getprojected_3dbox(left_roi_3d, extrin, intrin)
+            proj3d_start = time.time()
+            left_2d_bbox = getprojected_3dbox(roi_3d, extrin, intrin, isleft=True)
+            right_2d_bbox = getprojected_3dbox(roi_3d, extrin, intrin, isleft=False)
+            proj3d_end = time.time()
+
+            getoutter_start = time.time()
             left_2d_bbox = get_outter(left_2d_bbox)
-            left_2d_bbox = torch.tensor(left_2d_bbox)
-
-            right_roi_3d = generate_3d_bbox(right_roi_remain)
-            _, right_2d_bbox = getprojected_3dbox(right_roi_3d, extrin, intrin)
             right_2d_bbox = get_outter(right_2d_bbox)
-            right_2d_bbox = torch.tensor(right_2d_bbox)
 
+            left_index_inside = np.where(
+                (left_2d_bbox[:, 0] >= 0) &
+                (left_2d_bbox[:, 1] >= 0) &
+                (left_2d_bbox[:, 2] <= Const.ori_img_height) &
+                (left_2d_bbox[:, 3] <= Const.ori_img_width)
+            )[0]
+
+            right_index_inside = np.where(
+                (right_2d_bbox[:, 0] >= 0) &
+                (right_2d_bbox[:, 1] >= 0) &
+                (right_2d_bbox[:, 2] <= Const.ori_img_height) &
+                (right_2d_bbox[:, 3] <= Const.ori_img_width)
+            )[0]
+
+            left_2d_bbox = left_2d_bbox[left_index_inside]
+            right_2d_bbox = right_2d_bbox[right_index_inside]
+            left_rois_indices = roi_indices[left_index_inside]
+            right_rois_indices = roi_indices[right_index_inside]
+            getoutter_end = time.time()
+
+            left_2d_bbox = torch.tensor(left_2d_bbox)
+            right_2d_bbox = torch.tensor(right_2d_bbox)
+            trans3d_end = time.time()
+
+            roi_start = time.time()
             #------------左右ROI pooling-----------
             left_roi_cls_loc, left_roi_score, left_pred_sincos = self.roi_head(
                 img_featuremaps[0],
@@ -357,133 +392,120 @@ class OFTtrainer(BaseTrainer):
                 img_featuremaps[1],
                 right_2d_bbox.to(img_featuremaps[1].device),
                 right_rois_indices)
+            roi_end = time.time()
+            # -----------------------NMS---------------------------
 
-            # -----------------------LEFT NMS---------------------------
-            # left_roi_cls_loc = left_roi_cls_loc.data
-            # left_roi_score = left_roi_score.data
-            # mean = torch.Tensor(self.loc_normalize_mean).to(left_roi_cls_loc.device). \
-            #     repeat(self.n_class)[None]
-            # std = torch.Tensor(self.loc_normalize_std).to(left_roi_cls_loc.device). \
-            #    repeat(self.n_class)[None]
-            # left_roi_cls_loc = (left_roi_cls_loc * std + mean)
-            # left_roi_cls_loc = left_roi_cls_loc.view(-1, self.n_class, 4)
-            # left_rois = left_2d_bbox.view(-1, 1, 4).expand_as(left_roi_cls_loc)
-            # left_cls_bbox = loc2bbox(at.tonumpy(left_rois).reshape((-1, 4)),
-            #                     at.tonumpy(left_roi_cls_loc).reshape((-1, 4)))
-
+            nms_start = time.time()
             left_prob = at.tonumpy(F.softmax(at.totensor(left_roi_score), dim=1))
-
-            # left_raw_cls_bbox = at.tonumpy(left_cls_bbox)
-            # left_raw_prob = at.tonumpy(left_prob)
-            # print(left_rois_indices.shape, left_roi_remain.shape, left_raw_prob.shape, left_raw_cls_bbox.shape)
-            # left_bbox, left_label, left_score = _suppress(left_raw_cls_bbox, left_raw_prob)
-            # --------------------ROI prob 指导 RPN nms-------------------------
-            # 提出前景的概率和前景；类的框
             left_front_prob = left_prob[:, 1]
-            left_bev_boxes, _, left_sincos_remain = nms_new(left_roi_remain, left_front_prob, left_pred_sincos)
-
-            # -----------------------RIGHT NMS---------------------------
-            # right_roi_cls_loc = right_roi_cls_loc.data
-            # right_roi_score = right_roi_score.data
-            # mean = torch.Tensor(self.loc_normalize_mean).to(right_roi_cls_loc.device). \
-            #    repeat(self.n_class)[None]
-            # std = torch.Tensor(self.loc_normalize_std).to(right_roi_cls_loc.device). \
-            #    repeat(self.n_class)[None]
-            # right_roi_cls_loc = (right_roi_cls_loc * std + mean)
-            # right_roi_cls_loc = right_roi_cls_loc.view(-1, self.n_class, 4)
-            # right_rois = right_2d_bbox.view(-1, 1, 4).expand_as(right_roi_cls_loc)
-            # right_cls_bbox = loc2bbox(at.tonumpy(right_rois).reshape((-1, 4)),
-            #                     at.tonumpy(right_roi_cls_loc).reshape((-1, 4)))
-
             right_prob = at.tonumpy(F.softmax(at.totensor(right_roi_score), dim=1))
-
-            # right_raw_cls_bbox = at.tonumpy(right_cls_bbox)
-            # right_raw_prob = at.tonumpy(right_prob)
-
-            # right_bbox, right_label, right_score = _suppress(right_raw_cls_bbox, right_raw_prob)
             right_front_prob = right_prob[:, 1]
-            right_bev_boxes, _, right_sincos_remain = nms_new(right_roi_remain, right_front_prob, right_pred_sincos)
-            # -----------------------可视化---------------------------
-            # left_img = cv2.imread("/home/dzc/Data/4carreal_0318blend/img/left1/%d.jpg" % frame)
-            # for idx, bbx in enumerate(gt_left_bbox):
-            #     cv2.rectangle(left_img, (int(bbx[1]), int(bbx[0])), (int(bbx[3]), int(bbx[2])), color=(255, 255, 0),
-            #                   thickness=3)
-            #
-            # for idx, bbxx in enumerate(left_bbox):
-            #     cv2.rectangle(left_img, (int(bbxx[1]), int(bbxx[0])), (int(bbxx[3]), int(bbxx[2])), color=(255, 0, 0),
-            #                   thickness=2)
-            # cv2.imwrite("/home/dzc/Desktop/CASIA/proj/mvRPN-det/images/left_roi/%d.jpg" % frame, left_img)
-            #
-            #
-            # right_img = cv2.imread("/home/dzc/Data/4carreal_0318blend/img/right2/%d.jpg" % frame)
-            # for idx, bbx in enumerate(gt_right_bbox):
-            #     cv2.rectangle(right_img, (int(bbx[1]), int(bbx[0])), (int(bbx[3]), int(bbx[2])), color=(255, 255, 0),
-            #                   thickness=3)
-            #
-            # for idx, bbxx in enumerate(right_bbox):
-            #     cv2.rectangle(right_img, (int(bbxx[1]), int(bbxx[0])), (int(bbxx[3]), int(bbxx[2])), color=(255, 0, 0),
-            #                   thickness=2)
-            # cv2.imwrite("/home/dzc/Desktop/CASIA/proj/mvRPN-det/images/right_roi/%d.jpg" % frame, right_img)
 
+
+            position_mark = np.concatenate((np.zeros((left_front_prob.shape[0], )), np.ones((right_front_prob.shape[0]))))
+            all_front_prob = np.concatenate((left_front_prob, right_front_prob))
+            all_roi_remain = np.concatenate((roi[left_index_inside], roi[right_index_inside]))
+            all_pred_sincos = np.concatenate((at.tonumpy(left_pred_sincos), at.tonumpy(right_pred_sincos)))
+            # all_bev_boxes, _, all_sincos_remain, position_mark_keep = nms_new(all_roi_remain, all_front_prob, all_pred_sincos, position_mark)
+            # s = time.time()
+            v, indices = torch.tensor(all_front_prob).sort(0)
+            indices_remain = indices[v > 0.8]
+            all_roi_remain = all_roi_remain[indices_remain].reshape(len(indices_remain), 4)
+            all_pred_sincos = all_pred_sincos[indices_remain].reshape(len(indices_remain), 2)
+            all_front_prob = all_front_prob[indices_remain].reshape(len(indices_remain),)
+            position_mark = position_mark[indices_remain].reshape(len(indices_remain), 1)
+            if indices_remain.shape[0] == 0:
+                keep = [indices[np.argmax(v)]]
+            elif indices_remain.shape[0] == 1:
+                keep = [0]
+            else:
+                keep = box_ops.nms(torch.tensor(all_roi_remain), torch.tensor(all_front_prob), 0.01)
+            # e = time.time()
+            # print(e - s)
+
+            all_bev_boxes, all_sincos_remain, position_mark_keep = all_roi_remain[keep].reshape(len(keep), 4), all_pred_sincos[keep].reshape(len(keep), 2), position_mark[keep].reshape(len(keep))
+            nms_end = time.time()
+            total_end = time.time()
+            rpn_time += (rpn_end - rpn_start)
+            trans_time += (trans3d_end - trans3d_start)
+            roi_time += (roi_end - roi_start)
+            nms_time += (nms_end - nms_start)
+            total_time += (total_end - total_start)
+            gene3d_time += (gene3d_end - gene3d_start)
+            proj3d_time += (proj3d_end - proj3d_start)
+            getoutter_time += (getoutter_end - getoutter_start)
+
+
+            # -----------------------可视化---------------------------
             bev_img = cv2.imread("/home/dzc/Data/4carreal_0318blend/bevimgs/%d.jpg" % frame)
 
-            #for idx, bbx in enumerate(gt_bbox):
-                #cv2.rectangle(bev_img, (int(bbx[1]), int(bbx[0])), (int(bbx[3]), int(bbx[2])), color=(255, 255, 0),
-                              #thickness=3)
-            if left_bev_boxes is not []:
-                for idx, bbxx in enumerate(left_bev_boxes):
-                    cv2.rectangle(bev_img, (int(bbxx[1]), int(bbxx[0])), (int(bbxx[3]), int(bbxx[2])), color=(255, 0, 0),
-                                  thickness=2)
-                    center_x, center_y = (bbxx[1] + bbxx[3]) // 2, (bbxx[0] + bbxx[2]) // 2
-                    ray = np.arctan((Const.grid_height - center_y) / center_x)
-                    angle = np.arctan(left_sincos_remain[idx].detach().cpu().numpy()[0] / left_sincos_remain[idx].detach().cpu().numpy()[1])
-                    if left_sincos_remain[idx].detach().cpu().numpy()[0] > 0 and \
-                            left_sincos_remain[idx].detach().cpu().numpy()[1] < 0:
-                        angle += np.pi
-                    elif left_sincos_remain[idx].detach().cpu().numpy()[0] < 0 and \
-                            left_sincos_remain[idx].detach().cpu().numpy()[1] < 0:
-                        angle += np.pi
-                    elif left_sincos_remain[idx].detach().cpu().numpy()[0] < 0 and \
-                            left_sincos_remain[idx].detach().cpu().numpy()[1] > 0:
-                        angle += 2 * np.pi
-                    theta_l = angle
-                    theta = theta_l + ray
+            if all_bev_boxes is not []:
+                for idx, bbxx in enumerate(all_bev_boxes):
+                    # print(position_mark_keep)
+                    if position_mark_keep[idx] == 0:
+                        cv2.rectangle(bev_img, (int(bbxx[1]), int(bbxx[0])), (int(bbxx[3]), int(bbxx[2])), color=(255, 0, 0),
+                                      thickness=2)
+                        center_x, center_y = int((bbxx[1] + bbxx[3]) // 2), int((bbxx[0] + bbxx[2]) // 2)
+                        ray = np.arctan((Const.grid_height - center_y) / center_x)
+                        angle = np.arctan(all_sincos_remain[idx][0] / all_sincos_remain[idx][1])
+                        if all_sincos_remain[idx][0] > 0 and \
+                                all_sincos_remain[idx][1] < 0:
+                            angle += np.pi
+                        elif all_sincos_remain[idx][0] < 0 and \
+                                all_sincos_remain[idx][1] < 0:
+                            angle += np.pi
+                        elif all_sincos_remain[idx][0] < 0 and \
+                                all_sincos_remain[idx][1] > 0:
+                            angle += 2 * np.pi
+                        theta_l = angle
+                        theta = theta_l + ray
 
-                    x_rot = center_x + 40
-                    y_rot = Const.grid_height - center_y
+                        x_rot = center_x + 40
+                        y_rot = Const.grid_height - center_y
 
-                    nrx = (x_rot - center_x) * np.cos(theta) - (y_rot - (Const.grid_height - center_y)) * np.sin(theta) + center_x
-                    nry = (x_rot - center_x) * np.sin(theta) + (y_rot - (Const.grid_height - center_y)) * np.cos(theta) + (Const.grid_height - center_y)
+                        nrx = (x_rot - center_x) * np.cos(theta) - (y_rot - (Const.grid_height - center_y)) * np.sin(theta) + center_x
+                        nry = (x_rot - center_x) * np.sin(theta) + (y_rot - (Const.grid_height - center_y)) * np.cos(theta) + (Const.grid_height - center_y)
+                        cv2.arrowedLine(bev_img, (center_x, center_y), (int(nrx), Const.grid_height - int(nry)), color=(255, 60, 199), thickness=2)
 
-                    cv2.arrowedLine(bev_img, (center_x, center_y), (nrx, Const.grid_height - nry), color=(255, 60, 199), thickness=2)
+                    elif position_mark_keep[idx] == 1:
+                        cv2.rectangle(bev_img, (int(bbxx[1]), int(bbxx[0])), (int(bbxx[3]), int(bbxx[2])),
+                                      color=(255, 255, 0),
+                                      thickness=2)
+                        center_x, center_y = int((bbxx[1] + bbxx[3]) // 2), int((bbxx[0] + bbxx[2]) // 2)
+                        ray = np.arctan(center_y / (Const.grid_width - center_x))
+                        angle = np.arctan(all_sincos_remain[idx][0] /
+                                          all_sincos_remain[idx][1])
+                        if all_sincos_remain[idx][0] > 0 and all_sincos_remain[idx][1] < 0:
+                            angle += np.pi
+                        elif all_sincos_remain[idx][0] < 0 and all_sincos_remain[idx][1] < 0:
+                            angle += np.pi
+                        elif all_sincos_remain[idx][0] < 0 and all_sincos_remain[idx][1] > 0:
+                            angle += 2 * np.pi
 
-                for idx, bbxx in enumerate(right_bev_boxes):
-                    cv2.rectangle(bev_img, (int(bbxx[1]), int(bbxx[0])), (int(bbxx[3]), int(bbxx[2])),
-                                  color=(255, 255, 0),
-                                  thickness=2)
-                    center_x, center_y = (bbxx[1] + bbxx[3]) // 2, (bbxx[0] + bbxx[2]) // 2
-                    ray = np.arctan(center_y / (Const.grid_width - center_x))
-                    angle = np.arctan(right_sincos_remain[idx].detach().cpu().numpy()[0] /
-                                      right_sincos_remain[idx].detach().cpu().numpy()[1])
-                    if right_sincos_remain[idx].detach().cpu().numpy()[0] > 0 and right_sincos_remain[idx].detach().cpu().numpy()[1] < 0:
-                        angle += np.pi
-                    elif right_sincos_remain[idx].detach().cpu().numpy()[0] < 0 and right_sincos_remain[idx].detach().cpu().numpy()[1] < 0:
-                        angle += np.pi
-                    elif right_sincos_remain[idx].detach().cpu().numpy()[0] < 0 and right_sincos_remain[idx].detach().cpu().numpy()[1] > 0:
-                        angle += 2 * np.pi
+                        theta_l = angle
+                        theta = theta_l + ray
 
-                    theta_l = angle
-                    theta = theta_l + ray
+                        x1_rot = center_x - 30
+                        y1_rot = Const.grid_height - center_y
 
-                    x1_rot = center_x - 30
-                    y1_rot = Const.grid_height - center_y
+                        nrx = (x1_rot - center_x) * np.cos(theta) - (y1_rot - (Const.grid_height - center_y)) * np.sin(theta) + center_x
+                        nry = (x1_rot - center_x) * np.sin(theta) + (y1_rot - (Const.grid_height - center_y)) * np.cos(theta) + (Const.grid_height - center_y)
 
-                    nrx = (x1_rot - center_x) * np.cos(theta) - (y1_rot - (Const.grid_height - center_y)) * np.sin(theta) + center_x
-                    nry = (x1_rot - center_x) * np.sin(theta) + (y1_rot - (Const.grid_height - center_y)) * np.cos(theta) + (Const.grid_height - center_y)
+                        cv2.arrowedLine(bev_img, (center_x, center_y), (int(nrx), Const.grid_height - int(nry)), color=(255, 60, 199), thickness=2)
+            cv2.imwrite("%s/%d.jpg" % (Const.imgsavedir, frame), bev_img)
 
-                    cv2.arrowedLine(bev_img, (center_x, center_y), (nrx, Const.grid_height - nry), color=(255, 255, 0), thickness=2)
 
-            cv2.imwrite("/home/dzc/Desktop/CASIA/proj/mvRPN-det/images/bev_angle/%d.jpg" % frame, bev_img)
+        print("Avg total infer time: %4f" % (total_time / batch_idx))
+        print("Avg rpn infer time: %4f" % (rpn_time / batch_idx))
+        print("Avg trans infer time: %4f" % (trans_time / batch_idx))
+        print("Avg gene infer time: %4f" % (gene3d_time / batch_idx))
+        print("Avg proj infer time: %4f" % (proj3d_time / batch_idx))
+        print("Avg get outter infer time: %4f" % (getoutter_time / batch_idx))
+        print("Avg roi infer time: %4f" % (roi_time / batch_idx))
+        print("Avg nms infer time: %4f" % (nms_time / batch_idx))
+
+
+
     @property
     def n_class(self):
         # Total number of classes including the background.
@@ -520,49 +542,87 @@ def _fast_rcnn_loc_loss(pred_loc, gt_loc, gt_label, sigma):
 def generate_3d_bbox(pred_bboxs):
     # 输出以左下角为原点的3d坐标
     n_bbox = pred_bboxs.shape[0]
-    boxes_3d = [] #
-    for i in range(pred_bboxs.shape[0]):
-        ymax, xmax, ymin, xmin = pred_bboxs[i]
-        pt0 = [xmax, Const.grid_height - ymin, 0]
-        pt1 = [xmin, Const.grid_height - ymin, 0]
-        pt2 = [xmin, Const.grid_height - ymax, 0]
-        pt3 = [xmax, Const.grid_height - ymax, 0]
-        pt_h_0 = [xmax, Const.grid_height - ymin, Const.car_height]
-        pt_h_1 = [xmin, Const.grid_height - ymin, Const.car_height]
-        pt_h_2 = [xmin, Const.grid_height - ymax, Const.car_height]
-        pt_h_3 = [xmax, Const.grid_height - ymax, Const.car_height]
-        boxes_3d.append([pt0, pt1, pt2, pt3, pt_h_0, pt_h_1, pt_h_2, pt_h_3])
-    return np.array(boxes_3d).reshape((n_bbox, 8, 3))
+
+    zeros = np.zeros((n_bbox, 1))
+    heights = np.zeros((n_bbox, 1)) * Const.car_height
+    ymax, xmax, ymin, xmin = pred_bboxs[:, 0].reshape(-1, 1), pred_bboxs[:, 1].reshape(-1, 1), pred_bboxs[:, 2].reshape(-1, 1), pred_bboxs[:, 3].reshape(-1, 1)
+
+    pt0s = np.concatenate((xmax, Const.grid_height - ymin, zeros), axis=1).reshape(1, n_bbox, 3)
+    pt1s = np.concatenate((xmin, Const.grid_height - ymin, zeros), axis=1).reshape(1, n_bbox, 3)
+    pt2s = np.concatenate((xmin, Const.grid_height - ymax, zeros), axis=1).reshape(1, n_bbox, 3)
+    pt3s = np.concatenate((xmax, Const.grid_height - ymax, zeros), axis=1).reshape(1, n_bbox, 3)
+    pth0s = np.concatenate((xmax, Const.grid_height - ymin, heights), axis=1).reshape(1, n_bbox, 3)
+    pth1s = np.concatenate((xmin, Const.grid_height - ymin, heights), axis=1).reshape(1, n_bbox, 3)
+    pth2s = np.concatenate((xmin, Const.grid_height - ymax, heights), axis=1).reshape(1, n_bbox, 3)
+    pth3s = np.concatenate((xmax, Const.grid_height - ymax, heights), axis=1).reshape(1, n_bbox, 3)
+
+    res = np.vstack((pt0s, pt1s, pt2s, pt3s, pth0s, pth1s, pth2s, pth3s)).transpose(1, 0, 2)
+    return res
 
 def getimage_pt(points3d, extrin, intrin):
     # 此处输入的是以左下角为原点的坐标，输出的是opencv格式的左上角为原点的坐标
     newpoints3d = np.vstack((points3d, 1.0))
     Zc = np.dot(extrin, newpoints3d)[-1]
     imagepoints = (np.dot(intrin, np.dot(extrin, newpoints3d)) / Zc).astype(np.int)
+    # print(Zc)
     return [imagepoints[0, 0], imagepoints[1, 0]]
 
-def getprojected_3dbox(points3ds, extrin, intrin):
-    left_bboxes = []
-    right_bboxes = []
-    for i in range(points3ds.shape[0]):
-        left_bbox_2d = []
-        right_bbox_2d = []
-        for pt in points3ds[i]:
-            left = getimage_pt(pt.reshape(3, 1), extrin[0][0], intrin[0][0])
-            right = getimage_pt(pt.reshape(3, 1), extrin[1][0], intrin[1][0])
-            left_bbox_2d.append(left)
-            right_bbox_2d.append(right)
-        left_bboxes.append(left_bbox_2d)
-        right_bboxes.append(right_bbox_2d)
+def getprojected_3dbox(points3ds, extrin, intrin, isleft = True):
+    if isleft:
+        extrin_ = extrin[0].numpy()
+        intrin_ = intrin[0].numpy()
+    else:
+        extrin_ = extrin[1].numpy()
+        intrin_ = intrin[1].numpy()
 
-    return np.array(left_bboxes).reshape((points3ds.shape[0], 8, 2)), np.array(right_bboxes).reshape((points3ds.shape[0], 8, 2))
+    extrin_big = extrin_.repeat(points3ds.shape[0] * 8, axis=0)
+    intrin_big = intrin_.repeat(points3ds.shape[0] * 8, axis=0)
+
+    points3ds_big = points3ds.reshape(points3ds.shape[0], 8, 3, 1)
+    homog = np.ones((points3ds.shape[0], 8, 1, 1))
+    homo3dpts = np.concatenate((points3ds_big, homog), 2).reshape(points3ds.shape[0] * 8, 4, 1)
+    res = np.matmul(extrin_big, homo3dpts)
+    Zc = res[:, -1]
+    res2 = np.matmul(intrin_big, res)
+    imagepoints = (res2.reshape(-1, 3) / Zc).reshape((points3ds.shape[0], 8, 3))[:, :, :2].astype(int)
+
+    return imagepoints
+
+    # for i in range(points3ds.shape[0]):
+    #     left_bbox_2d = []
+    #
+    #     for pt in points3ds[i]:
+    #         left = getimage_pt(pt.reshape(3, 1), extrin[0][0], intrin[0][0])
+    #         left_bbox_2d.append(left)
+    #     left_bboxes.append(left_bbox_2d)
+    # print(np.array(left_bboxes).reshape((points3ds.shape[0], 8, 2))[0], imagepoints[0])
+    # return np.array(left_bboxes).reshape((points3ds.shape[0], 8, 2))
+
+# def getprojected_3dbox_right(points3ds, extrin, intrin):
+#     right_bboxes = []
+#     for i in range(points3ds.shape[0]):
+#         right_bbox_2d = []
+#         for pt in points3ds[i]:
+#             right = getimage_pt(pt.reshape(3, 1), extrin[1][0], intrin[1][0])
+#             right_bbox_2d.append(right)
+#         right_bboxes.append(right_bbox_2d)
+#
+#     return np.array(right_bboxes).reshape((points3ds.shape[0], 8, 2))
 
 def get_outter(projected_3dboxes):
-    outter_boxes = []
-    for boxes in projected_3dboxes:
-        xmax = max(boxes[:, 0])
-        xmin = min(boxes[:, 0])
-        ymax = max(boxes[:, 1])
-        ymin = min(boxes[:, 1])
-        outter_boxes.append([ymin, xmin, ymax, xmax])
-    return np.array(outter_boxes, dtype=np.float)
+    projected_3dboxes = projected_3dboxes + 1e-3
+    zero_mask = np.zeros((projected_3dboxes.shape[0], projected_3dboxes.shape[1], 1))
+    one_mask = np.ones((projected_3dboxes.shape[0], projected_3dboxes.shape[1], 1))
+    huge_mask = one_mask * 1000
+    ymax_mask = np.concatenate((zero_mask, one_mask), axis=2)
+    xmax_mask = np.concatenate((one_mask, zero_mask), axis=2)
+    ymin_mask = np.concatenate((huge_mask, one_mask), axis=2)
+    xmin_mask = np.concatenate((one_mask, huge_mask), axis=2)
+    xmax = np.max((projected_3dboxes * xmax_mask), axis = (1,2)).reshape(1, -1, 1)
+    ymax = np.max((projected_3dboxes * ymax_mask), axis = (1,2)).reshape(1, -1, 1)
+    xmin = np.min((projected_3dboxes * xmin_mask), axis = (1,2)).reshape(1, -1, 1)
+    ymin = np.min((projected_3dboxes * ymin_mask), axis = (1,2)).reshape(1, -1, 1)
+    res = np.concatenate((ymin, xmin, ymax, xmax), axis=2)
+    res = np.array(res, dtype=int).squeeze()
+
+    return res

@@ -1,4 +1,6 @@
 import os
+import time
+
 import numpy as np
 import torch
 import torch.nn as nn
@@ -47,7 +49,7 @@ class PerspTransDetector(nn.Module):
                                nn.Dropout(p=0.5, inplace=False),
                                nn.Linear(2048, 2048, bias=True),
                                nn.ReLU(inplace=True),
-                               nn.Dropout(p=0.5, inplace=False),
+                               nn.Dropout(p=0.4, inplace=False),
                                ).to("cuda:1")
         self.classifier = my_cls
 
@@ -56,17 +58,20 @@ class PerspTransDetector(nn.Module):
         assert N == self.num_cam
         world_features = []
         img_featuremap = []
+
         for cam in range(self.num_cam):
             img_feature =self.backbone(imgs[:, cam].to('cuda:0'))
             img_feature = F.interpolate(img_feature, self.upsample_shape, mode='bilinear')
             img_featuremap.append(img_feature)
             proj_mat = self.proj_mats[cam].repeat([B, 1, 1]).float().to('cuda:1')
-            world_feature = kornia.warp_perspective(img_feature.to('cuda:1'), proj_mat, self.reducedgrid_shape)
+            world_feature = kornia.warp_perspective(img_feature.to('cuda:1'), proj_mat, self.reducedgrid_shape) # 0.0142 * 2 = 0.028
+
             world_feature = kornia.vflip(world_feature)
             world_features.append(world_feature.to('cuda:1'))
         world_features = torch.cat(world_features + [self.coord_map.repeat([B, 1, 1, 1]).to('cuda:1')], dim=1)
-        # vis_feature(img_featuremap[0], max_num=5, out_path='/home/dzc/Desktop/CASIA/proj/mvRPN-det/images/')
-        rpn_locs, rpn_scores, anchor, rois, roi_indices = self.rpn(world_features, Const.grid_size)
+
+        rpn_locs, rpn_scores, anchor, rois, roi_indices = self.rpn(world_features, Const.grid_size) # 0.08
+
 
         # vis_feature(world_features, max_num=5, out_path='/home/dzc/Desktop/CASIA/proj/mvRPN-det/images/')
 
