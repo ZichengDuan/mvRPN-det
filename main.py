@@ -24,7 +24,7 @@ warnings.filterwarnings("ignore")
 
 def main(args):
     # seed
-    writer = SummaryWriter('/home/dzc/Desktop/CASIA/proj/mvRPN-det/tensorboard/log')
+    writer = SummaryWriter('/home/dzc/Desktop/CASIA/proj/mvRPN-det/results/tensorboard/log')
 
     if args.seed is not None:
         np.random.seed(args.seed)
@@ -79,8 +79,8 @@ def main(args):
             torch.save(model.state_dict(), os.path.join('%s/mvdet_%d.pth' % (Const.modelsavedir, epoch)))
             torch.save(roi_head.state_dict(), os.path.join('%s/roi_head_%d.pth' % (Const.modelsavedir, epoch)))
         else:
-            model.load_state_dict(torch.load("%s/mvdet_%d.pth" % (Const.modelsavedir, 2)))
-            roi_head.load_state_dict(torch.load("%s/roi_head_%d.pth" % (Const.modelsavedir, 2)))
+            model.load_state_dict(torch.load("%s/mvdet_%d.pth" % (Const.modelsavedir, 3)))
+            roi_head.load_state_dict(torch.load("%s/roi_head_%d.pth" % (Const.modelsavedir, 3)))
             trainer.test(epoch, test_loader, writer)
             break
     writer.close()
@@ -95,11 +95,12 @@ if __name__ == '__main__':
     parser.add_argument('-j', '--num_workers', type=int, default=8)
     parser.add_argument('-b', '--batch_size', type=int, default=1, metavar='N',
                         help='input batch size for training (default: 1)')
-    parser.add_argument('--epochs', type=int, default=2, metavar='N', help='number of epochs to train (default: 10)')
-    parser.add_argument('--lr', type=float, default=0.0002, metavar='LR', help='learning rate (default: 0.1)')
+    parser.add_argument('--epochs', type=int, default=4, metavar='N', help='number of epochs to train (default: 10)')
+    parser.add_argument('--lr', type=float, default=0.0003, metavar='LR', help='learning rate (default: 0.1)')
     parser.add_argument('--weight_decay', type=float, default=1e-5)
     parser.add_argument('--momentum', type=float, default=0.5, metavar='M', help='SGD momentum (default: 0.5)')
     parser.add_argument('--seed', type=int, default=17, help='random seed (default: None)')
+
     parser.add_argument('--resume', type=bool, default = True)
     args = parser.parse_args()
 

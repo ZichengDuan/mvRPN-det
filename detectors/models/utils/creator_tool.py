@@ -6,7 +6,7 @@ import cupy as cp
 import torch
 
 from .bbox_tools import bbox2loc, bbox_iou, loc2bbox
-from .nms import non_maximum_suppression
+# from .nms import non_maximum_suppression
 from EX_CONST import Const
 from torchvision.ops import boxes as box_ops
 
@@ -36,7 +36,7 @@ class ProposalTargetCreator(object):
 
     def __init__(self,
                  n_sample=128,
-                 pos_ratio=0.25, pos_iou_thresh=0.5,
+                 pos_ratio=0.35, pos_iou_thresh=0.5,
                  neg_iou_thresh_hi=0.5, neg_iou_thresh_lo=0.0
                  ):
         self.n_sample = n_sample
@@ -163,13 +163,22 @@ class ProposalTargetCreator(object):
         right_sample_roi = right_roi[right_keep_index]
         # ------------------------开始转换坐标-------------------------
         left_roi_3d = generate_3d_bbox(left_sample_roi)
-        left_2d_bbox = getprojected_3dbox(left_roi_3d, extrin, intrin, isleft = True)
+        left_2d_bbox = getprojected_3dbox(left_roi_3d, extrin[0][0], intrin[0][0])
         left_2d_bbox = get_outter(left_2d_bbox)
 
         right_roi_3d = generate_3d_bbox(right_sample_roi)
-        right_2d_bbox = getprojected_3dbox(right_roi_3d, extrin, intrin, isleft = False)
+        right_2d_bbox = getprojected_3dbox(right_roi_3d, extrin[1][0], intrin[1][0])
         right_2d_bbox = get_outter(right_2d_bbox)
-        # print(left_2d_bbox.shape)
+
+        # left_roi_3d = generate_3d_bbox2(left_sample_roi)
+        # left_2d_bbox = getprojected_3dbox2(left_roi_3d, extrin, intrin, isleft=True)
+        # left_2d_bbox = get_outter2(left_2d_bbox)
+        #
+        # right_roi_3d = generate_3d_bbox2(right_sample_roi)
+        # right_2d_bbox = getprojected_3dbox2(right_roi_3d, extrin, intrin, isleft=False)
+        # right_2d_bbox = get_outter2(right_2d_bbox)
+
+        # print(left_2d_bbox2[:3], left_2d_bbox[:3])
         left_gt_roi_loc = bbox2loc(left_2d_bbox, left_gt_bbox[left_gt_assignment[left_keep_index]])
 
         # left_img = cv2.imread("/home/dzc/Data/4carreal_0318blend/img/left1/%d.jpg" % frame)
@@ -540,7 +549,7 @@ class ProposalCreator:
                  parent_model,
                  nms_thresh=0.7,
                  n_train_pre_nms=12000,
-                 n_train_post_nms=2000,
+                 n_train_post_nms=3000,
                  n_test_pre_nms=6000,
                  n_test_post_nms=300,
                  min_size=16
@@ -647,7 +656,7 @@ class ProposalCreator:
         roi = roi[keep]
         return roi
 
-def generate_3d_bbox(pred_bboxs):
+def generate_3d_bbox2(pred_bboxs):
     # 输出以左下角为原点的3d坐标
     n_bbox = pred_bboxs.shape[0]
     zeros = np.zeros((n_bbox, 1))
@@ -667,14 +676,14 @@ def generate_3d_bbox(pred_bboxs):
     res = np.vstack((pt0s, pt1s, pt2s, pt3s, pth0s, pth1s, pth2s, pth3s)).transpose(1, 0, 2)
     return res
 
-def getimage_pt(points3d, extrin, intrin):
+def getimage_pt2(points3d, extrin, intrin):
     # 此处输入的是以左下角为原点的坐标，输出的是opencv格式的左上角为原点的坐标
     newpoints3d = np.vstack((points3d, 1.0))
     Zc = np.dot(extrin, newpoints3d)[-1]
     imagepoints = (np.dot(intrin, np.dot(extrin, newpoints3d)) / Zc).astype(np.int)
     return [imagepoints[0, 0], imagepoints[1, 0]]
 
-def getprojected_3dbox(points3ds, extrin, intrin, isleft = True):
+def getprojected_3dbox2(points3ds, extrin, intrin, isleft = True):
     if isleft:
         extrin_ = extrin[0].numpy()
         intrin_ = intrin[0].numpy()
@@ -695,7 +704,7 @@ def getprojected_3dbox(points3ds, extrin, intrin, isleft = True):
 
     return imagepoints
 
-def get_outter(projected_3dboxes):
+def get_outter2(projected_3dboxes):
     projected_3dboxes = projected_3dboxes + 1e-3
     zero_mask = np.zeros((projected_3dboxes.shape[0], projected_3dboxes.shape[1], 1))
     one_mask = np.ones((projected_3dboxes.shape[0], projected_3dboxes.shape[1], 1))
@@ -709,6 +718,52 @@ def get_outter(projected_3dboxes):
     xmin = np.min((projected_3dboxes * xmin_mask), axis=(1, 2)).reshape(1, -1, 1)
     ymin = np.min((projected_3dboxes * ymin_mask), axis=(1, 2)).reshape(1, -1, 1)
     res = np.concatenate((ymin, xmin, ymax, xmax), axis=2)
-    res = np.array(res, dtype=int).squeeze()
+    res = np.array(res).squeeze()
 
     return res
+
+
+def generate_3d_bbox(pred_bboxs):
+    # 输出以左下角为原点的3d坐标
+    n_bbox = pred_bboxs.shape[0]
+    boxes_3d = [] #
+    for i in range(pred_bboxs.shape[0]):
+        ymax, xmax, ymin, xmin = pred_bboxs[i]
+        pt0 = [xmax, Const.grid_height - ymin, 0]
+        pt1 = [xmin, Const.grid_height - ymin, 0]
+        pt2 = [xmin, Const.grid_height - ymax, 0]
+        pt3 = [xmax, Const.grid_height - ymax, 0]
+        pt_h_0 = [xmax, Const.grid_height - ymin, Const.car_height]
+        pt_h_1 = [xmin, Const.grid_height - ymin, Const.car_height]
+        pt_h_2 = [xmin, Const.grid_height - ymax, Const.car_height]
+        pt_h_3 = [xmax, Const.grid_height - ymax, Const.car_height]
+        boxes_3d.append([pt0, pt1, pt2, pt3, pt_h_0, pt_h_1, pt_h_2, pt_h_3])
+    return np.array(boxes_3d).reshape((n_bbox, 8, 3))
+
+def getimage_pt(points3d, extrin, intrin):
+    # 此处输入的是以左下角为原点的坐标，输出的是opencv格式的左上角为原点的坐标
+    newpoints3d = np.vstack((points3d, 1.0))
+    Zc = np.dot(extrin, newpoints3d)[-1]
+    imagepoints = (np.dot(intrin, np.dot(extrin, newpoints3d)) / Zc).astype(np.int)
+    return [imagepoints[0, 0], imagepoints[1, 0]]
+
+def getprojected_3dbox(points3ds, extrin, intrin):
+    bboxes = []
+    for i in range(points3ds.shape[0]):
+        bbox_2d = []
+        for pt in points3ds[i]:
+            left = getimage_pt(pt.reshape(3, 1), extrin, intrin)
+            bbox_2d.append(left)
+        bboxes.append(bbox_2d)
+
+    return np.array(bboxes).reshape((points3ds.shape[0], 8, 2))
+
+def get_outter(projected_3dboxes):
+    outter_boxes = []
+    for boxes in projected_3dboxes:
+        xmax = max(boxes[:, 0])
+        xmin = min(boxes[:, 0])
+        ymax = max(boxes[:, 1])
+        ymin = min(boxes[:, 1])
+        outter_boxes.append([ymin, xmin, ymax, xmax])
+    return np.array(outter_boxes, dtype=np.float)

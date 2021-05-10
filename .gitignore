@@ -1,5 +1,5 @@
-/images/
-/tensorboard/
+/results/images/
+/results/tensorboard/
 /4carreal_object_detection/
-/images/
-/trained/
+/results/images/
+/results/trained/

@@ -59,7 +59,21 @@
             </Attribute>
           </value>
         </entry>
+        <entry key="/sentry_detection.py">
+          <value>
+            <Attribute>
+              <option name="separator" value="," />
+            </Attribute>
+          </value>
+        </entry>
         <entry key="/tests/backbone_test.py">
+          <value>
+            <Attribute>
+              <option name="separator" value="," />
+            </Attribute>
+          </value>
+        </entry>
+        <entry key="/tools/video_visualize.py">
           <value>
             <Attribute>
               <option name="separator" value="," />

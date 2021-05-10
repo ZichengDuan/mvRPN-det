@@ -1,13 +1,14 @@
 import time
 
+import cv2
 import numpy as np
+import torch
 from torch.nn import functional as F
 import torch as t
 from torch import nn
 
 from .utils.bbox_tools import generate_anchor_base
 from .utils.creator_tool import ProposalCreator
-
 
 class RegionProposalNetwork(nn.Module):
     def __init__(
@@ -25,17 +26,45 @@ class RegionProposalNetwork(nn.Module):
         self.conv1 = nn.Conv2d(in_channels, mid_channels, 3, 1, 1)
         self.score = nn.Conv2d(mid_channels, n_anchor * 2, 1, 1, 0)
         self.loc = nn.Conv2d(mid_channels, n_anchor * 4, 1, 1, 0)
+
+        # torchvision
+
         normal_init(self.conv1, 0, 0.01)
         normal_init(self.score, 0, 0.01)
         normal_init(self.loc, 0, 0.01)
 
     def forward(self, x, img_size, scale=1.):
+        # print(x.shape, img_size)
+        # batch_images = torch.zeros((1, 3, img_size[0], img_size[1]))
+        # image_sizes = [(img_size[0], img_size[1])]
+        # image_list_ = image_list.ImageList(batch_images, image_sizes)
+        # test_anchors = self.anchor_generator(image_list_, x)
+        # print(test_anchors[0][:20])
+
+        # a = np.zeros((img_size[0] + 100, img_size[1] + 100))
+        # img = np.uint8(a)
+        # img = cv2.cvtColor(img, cv2.COLOR_GRAY2BGR)
+
+        # for anchor in test_anchors[0][:5]:
+        #     x1, y1, x2, y2 = anchor
+        #     cv2.rectangle(img, (int(x1+ 50), int(y1+ 50)), (int(x2+ 50), int(y2+ 50)), color=(255, 255, 0))
+        # cv2.imwrite("/home/dzc/Desktop/CASIA/proj/mvRPN-det/results/images/test_anchor.jpg", img)
+
         n, _, hh, ww = x.shape
         anchor = _enumerate_shifted_anchor(
             np.array(self.anchor_base),
             self.feat_stride, hh, ww)
 
         n_anchor = anchor.shape[0] // (hh * ww)
+        # a = np.zeros((img_size[0]+ 100, img_size[1]+ 100))
+        # img = np.uint8(a)
+        # img = cv2.cvtColor(img, cv2.COLOR_GRAY2BGR)
+        #
+        # for anchors in anchor[:5]:
+        #     y1, x1, y2, x2 = anchors
+        #     cv2.rectangle(img, (int(x2+ 50), int(y2+ 50)),(int(x1+ 50), int(y1+ 50)), color=(255, 255, 0))
+        # cv2.imwrite("/home/dzc/Desktop/CASIA/proj/mvRPN-det/results/images/anchor.jpg", img)
+
         h = F.relu(self.conv1(x))
         rpn_locs = self.loc(h)
         rpn_locs = rpn_locs.permute(0, 2, 3, 1).contiguous().view(n, -1, 4)
@@ -47,7 +76,7 @@ class RegionProposalNetwork(nn.Module):
         rpn_fg_scores = rpn_fg_scores.view(n, -1)
         rpn_scores = rpn_scores.view(n, -1, 2)
 
-        s = time.time()
+        # s = time.time()
         rois = list()
         roi_indices = list()
         for i in range(n):
@@ -59,8 +88,8 @@ class RegionProposalNetwork(nn.Module):
             batch_index = i * np.ones((len(roi),), dtype=np.int32)
             rois.append(roi)
             roi_indices.append(batch_index)
-        e = time.time()
-        print(e - s)
+        # e = time.time()
+        # print(e - s)
         rois = np.concatenate(rois, axis=0)
         roi_indices = np.concatenate(roi_indices, axis=0)
 

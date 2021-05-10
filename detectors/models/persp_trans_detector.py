@@ -11,8 +11,10 @@ from detectors.models.resnet import resnet18
 from torchvision.models.vgg import vgg16
 import matplotlib
 from detectors.models.mobilenet import MobileNetV3_Small, MobileNetV3_Large
+import torchvision.models.detection.rpn as torchvision_rpn
 from detectors.models.region_proposal_network import RegionProposalNetwork
 import cv2
+import torchvision.models.detection.image_list as image_list
 from EX_CONST import Const
 matplotlib.use('Agg')
 
@@ -26,21 +28,22 @@ class Reshape(nn.Module):
 class PerspTransDetector(nn.Module):
     def __init__(self, dataset = None):
         super().__init__()
-        self.num_cam = dataset.num_cam
-        self.img_shape, self.reducedgrid_shape = dataset.img_shape, dataset.reducedgrid_shape
-        # calculate the
-        imgcoord2worldgrid_matrices = self.get_imgcoord2worldgrid_matrices(dataset.base.intrinsic_matrices,
-                                                                           dataset.base.extrinsic_matrices,
-                                                                           dataset.base.worldgrid2worldcoord_mat)
-        self.coord_map = self.create_coord_map(self.reducedgrid_shape + [1])
-        # img
-        self.upsample_shape = list(map(lambda x: int(x / dataset.img_reduce), self.img_shape))
-        img_reduce = np.array(self.img_shape) / np.array(self.upsample_shape)
-        img_zoom_mat = np.diag(np.append(img_reduce, [1]))
-        # map
-        map_zoom_mat = np.diag(np.append(np.ones([2]) / dataset.grid_reduce, [1]))
-        self.proj_mats = [torch.from_numpy(map_zoom_mat @ imgcoord2worldgrid_matrices[cam] @ img_zoom_mat)
-                          for cam in range(self.num_cam)]
+        if dataset is not None:
+            self.num_cam = dataset.num_cam
+            self.img_shape, self.reducedgrid_shape = dataset.img_shape, dataset.reducedgrid_shape
+            # calculate the
+            imgcoord2worldgrid_matrices = self.get_imgcoord2worldgrid_matrices(dataset.base.intrinsic_matrices,
+                                                                               dataset.base.extrinsic_matrices,
+                                                                               dataset.base.worldgrid2worldcoord_mat)
+            self.coord_map = self.create_coord_map(self.reducedgrid_shape + [1])
+            # img
+            self.upsample_shape = list(map(lambda x: int(x / dataset.img_reduce), self.img_shape))
+            img_reduce = np.array(self.img_shape) / np.array(self.upsample_shape)
+            img_zoom_mat = np.diag(np.append(img_reduce, [1]))
+            # map
+            map_zoom_mat = np.diag(np.append(np.ones([2]) / dataset.grid_reduce, [1]))
+            self.proj_mats = [torch.from_numpy(map_zoom_mat @ imgcoord2worldgrid_matrices[cam] @ img_zoom_mat)
+                              for cam in range(self.num_cam)]
 
         self.backbone = nn.Sequential(*list(resnet18(replace_stride_with_dilation=[False, False, False]).children())[:-2]).to('cuda:0')
         self.rpn = RegionProposalNetwork(in_channels=1026, mid_channels=1026, ratios=[1], anchor_scales=[4]).to('cuda:1')
@@ -49,11 +52,19 @@ class PerspTransDetector(nn.Module):
                                nn.Dropout(p=0.5, inplace=False),
                                nn.Linear(2048, 2048, bias=True),
                                nn.ReLU(inplace=True),
-                               nn.Dropout(p=0.4, inplace=False),
+                               nn.Dropout(p=0.5, inplace=False),
                                ).to("cuda:1")
         self.classifier = my_cls
 
-    def forward(self, imgs, epoch = None, visualize=False, train = True):
+        # anchor_generator = torchvision_rpn.AnchorGenerator(sizes=[64], aspect_ratios=[1]).to("cuda:1")
+        # rpn_head = torchvision_rpn.RPNHead(in_channels=1026, num_anchors=None).to("cuda:1")
+        # self.torchvis_rpn = torchvision_rpn.RegionProposalNetwork(anchor_generator, head=rpn_head, fg_iou_thresh=0.8,
+        #                                                  bg_iou_thresh=0.3, batch_size_per_image=256,
+        #                                                  positive_fraction=0.8, pre_nms_top_n={'training': 12000, 'testing': 6000},
+        #                                                  post_nms_top_n={'training': 3000, 'testing':300}, nms_thresh=0.7).to("cuda:1")
+
+
+    def forward(self, imgs, gt_boxes = None, epoch = None, visualize=False, train = True):
         B, N, C, H, W = imgs.shape
         assert N == self.num_cam
         world_features = []
@@ -72,8 +83,22 @@ class PerspTransDetector(nn.Module):
 
         rpn_locs, rpn_scores, anchor, rois, roi_indices = self.rpn(world_features, Const.grid_size) # 0.08
 
+        # batch_images = torch.zeros((1, 3, Const.grid_height, Const.grid_width))
+        # image_sizes = [(Const.grid_height, Const.grid_width)]
+        # image_list_ = image_list.ImageList(batch_images, image_sizes)
+        # # 需要对gt box转换格式从ymin, xmin, ymax, xmax转换成 x1, y1, x2, y2
+        # gt_boxes = torch.cat((gt_boxes.squeeze()[:, 1].reshape(-1, 1),
+        #                       gt_boxes.squeeze()[:, 0].reshape(-1, 1),
+        #                       gt_boxes.squeeze()[:, 3].reshape(-1, 1),
+        #                       gt_boxes.squeeze()[:, 2].reshape(-1, 1)), dim=1)
+
+        # boxes, losses = self.torchvis_rpn(images=image_list_, features=world_features, targets = gt_boxes)
 
         # vis_feature(world_features, max_num=5, out_path='/home/dzc/Desktop/CASIA/proj/mvRPN-det/images/')
+        # roi_indices = list()
+        # for i in range(B):
+        #     batch_index = i * np.ones((len(rois),), dtype=np.int32)
+        #     roi_indices.append(batch_index)
 
         return rpn_locs, rpn_scores, anchor, rois, roi_indices, img_featuremap, world_features
 
