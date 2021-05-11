@@ -84,7 +84,7 @@ def read_txt(left_right_dir):
 
             lold = np.array([left_xmax, left_xmin, left_ymax, left_ymin])
             rold = np.array([right_xmax, right_xmin, right_ymax, right_ymin])
-
+            # print("old", lold)
             # 裁剪，x控制到0-640,y控制到0-480
             lnew = np.clip(lold, [0,0,0,0], [640, 640, 480, 480])
             rnew = np.clip(rold, [0,0,0,0], [640, 640, 480, 480])
@@ -95,19 +95,31 @@ def read_txt(left_right_dir):
 
             lnarea = (lnew[0] - lnew[1]) * (lnew[2] - lnew[3])
             rnarea = (rnew[0] - rnew[1]) * (rnew[2] - rnew[3])
-
+            # print("new", lnew)
             # 全出界，坐标全出，或者是裁剪后边框所占面积小于原来的0.3
-            if lnew.all() == 0 or np.sum(lnew) == 480 * 2 + 640 * 2 or lnarea / loarea < 0.3:
+            # print(lnarea, loarea, lnarea / loarea < 0.3)
+            # print(lnew.all())
+            if np.sum(lnew) == 0 or np.sum(lnew) == 480 * 2 + 640 * 2 or lnarea / loarea < 0.3:
                 lnew = (np.zeros(4) - 1).astype(np.int32)
 
-            if rnew.all() == 0 or np.sum(rnew) == 480 * 2 + 640 * 2 or rnarea / roarea < 0.3:
+            # if m == 25 and i == 0:
+            #     print(rnew)
+            #     print(rnew.all() == 0)
+            #     # print(right_xmax, right_xmin, right_ymax, right_ymin)
+            #     print(rnarea / roarea)
+
+            if np.sum(rnew) == 0 or np.sum(rnew) == 480 * 2 + 640 * 2 or rnarea / roarea < 0.3:
                 rnew = (np.zeros(4) - 1).astype(np.int32)
 
             left_xmax, left_xmin, left_ymax, left_ymin = lnew
             left_xmax, left_xmin, left_ymax, left_ymin = int(left_xmax), int(left_xmin), int(left_ymax), int(left_ymin)
             right_xmax, right_xmin, right_ymax, right_ymin = rnew
             right_xmax, right_xmin, right_ymax, right_ymin = int(right_xmax), int(right_xmin), int(right_ymax), int(right_ymin)
-
+            # if m == 25 and i == 0:
+            #
+            #     print(rnew)
+            #     print(right_xmax, right_xmin, right_ymax, right_ymin)
+            #     print(rnarea/ roarea)
             # -----------------------------------------
             x1_ori, x2_ori, x3_ori, x4_ori = world_x / 10 + 26, world_x / 10 + 26, world_x / 10 - 26, world_x / 10 - 26
             y1_ori, y2_ori, y3_ori, y4_ori = world_y / 10 + 26, world_y / 10 - 26, world_y / 10 - 26, world_y / 10 + 26
