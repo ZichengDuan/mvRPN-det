@@ -8,7 +8,7 @@ import cv2
 
 def read_txt(left_right_dir):
     l_lhs = None
-    for m in range(0, 3021):
+    for m in range(0, 7379):
         print(m)
         idx = str(m)
         # if 6 - len(idx) > 0:
@@ -18,16 +18,19 @@ def read_txt(left_right_dir):
         left = open(left_right_dir + "/left1/%s.txt" % idx)
         right = open(left_right_dir + "/right2/%s.txt" % idx)
         datas = []
-        annotation = open("/home/dzc/Data/4carreal0511_blend/od_annotations/%d.json" % (m), 'w')
+        annotation = open("/home/dzc/Data/mix/annotations/%d.json" % (m), 'w')
 
         od_xmax = []
         od_xmin = []
         od_ymax = []
         od_ymin = []
         cordss = []
-        for i in range(3):
-            l_lhs, l_rhs = left.readline().split(":")
-            r_lhs, r_rhs = right.readline().split(":")
+        left_lines = left.readlines()
+        right_lines = right.readlines()
+
+        for i in range(len(left_lines)):
+            l_lhs, l_rhs = left_lines[i].split(":")
+            r_lhs, r_rhs = right_lines[i].split(":")
 
             if l_lhs == "blue1":
                 l_lhs = 0
@@ -46,13 +49,18 @@ def read_txt(left_right_dir):
             # 在相机视角下坐标系下，原数据格式为图像大小为W(x): 0~640, H(y): 0~480，左上角为坐标原点，x轴水平，y轴竖直
             # for p in cont_left:
             #     print(p)
-
-            world_x, world_y, left_xmax, left_ymax, left_xmin, left_ymin, _ = [float(tmp) for tmp in cont_left]
-            right_xmax, right_ymax, right_xmin, right_ymin = [float(tmp) for tmp in cont_right[2:-1]]
-
-            if i == 1:
-                world_x *= 1000
-                world_y *= 1000
+            if len(left_lines) == 3:
+                world_x, world_y, left_xmax, left_ymax, left_xmin, left_ymin, _ = [float(tmp) for tmp in cont_left]
+                right_xmax, right_ymax, right_xmin, right_ymin = [float(tmp) for tmp in cont_right[2:-1]]
+                if i == 1:
+                    world_x *= 1000
+                    world_y *= 1000
+            else:
+                world_x, world_y, left_xmax, left_ymax, left_xmin, left_ymin, _, angle = [float(tmp) for tmp in cont_left]
+                right_xmax, right_ymax, right_xmin, right_ymin = [float(tmp) for tmp in cont_right[2:-2]]
+                if i == 2:
+                    world_x *= 1000
+                    world_y *= 1000
 
             pID = i
             # ## 将角度转换为0-360度
@@ -140,6 +148,7 @@ def read_txt(left_right_dir):
             # 生成json,view 0: left, view 1: right
             data = {}
             data = json.loads(json.dumps(data))
+            data["mark"] = 0 if len(left_lines) == 4 else 1
             data["VehicleID"] = pID
             data["type"] = l_lhs
             # data["direc_left"] = int(direc_left)
@@ -170,4 +179,4 @@ def read_txt(left_right_dir):
         # break
 
 if __name__ == "__main__":
-    read_txt("/home/dzc/Data/4carreal0511_blend/txt")
+    read_txt("/home/dzc/Data/mix/txt")
