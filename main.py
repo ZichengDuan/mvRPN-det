@@ -43,6 +43,7 @@ def main(args):
     train_trans = T.Compose([resize, T.ToTensor(), normalize])
 
     data_path = os.path.expanduser('/home/dzc/Data/%s' % Const.dataset)
+    data_path2 = os.path.expanduser('/home/dzc/Data/%s' % Const.dataset)
     base = Robomaster_1_dataset(data_path, args, worldgrid_shape=Const.grid_size)
     train_set = oftFrameDataset(base, train=True, transform=train_trans, grid_reduce=4)
     test_set = oftFrameDataset(base , train=False, transform=train_trans, grid_reduce=4)
@@ -95,13 +96,13 @@ if __name__ == '__main__':
     parser.add_argument('-j', '--num_workers', type=int, default=8)
     parser.add_argument('-b', '--batch_size', type=int, default=1, metavar='N',
                         help='input batch size for training (default: 1)')
-    parser.add_argument('--epochs', type=int, default=4, metavar='N', help='number of epochs to train (default: 10)')
-    parser.add_argument('--lr', type=float, default=0.0003, metavar='LR', help='learning rate (default: 0.1)')
+    parser.add_argument('--epochs', type=int, default=6, metavar='N', help='number of epochs to train (default: 10)')
+    parser.add_argument('--lr', type=float, default=0.0001, metavar='LR', help='learning rate (default: 0.1)')
     parser.add_argument('--weight_decay', type=float, default=1e-5)
     parser.add_argument('--momentum', type=float, default=0.5, metavar='M', help='SGD momentum (default: 0.5)')
     parser.add_argument('--seed', type=int, default=17, help='random seed (default: None)')
 
-    parser.add_argument('--resume', type=bool, default = True)
+    parser.add_argument('--resume', type=bool, default = False)
     args = parser.parse_args()
 
     main(args)

@@ -57,9 +57,10 @@ class OFTtrainer(BaseTrainer):
 
         for batch_idx, data in enumerate(data_loader):
             optimizer.zero_grad()
-            imgs, bev_xy,bev_angle, gt_bbox, gt_left_bbox, gt_right_bbox, left_dirs, right_dirs, left_sincos, right_sincos, frame, extrin, intrin = data
+            imgs, bev_xy,bev_angle, gt_bbox, gt_left_bbox, gt_right_bbox, left_dirs, right_dirs, left_sincos, right_sincos, frame, extrin, intrin, extrin2, intrin2, mark = data
+            print(frame)
             img_size = (Const.grid_height, Const.grid_width)
-            rpn_locs, rpn_scores, anchor, rois, roi_indices, img_featuremaps, bev_featuremaps = self.model(imgs, gt_bbox)
+            rpn_locs, rpn_scores, anchor, rois, roi_indices, img_featuremaps, bev_featuremaps = self.model(imgs, gt_bbox, mark=mark)
 
             # visualize angle
             # bev_img = cv2.imread("/home/dzc/Data/4carreal_0318blend/bevimgs/%d.jpg" % frame)
@@ -323,11 +324,16 @@ class OFTtrainer(BaseTrainer):
 
 
         for batch_idx, data in enumerate(data_loader):
-            imgs, gt_bev_xy,bev_angle, gt_bbox, gt_left_bbox, gt_right_bbox, gt_left_dirs, gt_right_dirs, gt_left_sincos, gt_right_sincos, frame, extrin, intrin = data
+            imgs, gt_bev_xy,bev_angle, gt_bbox, gt_left_bbox, gt_right_bbox, gt_left_dirs, gt_right_dirs, gt_left_sincos, gt_right_sincos, frame, extrin, intrin, extrin2, intrin2, mark = data
             total_start = time.time()
             rpn_start = time.time()
+
+            if mark == 1:
+                extrin = extrin2
+                intrin = intrin2
+
             with torch.no_grad():
-                rpn_locs, rpn_scores, anchor, rois, roi_indices, img_featuremaps, bev_featuremaps = self.model(imgs)
+                rpn_locs, rpn_scores, anchor, rois, roi_indices, img_featuremaps, bev_featuremaps = self.model(imgs, mark=mark)
             rpn_end = time.time()
             roi = torch.tensor(rois)
 
@@ -744,7 +750,7 @@ def getprojected_3dbox(points3ds, extrin, intrin, isleft = True):
     else:
         extrin_ = extrin[1].numpy()
         intrin_ = intrin[1].numpy()
-    print(extrin_.shape)
+    # print(extrin_.shape)
     extrin_big = extrin_.repeat(points3ds.shape[0] * points3ds.shape[1], axis=0)
     intrin_big = intrin_.repeat(points3ds.shape[0] * points3ds.shape[1], axis=0)
 
@@ -753,7 +759,7 @@ def getprojected_3dbox(points3ds, extrin, intrin, isleft = True):
     homo3dpts = np.concatenate((points3ds_big, homog), 2).reshape(points3ds.shape[0] * points3ds.shape[1], 4, 1)
     res = np.matmul(extrin_big, homo3dpts)
     Zc = res[:, -1]
-    print(intrin_big.shape, res.shape)
+    # print(intrin_big.shape, res.shape)
     res2 = np.matmul(intrin_big, res)
     imagepoints = (res2.reshape(-1, 3) / Zc).reshape((points3ds.shape[0], points3ds.shape[1], 3))[:, :, :2].astype(int)
 

@@ -24,6 +24,9 @@ class Robomaster_1_dataset(VisionDataset):
         self.worldgrid2worldcoord_mat = np.array([[1,0,0], [0,1,0], [0,0,1]])
         self.intrinsic_matrices, self.extrinsic_matrices = zip(
             *[self.get_intrinsic_extrinsic_matrix(cam) for cam in range(self.num_cam)])
+
+        self.intrinsic_matrices2, self.extrinsic_matrices2 = zip(
+            *[self.get_intrinsic_extrinsic_matrix2(cam) for cam in range(self.num_cam)])
         # self.left_2d_points, self.left_3d_points, self.right_2d_points, self.right_3d_points = self.get_2d3d_points()
 
     def get_image_fpaths(self, frame_range):
@@ -60,14 +63,14 @@ class Robomaster_1_dataset(VisionDataset):
 
 
     def get_intrinsic_extrinsic_matrix2(self, camera_i):
-        intrinsic_camera_path = os.path.join(self.root2, 'calibration', 'intrinsic')
+        intrinsic_camera_path = os.path.join(self.root, 'calibration2', 'intrinsic')
         intrinsic_params_file = cv2.FileStorage(os.path.join(intrinsic_camera_path,
                                                              intrinsic_camera_matrix_filenames[camera_i]),
                                                              flags=cv2.FILE_STORAGE_READ)
         intrinsic_matrix = intrinsic_params_file.getNode('intri_matrix').mat()
         intrinsic_params_file.release()
 
-        extrinsic_camera_path = os.path.join(self.root2, 'calibration', 'extrinsic')
+        extrinsic_camera_path = os.path.join(self.root, 'calibration2', 'extrinsic')
         extrinsic_params_file = cv2.FileStorage(os.path.join(extrinsic_camera_path,
                                                              extrinsic_camera_matrix_filenames[camera_i]),
                                                              flags=cv2.FILE_STORAGE_READ)

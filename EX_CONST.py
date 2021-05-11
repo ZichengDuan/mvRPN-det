@@ -20,9 +20,9 @@ class Const:
 
     grid_size = [grid_height, grid_width]
 
-    reduce = 3
+    reduce = 4
 
-    dataset = "4carreal_0318blend"
+    dataset = "mix"
 
     car_dist = math.sqrt(50/2 * 50/2 + 60/2 * 60/2)
 
