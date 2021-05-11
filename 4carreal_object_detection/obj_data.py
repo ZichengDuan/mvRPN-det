@@ -8,24 +8,24 @@ import cv2
 
 def read_txt(left_right_dir):
     l_lhs = None
-    for m in range(0, 4358):
+    for m in range(0, 3021):
         print(m)
         idx = str(m)
-        # if 4 - len(idx) > 0:
-        #     for j in range(4 - len(idx)):
+        # if 6 - len(idx) > 0:
+        #     for j in range(6 - len(idx)):
         #         idx = "0" + idx
 
         left = open(left_right_dir + "/left1/%s.txt" % idx)
         right = open(left_right_dir + "/right2/%s.txt" % idx)
         datas = []
-        annotation = open("/home/dzc/Data/4carreal_0318blend/od_annotations/%d.json" % (m), 'w')
+        annotation = open("/home/dzc/Data/4carreal0511_blend/od_annotations/%d.json" % (m), 'w')
 
         od_xmax = []
         od_xmin = []
         od_ymax = []
         od_ymin = []
         cordss = []
-        for i in range(4):
+        for i in range(3):
             l_lhs, l_rhs = left.readline().split(":")
             r_lhs, r_rhs = right.readline().split(":")
 
@@ -47,10 +47,10 @@ def read_txt(left_right_dir):
             # for p in cont_left:
             #     print(p)
 
-            world_x, world_y, left_xmax, left_xmin, left_ymax, left_ymin, _, _ = [float(tmp) for tmp in cont_left]
-            right_xmax, right_xmin, right_ymax, right_ymin = [float(tmp) for tmp in cont_right[-6:-2]]
+            world_x, world_y, left_xmax, left_ymax, left_xmin, left_ymin, _ = [float(tmp) for tmp in cont_left]
+            right_xmax, right_ymax, right_xmin, right_ymin = [float(tmp) for tmp in cont_right[2:-1]]
 
-            if i == 2:
+            if i == 1:
                 world_x *= 1000
                 world_y *= 1000
 
@@ -64,8 +64,8 @@ def read_txt(left_right_dir):
                 angle += 2 * np.pi
 
             # direc = int(angle/ (np.pi / 4))
-            direc_left = int(cont_left[-2])
-            direc_right = int(cont_right[-2])
+            # direc_left = int(cont_left[-2])
+            # direc_right = int(cont_right[-2])
             # print(angle, direc)
 
             ## 出去一部分
@@ -134,14 +134,16 @@ def read_txt(left_right_dir):
             od_ymin.append(ymin_od)
 
             # -----------------------------------------
-
+            # img = cv2.imread("/home/dzc/Data/4carreal_0318blend/img/left1/%d.jpg" % m)
+            # cv2.rectangle(img, (left_xmin, left_ymin), (left_xmax, left_ymax), color=(255, 0, 0))
+            # cv2.imwrite("/home/dzc/Desktop/CASIA/proj/mvRPN-det/4carreal_object_detection/test/%d.jpg" % m, img)
             # 生成json,view 0: left, view 1: right
             data = {}
             data = json.loads(json.dumps(data))
             data["VehicleID"] = pID
             data["type"] = l_lhs
-            data["direc_left"] = int(direc_left)
-            data["direc_right"] = int(direc_right)
+            # data["direc_left"] = int(direc_left)
+            # data["direc_right"] = int(direc_right)
             data["angle"] = angle
             data["wx"] = world_x
             data["wy"] = world_y
@@ -154,18 +156,18 @@ def read_txt(left_right_dir):
             data["ymax_od"] = ymax_od
             datas.append(data)
 
-        back = np.zeros((Const.grid_height, Const.grid_width), np.uint8)
-        img = cv2.cvtColor(back, cv2.COLOR_GRAY2BGR)
-        img = cv2.imread("/home/dzc/Data/4carreal_0318blend/bevimgs/%s.jpg" % idx)
+        # back = np.zeros((Const.grid_height, Const.grid_width), np.uint8)
+        # img = cv2.cvtColor(back, cv2.COLOR_GRAY2BGR)
+        # img = cv2.imread("/home/dzc/Data/4carreal_0318blend/bevimgs/%s.jpg" % idx)
         # print(od_xmax, od_ymax)
-        for k in range(4):
-            cv2.rectangle(img, (od_xmax[k], od_ymax[k]), (od_xmin[k], od_ymin[k]), (255, 0, 0), thickness=2)
-            # cv2.fillPoly(img, cordss[k], (255, 255, 0))
-        cv2.imwrite("/home/dzc/Desktop/CASIA/proj/mvRPN-det/4carreal_object_detection/test/%d.jpg" % m, img)
+        # for k in range(4):
+        #     cv2.rectangle(img, (od_xmax[k], od_ymax[k]), (od_xmin[k], od_ymin[k]), (255, 0, 0), thickness=2)
+        #     # cv2.fillPoly(img, cordss[k], (255, 255, 0))
+        # cv2.imwrite("/home/dzc/Desktop/CASIA/proj/mvRPN-det/4carreal_object_detection/test/%d.jpg" % m, img)
 
         annotation.write(json.dumps(datas, indent=4))
         annotation.close()
         # break
 
 if __name__ == "__main__":
-    read_txt("/home/dzc/Data/4carreal_0318blend/txt")
+    read_txt("/home/dzc/Data/4carreal0511_blend/txt")

@@ -10,6 +10,20 @@
             </Attribute>
           </value>
         </entry>
+        <entry key="/4carreal_object_detection/rename_txt.py">
+          <value>
+            <Attribute>
+              <option name="separator" value="," />
+            </Attribute>
+          </value>
+        </entry>
+        <entry key="$USER_HOME$/miniconda3/envs/casia/lib/python3.7/shutil.py">
+          <value>
+            <Attribute>
+              <option name="separator" value="," />
+            </Attribute>
+          </value>
+        </entry>
       </map>
     </option>
   </component>
