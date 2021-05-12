@@ -416,7 +416,7 @@ class OFTtrainer(BaseTrainer):
             # all_bev_boxes, _, all_sincos_remain, position_mark_keep = nms_new(all_roi_remain, all_front_prob, all_pred_sincos, position_mark)
             # s = time.time()
             v, indices = torch.tensor(all_front_prob).sort(0)
-            indices_remain = indices[v > 0.6]
+            indices_remain = indices[v > 0.7]
             all_roi_remain = all_roi_remain[indices_remain].reshape(len(indices_remain), 4)
             all_pred_sincos = all_pred_sincos[indices_remain].reshape(len(indices_remain), 2)
             all_front_prob = all_front_prob[indices_remain].reshape(len(indices_remain),)
@@ -431,9 +431,11 @@ class OFTtrainer(BaseTrainer):
                     keep = [0]
                 else:
                     keep = box_ops.nms(torch.tensor(all_roi_remain), torch.tensor(all_front_prob), 0)
-                all_bev_boxes, all_sincos_remain, position_mark_keep = all_roi_remain[keep].reshape(len(keep), 4), \
+                all_bev_boxes, all_sincos_remain, position_mark_keep, front_prob_keep = all_roi_remain[keep].reshape(len(keep), 4), \
                                                                        all_pred_sincos[keep].reshape(len(keep), 2), \
-                                                                       position_mark[keep].reshape(len(keep))
+                                                                       position_mark[keep].reshape(len(keep)), \
+                                                                                        all_front_prob[keep].reshape(len(keep))
+
             # all_bev_boxes, all_sincos_remain, position_mark_keep = all_roi_remain2[keep].reshape(len(keep), 4), all_pred_sincos2[keep].reshape(len(keep), 2), position_mark2[keep].reshape(len(keep))
             nms_end = time.time()
             total_end = time.time()
@@ -450,6 +452,7 @@ class OFTtrainer(BaseTrainer):
             bev_img = cv2.imread("/home/dzc/Data/4carreal0511_blend/bevimgs/%d.jpg" % frame)
 
             if len(all_bev_boxes) != 0:
+                # print(front_prob_keep, all_bev_boxes)
                 for idx, bbxx in enumerate(all_bev_boxes):
                     # print(position_mark_keep)
                     if position_mark_keep[idx] == 0:
@@ -480,6 +483,7 @@ class OFTtrainer(BaseTrainer):
                         nry = (x_rot - center_x) * np.sin(theta) + (y_rot - (Const.grid_height - center_y)) * np.cos(theta) + (Const.grid_height - center_y)
                         cv2.arrowedLine(bev_img, (center_x, center_y), (int(nrx), Const.grid_height - int(nry)), color=(255, 60, 199), thickness=2)
 
+                        cv2.putText(bev_img, str(front_prob_keep[idx]),(center_x, center_y), fontFace=cv2.FONT_HERSHEY_SIMPLEX, fontScale=1, color=(255, 60, 199))
                     elif position_mark_keep[idx] == 1:
 
                         cv2.rectangle(bev_img, (int(bbxx[1]), int(bbxx[0])), (int(bbxx[3]), int(bbxx[2])),
@@ -508,7 +512,9 @@ class OFTtrainer(BaseTrainer):
                         nry = (x1_rot - center_x) * np.sin(theta) + (y1_rot - (Const.grid_height - center_y)) * np.cos(theta) + (Const.grid_height - center_y)
 
                         cv2.arrowedLine(bev_img, (center_x, center_y), (int(nrx), Const.grid_height - int(nry)), color=(255, 60, 199), thickness=2)
-                visualize_3dbox(all_bev_boxes, all_sincos_remain, position_mark_keep, extrin, intrin, frame)
+                        cv2.putText(bev_img, str(front_prob_keep[idx]),(center_x, center_y),
+                                    fontFace=cv2.FONT_HERSHEY_SIMPLEX, fontScale=2, color=(255, 60, 199))
+                visualize_3dbox(all_bev_boxes, all_sincos_remain, position_mark_keep, front_prob_keep, extrin, intrin, frame)
             cv2.imwrite("%s/%d.jpg" % (Const.imgsavedir, frame), bev_img)
 
 
@@ -529,7 +535,7 @@ class OFTtrainer(BaseTrainer):
         # Total number of classes including the background.
         return self.roi_head.n_class
 
-def visualize_3dbox(pred_ori, pred_angle, position_mark, extrin, intrin, idx):
+def visualize_3dbox(pred_ori, pred_angle, position_mark, front_prob_keep, extrin, intrin, idx):
     left_img = cv2.imread("/home/dzc/Data/4carreal0511_blend/img/left1/%d.jpg" % (idx))
     boxes_3d = []
     n_bbox = pred_ori.shape[0]
@@ -679,6 +685,9 @@ def visualize_3dbox(pred_ori, pred_angle, position_mark, extrin, intrin, idx):
         # cv2.line(left_img, (projected_2d[k][7+ 9][0], projected_2d[k][7+ 9][1]), (projected_2d[k][4+ 9][0], projected_2d[k][4+ 9][1]), color = (255, 255, 0))
         #
         cv2.arrowedLine(left_img, (int((projected_2d[k][0][0] + projected_2d[k][2][0]) / 2), int((projected_2d[k][0][1] + projected_2d[k][2][1]) / 2)), (projected_2d[k][8][0], projected_2d[k][8][1]), color = (255, 60, 199), thickness=2)
+        cv2.putText(left_img, str(front_prob_keep[k]),
+                    (int((projected_2d[k][0][0] + projected_2d[k][2][0]) / 2), int((projected_2d[k][0][1] + projected_2d[k][2][1]) / 2)),
+                    fontFace=cv2.FONT_HERSHEY_SIMPLEX, fontScale=1, color = (255, 60, 199))
         # cv2.line(left_img, (int((projected_2d[k][0+ 9][0] + projected_2d[k][2+ 9][0]) / 2), int((projected_2d[k][0+ 9][1] + projected_2d[k][2+ 9][1]) / 2)), (projected_2d[k][8+ 9][0], projected_2d[k][8+ 9][1]), color = (255, 60, 199), thickness=2)
     cv2.imwrite("/home/dzc/Desktop/CASIA/proj/mvRPN-det/results/images/3d_box/%d.jpg" % idx, left_img)
 

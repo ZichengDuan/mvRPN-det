@@ -45,8 +45,8 @@ def main(args):
     data_path = os.path.expanduser('/home/dzc/Data/%s' % Const.dataset)
     data_path2 = os.path.expanduser('/home/dzc/Data/%s' % Const.dataset)
     base = Robomaster_1_dataset(data_path, args, worldgrid_shape=Const.grid_size)
-    train_set = oftFrameDataset(base, train=True, transform=train_trans, grid_reduce=4)
-    test_set = oftFrameDataset(base , train=False, transform=train_trans, grid_reduce=4)
+    train_set = oftFrameDataset(base, train=True, transform=train_trans, grid_reduce=5)
+    test_set = oftFrameDataset(base , train=False, transform=train_trans, grid_reduce=5)
     train_loader = torch.utils.data.DataLoader(train_set, batch_size=args.batch_size, shuffle=True,
                                                num_workers=args.num_workers, pin_memory=True, drop_last=True)
     test_loader = torch.utils.data.DataLoader(test_set, batch_size=args.batch_size, shuffle=False,
@@ -80,8 +80,8 @@ def main(args):
             torch.save(model.state_dict(), os.path.join('%s/mvdet_%d.pth' % (Const.modelsavedir, epoch)))
             torch.save(roi_head.state_dict(), os.path.join('%s/roi_head_%d.pth' % (Const.modelsavedir, epoch)))
         else:
-            model.load_state_dict(torch.load("%s/mvdet_%d.pth" % (Const.modelsavedir, 3)))
-            roi_head.load_state_dict(torch.load("%s/roi_head_%d.pth" % (Const.modelsavedir, 3)))
+            model.load_state_dict(torch.load("%s/mvdet_%d.pth" % (Const.modelsavedir, 1)))
+            roi_head.load_state_dict(torch.load("%s/roi_head_%d.pth" % (Const.modelsavedir, 1)))
             trainer.test(epoch, test_loader, writer)
             break
     writer.close()
@@ -97,12 +97,12 @@ if __name__ == '__main__':
     parser.add_argument('-b', '--batch_size', type=int, default=1, metavar='N',
                         help='input batch size for training (default: 1)')
     parser.add_argument('--epochs', type=int, default=6, metavar='N', help='number of epochs to train (default: 10)')
-    parser.add_argument('--lr', type=float, default=0.0002, metavar='LR', help='learning rate (default: 0.1)')
+    parser.add_argument('--lr', type=float, default=0.0003, metavar='LR', help='learning rate (default: 0.1)')
     parser.add_argument('--weight_decay', type=float, default=1e-5)
     parser.add_argument('--momentum', type=float, default=0.5, metavar='M', help='SGD momentum (default: 0.5)')
-    parser.add_argument('--seed', type=int, default=17, help='random seed (default: None)')
+    parser.add_argument('--seed', type=int, default=18, help='random seed (default: None)')
 
-    parser.add_argument('--resume', type=bool, default = False)
+    parser.add_argument('--resume', type=bool, default = True)
     args = parser.parse_args()
 
     main(args)
