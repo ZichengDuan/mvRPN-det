@@ -1,8 +1,8 @@
 import os
 import shutil
 
-target_path = "/home/dzc/Data/mix/txt/left1"
-root_path = "/home/dzc/Data/4carreal_0318blend/txt/left1"
+target_path = "/home/dzc/Data/mix/bevimgs"
+root_path = "/home/dzc/Data/4carreal_0318blend/bevimgs"
 
 target_file_num = len(os.listdir(target_path))
 root_file_num = len(os.listdir(root_path))
@@ -17,10 +17,10 @@ while i < root_file_num:
     #     for j in range(6 - len(idx)):
     #         idx = "0" + idx
 
-    filename = os.path.join(root_path, "%s.txt" % idx)
+    filename = os.path.join(root_path, "%s.jpg" % idx)
 
     if os.path.exists(filename):
-        shutil.copy(filename, os.path.join(target_path, "%d.txt" % (i + target_file_num)))
+        shutil.copy(filename, os.path.join(target_path, "%d.jpg" % (i + target_file_num)))
         i += 1
         name += 1
     else:
