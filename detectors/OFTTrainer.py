@@ -447,7 +447,7 @@ class OFTtrainer(BaseTrainer):
             getoutter_time += (getoutter_end - getoutter_start)
 
             # -----------------------可视化---------------------------
-            bev_img = cv2.imread("/home/dzc/Data/mix/bevimgs/%d.jpg" % frame)
+            bev_img = cv2.imread("/home/dzc/Data/4carreal0511_blend/bevimgs/%d.jpg" % frame)
 
             if len(all_bev_boxes) != 0:
                 for idx, bbxx in enumerate(all_bev_boxes):
@@ -530,7 +530,7 @@ class OFTtrainer(BaseTrainer):
         return self.roi_head.n_class
 
 def visualize_3dbox(pred_ori, pred_angle, position_mark, extrin, intrin, idx):
-    left_img = cv2.imread("/home/dzc/Data/mix/img/left1/%d.jpg" % (idx))
+    left_img = cv2.imread("/home/dzc/Data/4carreal0511_blend/img/left1/%d.jpg" % (idx))
     boxes_3d = []
     n_bbox = pred_ori.shape[0]
     for i, bbox in enumerate(pred_ori):
