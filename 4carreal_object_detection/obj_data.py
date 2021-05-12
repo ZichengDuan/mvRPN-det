@@ -8,7 +8,7 @@ import cv2
 
 def read_txt(left_right_dir):
     l_lhs = None
-    for m in range(0, 7379):
+    for m in range(0, 3021):
         print(m)
         idx = str(m)
         # if 6 - len(idx) > 0:
@@ -18,7 +18,7 @@ def read_txt(left_right_dir):
         left = open(left_right_dir + "/left1/%s.txt" % idx)
         right = open(left_right_dir + "/right2/%s.txt" % idx)
         datas = []
-        annotation = open("/home/dzc/Data/mix/annotations/%d.json" % (m), 'w')
+        annotation = open("/home/dzc/Data/4carreal0511_blend/annotations/%d.json" % (m), 'w')
 
         od_xmax = []
         od_xmin = []
@@ -160,7 +160,7 @@ def read_txt(left_right_dir):
             # 生成json,view 0: left, view 1: right
             data = {}
             data = json.loads(json.dumps(data))
-            data["mark"] = 0 if len(left_lines) == 4 else 1
+            # data["mark"] = 0 if len(left_lines) == 4 else 1
             data["VehicleID"] = pID
             data["type"] = l_lhs
             # data["direc_left"] = int(direc_left)
