@@ -58,7 +58,6 @@ class OFTtrainer(BaseTrainer):
         for batch_idx, data in enumerate(data_loader):
             optimizer.zero_grad()
             imgs, bev_xy,bev_angle, gt_bbox, gt_left_bbox, gt_right_bbox, left_dirs, right_dirs, left_sincos, right_sincos, frame, extrin, intrin, extrin2, intrin2, mark = data
-            print(frame)
             img_size = (Const.grid_height, Const.grid_width)
             rpn_locs, rpn_scores, anchor, rois, roi_indices, img_featuremaps, bev_featuremaps = self.model(imgs, gt_bbox, mark=mark)
 
@@ -218,16 +217,16 @@ class OFTtrainer(BaseTrainer):
             #     for name, param in self.model.rpn.named_parameters():
             #         param.requires_grad = False
 
-            loss = rpn_loc_loss + rpn_cls_loss * 1.5 + left_roi_loc_loss * 1.5 + left_roi_cls_loss + left_sincos_loss / 4 + right_roi_loc_loss + right_roi_cls_loss + right_sincos_loss / 4
+            loss = rpn_loc_loss * 1.5 + rpn_cls_loss * 1.5 + left_roi_loc_loss + left_roi_cls_loss + left_sincos_loss / 2 + right_roi_loc_loss + right_roi_cls_loss + right_sincos_loss / 2
             Loss += loss
             RPN_CLS_LOSS += rpn_cls_loss
             RPN_LOC_LOSS += rpn_loc_loss
             LEFT_ROI_LOC_LOSS += left_roi_loc_loss
             LEFT_ROI_CLS_LOSS += left_roi_cls_loss
-            LEFT_ANGLE_REG_LOSS += left_sincos_loss / 4
+            LEFT_ANGLE_REG_LOSS += left_sincos_loss / 2
             RIGHT_ROI_LOC_LOSS += right_roi_loc_loss
             RIGHT_ROI_CLS_LOSS += right_roi_cls_loss
-            RIGHT_ANGLE_REG_LOSS += right_sincos_loss / 4
+            RIGHT_ANGLE_REG_LOSS += right_sincos_loss / 2
 
             # ------------------------------------------------------------
             loss.backward()
@@ -249,10 +248,10 @@ class OFTtrainer(BaseTrainer):
                       "Total: %4f\n" % (Loss.detach().cpu().item() / (batch_idx + 1)),
                       "Rpn Loc : %4f    || " % (RPN_LOC_LOSS.detach().cpu().item() / (batch_idx + 1)),
                       "Rpn Cls : %4f    ||" % (RPN_CLS_LOSS.detach().cpu().item() / (batch_idx + 1)),
-                      "LEFT ROI_Loc: %4f    || " % ((LEFT_ROI_LOC_LOSS.detach().cpu().item() / 2) / (batch_idx + 1)),
+                      "LEFT ROI_Loc: %4f    || " % ((LEFT_ROI_LOC_LOSS.detach().cpu().item()) / (batch_idx + 1)),
                       "LEFT ROI_Cls : %4f   ||" % ((LEFT_ROI_CLS_LOSS.detach().cpu().item()) / (batch_idx + 1)),
                       "Left SinCos : %4f" % ((LEFT_ANGLE_REG_LOSS.detach().cpu().item()) / (batch_idx + 1)),
-                      "RIGHT ROI_Loc : %4f  || " % ((RIGHT_ROI_LOC_LOSS.detach().cpu().item() / 2) / (batch_idx + 1)),
+                      "RIGHT ROI_Loc : %4f  || " % ((RIGHT_ROI_LOC_LOSS.detach().cpu().item()) / (batch_idx + 1)),
                       "RIGHT ROI_Cls : %4f" % ((RIGHT_ROI_CLS_LOSS.detach().cpu().item()) / (batch_idx + 1)),
                       "RIGHT SinCos : %4f" % ((RIGHT_ANGLE_REG_LOSS.detach().cpu().item()) / (batch_idx + 1)))
                 print("----------------------------------------------------------------------------------------------------------------------------------------------------------------------")
