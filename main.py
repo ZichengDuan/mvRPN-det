@@ -102,7 +102,7 @@ if __name__ == '__main__':
     parser.add_argument('--momentum', type=float, default=0.5, metavar='M', help='SGD momentum (default: 0.5)')
     parser.add_argument('--seed', type=int, default=17, help='random seed (default: None)')
 
-    parser.add_argument('--resume', type=bool, default = True)
+    parser.add_argument('--resume', type=bool, default = False)
     args = parser.parse_args()
 
     main(args)

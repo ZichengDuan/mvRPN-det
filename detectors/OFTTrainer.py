@@ -57,9 +57,9 @@ class OFTtrainer(BaseTrainer):
 
         for batch_idx, data in enumerate(data_loader):
             optimizer.zero_grad()
-            imgs, bev_xy,bev_angle, gt_bbox, gt_left_bbox, gt_right_bbox, left_dirs, right_dirs, left_sincos, right_sincos, frame, extrin, intrin, extrin2, intrin2, mark = data
+            imgs, bev_xy,bev_angle, gt_bbox, gt_left_bbox, gt_right_bbox, left_dirs, right_dirs, left_sincos, right_sincos, frame, extrin, intrin = data
             img_size = (Const.grid_height, Const.grid_width)
-            rpn_locs, rpn_scores, anchor, rois, roi_indices, img_featuremaps, bev_featuremaps = self.model(imgs, gt_bbox, mark=mark)
+            rpn_locs, rpn_scores, anchor, rois, roi_indices, img_featuremaps, bev_featuremaps = self.model(imgs, gt_bbox)
 
             # visualize angle
             # bev_img = cv2.imread("/home/dzc/Data/4carreal_0318blend/bevimgs/%d.jpg" % frame)
@@ -323,16 +323,12 @@ class OFTtrainer(BaseTrainer):
 
 
         for batch_idx, data in enumerate(data_loader):
-            imgs, gt_bev_xy,bev_angle, gt_bbox, gt_left_bbox, gt_right_bbox, gt_left_dirs, gt_right_dirs, gt_left_sincos, gt_right_sincos, frame, extrin, intrin, extrin2, intrin2, mark = data
+            imgs, gt_bev_xy,bev_angle, gt_bbox, gt_left_bbox, gt_right_bbox, gt_left_dirs, gt_right_dirs, gt_left_sincos, gt_right_sincos, frame, extrin, intrin = data
             total_start = time.time()
             rpn_start = time.time()
 
-            if mark == 1:
-                extrin = extrin2
-                intrin = intrin2
-
             with torch.no_grad():
-                rpn_locs, rpn_scores, anchor, rois, roi_indices, img_featuremaps, bev_featuremaps = self.model(imgs, mark=mark)
+                rpn_locs, rpn_scores, anchor, rois, roi_indices, img_featuremaps, bev_featuremaps = self.model(imgs)
             rpn_end = time.time()
             roi = torch.tensor(rois)
 

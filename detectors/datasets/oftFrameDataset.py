@@ -27,21 +27,17 @@ class oftFrameDataset(VisionDataset):
         self.extrinsic_matrix = base.extrinsic_matrices
         self.intrinsic_matrix = base.intrinsic_matrices
 
-        self.extrinsic_matrix2 = base.extrinsic_matrices
-        self.intrinsic_matrix2 = base.intrinsic_matrices
+        if train:
+            frame_range = list(range(0, 1500)) + list(range(1616, 2500))
+        else:
+            frame_range = list(range(2500, 3021))
+
+
 
         # if train:
-        #     frame_range = list(range(0, 2800)) + list(range(1269 + 3021, 1700 + 3021)) + list(range(2977+ 3021, 4100+ 3021))
-        #     random.shuffle(frame_range)
+        #     frame_range = range(0, 20)
         # else:
-        #     frame_range = list(range(2800, 3021)) + list(range(1700 + 3021, 2100 + 3021))
-
-
-
-        if train:
-            frame_range = range(0, 20)
-        else:
-            frame_range = range(20, 100)
+        #     frame_range = range(20, 100)
 
         self.upsample_shape = list(map(lambda x: int(x / self.img_reduce), self.img_shape))
         img_reduce_local = np.array(self.img_shape) / np.array(self.upsample_shape)
@@ -63,7 +59,6 @@ class oftFrameDataset(VisionDataset):
         self.right_angle = {}
         self.world_xy = {}
         self.bev_angle = {}
-        self.mark = {}
 
         self.img_fpaths = self.base.get_image_fpaths(frame_range)
         self.gt_fpath = os.path.join(self.root, 'gt.txt')
@@ -149,7 +144,6 @@ class oftFrameDataset(VisionDataset):
                 for i, car in enumerate(cars):
                     wx = int(car["wx"]) // 10
                     wy = int(car["wy"]) // 10
-                    mk = int(car["mark"])
                     # left_dir = int(car["direc_left"])
                     # right_dir = int(car["direc_right"])
                     left_dir = 0
@@ -196,7 +190,6 @@ class oftFrameDataset(VisionDataset):
                 self.bev_angle[frame] = frame_bev_angle
                 self.left_angle[frame] = frame_left_ang
                 self.right_angle[frame] = frame_right_ang
-                self.mark[frame] = mk
 
     def __getitem__(self, index):
         frame = list(self.bev_bboxes.keys())[index]
@@ -217,16 +210,13 @@ class oftFrameDataset(VisionDataset):
         right_angles = torch.tensor(self.right_angle[frame])
         bev_xy =torch.tensor(self.world_xy[frame])
         bev_angle = torch.tensor(self.bev_angle[frame])
-        mark = self.mark[frame]
 
         return imgs, bev_xy, bev_angle, bev_bboxes, \
                left_bboxes, right_bboxes,\
                left_dirs, right_dirs, \
                left_angles, right_angles, \
                frame, \
-               self.extrinsic_matrix, self.intrinsic_matrix, \
-               self.extrinsic_matrix2, self.intrinsic_matrix2, \
-               mark
+               self.extrinsic_matrix, self.intrinsic_matrix
 
     def __len__(self):
         return len(self.bev_bboxes.keys())
