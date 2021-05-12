@@ -426,6 +426,7 @@ class OFTtrainer(BaseTrainer):
             all_front_prob = all_front_prob[indices_remain].reshape(len(indices_remain),)
             position_mark = position_mark[indices_remain].reshape(len(indices_remain), 1)
 
+            all_bev_boxes = []
             if indices_remain.shape[0] != 0:
             #     keep = indices[np.argmax(v)].reshape(-1)
             #     all_bev_boxes = all_roi_remain[keep]
@@ -437,8 +438,6 @@ class OFTtrainer(BaseTrainer):
                 all_bev_boxes, all_sincos_remain, position_mark_keep = all_roi_remain[keep].reshape(len(keep), 4), \
                                                                        all_pred_sincos[keep].reshape(len(keep), 2), \
                                                                        position_mark[keep].reshape(len(keep))
-            # e = time.time()
-            # print(e - s)
             # all_bev_boxes, all_sincos_remain, position_mark_keep = all_roi_remain2[keep].reshape(len(keep), 4), all_pred_sincos2[keep].reshape(len(keep), 2), position_mark2[keep].reshape(len(keep))
             nms_end = time.time()
             total_end = time.time()
@@ -452,9 +451,9 @@ class OFTtrainer(BaseTrainer):
             getoutter_time += (getoutter_end - getoutter_start)
 
             # -----------------------可视化---------------------------
-            bev_img = cv2.imread("/home/dzc/Data/4carreal_0318blend/bevimgs/%d.jpg" % frame)
+            bev_img = cv2.imread("/home/dzc/Data/mix/bevimgs/%d.jpg" % frame)
 
-            if all_bev_boxes is not []:
+            if len(all_bev_boxes) != 0:
                 for idx, bbxx in enumerate(all_bev_boxes):
                     # print(position_mark_keep)
                     if position_mark_keep[idx] == 0:
@@ -475,8 +474,8 @@ class OFTtrainer(BaseTrainer):
                         theta_l = angle
                         theta = theta_l + ray
                         # if idx < 1900:
-                        if frame == 1796:
-                            print(theta_l, ray)
+                        # if frame == 1796:
+                        #     print(theta_l, ray)
                         #     print("dzc1", theta)
                         x_rot = center_x + 40
                         y_rot = Const.grid_height - center_y
@@ -513,8 +512,9 @@ class OFTtrainer(BaseTrainer):
                         nry = (x1_rot - center_x) * np.sin(theta) + (y1_rot - (Const.grid_height - center_y)) * np.cos(theta) + (Const.grid_height - center_y)
 
                         cv2.arrowedLine(bev_img, (center_x, center_y), (int(nrx), Const.grid_height - int(nry)), color=(255, 60, 199), thickness=2)
+                visualize_3dbox(all_bev_boxes, all_sincos_remain, position_mark_keep, extrin, intrin, frame)
             cv2.imwrite("%s/%d.jpg" % (Const.imgsavedir, frame), bev_img)
-            visualize_3dbox(all_bev_boxes, all_sincos_remain, position_mark_keep, extrin, intrin, frame)
+
 
 
         print("Avg total infer time: %4f" % (total_time / batch_idx))
@@ -534,7 +534,7 @@ class OFTtrainer(BaseTrainer):
         return self.roi_head.n_class
 
 def visualize_3dbox(pred_ori, pred_angle, position_mark, extrin, intrin, idx):
-    left_img = cv2.imread("/home/dzc/Data/4carreal_0318blend/img/left1/%d.jpg" % (idx))
+    left_img = cv2.imread("/home/dzc/Data/mix/img/left1/%d.jpg" % (idx))
     boxes_3d = []
     n_bbox = pred_ori.shape[0]
     for i, bbox in enumerate(pred_ori):
