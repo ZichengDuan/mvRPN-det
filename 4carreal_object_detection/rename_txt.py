@@ -1,8 +1,8 @@
 import os
 import shutil
 
-target_path = "/home/dzc/Data/4carreal0511_blend/img/right2"
-root_path = "/home/dzc/Data/4carreal0511_bright/img/right2"
+target_path = "/home/dzc/Data/mix/bevimgs"
+root_path = "/home/dzc/Data/4carreal_0318blend/bevimgs"
 
 target_file_num = len(os.listdir(target_path))
 root_file_num = len(os.listdir(root_path))
@@ -13,9 +13,9 @@ i = 0
 name = 0
 while i < root_file_num:
     idx = str(name)
-    if 6 - len(idx) > 0:
-        for j in range(6 - len(idx)):
-            idx = "0" + idx
+    # if 6 - len(idx) > 0:
+    #     for j in range(6 - len(idx)):
+    #         idx = "0" + idx
 
     filename = os.path.join(root_path, "%s.jpg" % idx)
 
