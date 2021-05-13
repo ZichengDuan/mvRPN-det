@@ -97,8 +97,6 @@ class OFTtrainer(BaseTrainer):
                 anchor,
                 img_size)
 
-            # rpn_loc_loss = nn.MSELoss()(rpn_loc, torch.tensor(gt_rpn_loc, dtype=torch.float).to("cuda:0"))
-
             rpn_loc_loss = _fast_rcnn_loc_loss(
                 rpn_loc,
                 gt_rpn_loc,
@@ -135,7 +133,6 @@ class OFTtrainer(BaseTrainer):
             left_roi_loc = left_roi_cls_loc[torch.arange(0, left_n_sample).long().cuda(), at.totensor(left_gt_label).long()]
             left_gt_label = at.totensor(left_gt_label).long()
             left_gt_loc = at.totensor(left_gt_loc)
-            # print(left_roi_loc.shape, left_gt_loc.shape)
             left_roi_loc_loss = _fast_rcnn_loc_loss(
                 left_roi_loc.contiguous(),
                 left_gt_loc,
@@ -156,7 +153,6 @@ class OFTtrainer(BaseTrainer):
                 torch.arange(0, right_n_sample).long().cuda(), at.totensor(right_gt_label).long()]
             right_gt_label = at.totensor(right_gt_label).long()
             right_gt_loc = at.totensor(right_gt_loc)
-            # print(left_roi_loc.shape, left_gt_loc.shape)
             right_roi_loc_loss = _fast_rcnn_loc_loss(
                 right_roi_loc.contiguous(),
                 right_gt_loc,
@@ -239,10 +235,10 @@ class OFTtrainer(BaseTrainer):
             writer.add_scalar("rpn_cls_loss", RPN_CLS_LOSS / (batch_idx + 1), niter)
             writer.add_scalar("LEFT ROI_Loc LOSS", LEFT_ROI_LOC_LOSS / (batch_idx + 1), niter)
             writer.add_scalar("LEFT ROI_Cls LOSS", LEFT_ROI_CLS_LOSS / (batch_idx + 1), niter)
-            # writer.add_scalar("LEFT_ANGLE_REG_LOSS", RIGHT_ROI_CLS_LOSS / (batch_idx + 1), niter)
+            writer.add_scalar("LEFT_ANGLE_REG_LOSS", RIGHT_ROI_CLS_LOSS / (batch_idx + 1), niter)
             writer.add_scalar("RIGHT ROI_Loc LOSS", RIGHT_ROI_LOC_LOSS / (batch_idx + 1), niter)
             writer.add_scalar("RIGHT ROI_Cls LOSS", RIGHT_ROI_CLS_LOSS / (batch_idx + 1), niter)
-            # writer.add_scalar("RIGHT_ANGLE_REG_LOSS", RIGHT_ROI_CLS_LOSS / (batch_idx + 1), niter)
+            writer.add_scalar("RIGHT_ANGLE_REG_LOSS", RIGHT_ROI_CLS_LOSS / (batch_idx + 1), niter)
 
             if batch_idx % 10 == 0:
                 print("Iteration: %d\n" % batch_idx,
@@ -322,7 +318,6 @@ class OFTtrainer(BaseTrainer):
         gene3d_time = 0
         proj3d_time = 0
         getoutter_time = 0
-
 
         for batch_idx, data in enumerate(data_loader):
             imgs, gt_bev_xy,bev_angle, gt_bbox, gt_left_bbox, gt_right_bbox, gt_left_dirs, gt_right_dirs, gt_left_sincos, gt_right_sincos, frame, extrin, intrin, extrin2, intrin2, mark = data
