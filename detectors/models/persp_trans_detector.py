@@ -54,7 +54,7 @@ class PerspTransDetector(nn.Module):
 
         self.backbone = nn.Sequential(*list(resnet18(replace_stride_with_dilation=[False, False, False]).children())[:-2]).to('cuda:0')
         self.rpn = RegionProposalNetwork(in_channels=1026, mid_channels=1026, ratios=[1], anchor_scales=[4]).to('cuda:1')
-        my_cls = nn.Sequential(nn.Linear(25088, 2048, bias=True),
+        my_cls = nn.Sequential(nn.Linear(50274, 2048, bias=True),
                                nn.ReLU(inplace=True),
                                nn.Dropout(p=0.5, inplace=False),
                                nn.Linear(2048, 2048, bias=True),

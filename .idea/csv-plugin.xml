@@ -10,6 +10,13 @@
             </Attribute>
           </value>
         </entry>
+        <entry key="/detectors/RPNTrainer.py">
+          <value>
+            <Attribute>
+              <option name="separator" value="," />
+            </Attribute>
+          </value>
+        </entry>
         <entry key="/detectors/datasets/Robomaster_1.py">
           <value>
             <Attribute>
@@ -74,6 +81,13 @@
           </value>
         </entry>
         <entry key="/tests/backbone_test.py">
+          <value>
+            <Attribute>
+              <option name="separator" value="," />
+            </Attribute>
+          </value>
+        </entry>
+        <entry key="/tests/generate_gtboximg.py">
           <value>
             <Attribute>
               <option name="separator" value="," />

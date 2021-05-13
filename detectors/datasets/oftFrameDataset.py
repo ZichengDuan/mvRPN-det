@@ -30,18 +30,19 @@ class oftFrameDataset(VisionDataset):
         self.extrinsic_matrix2 = base.extrinsic_matrices
         self.intrinsic_matrix2 = base.intrinsic_matrices
 
-        # if train:
-        #     frame_range = list(range(0, 2800)) + list(range(1269 + 3021, 1700 + 3021)) + list(range(2977+ 3021, 4100+ 3021))
-        #     random.shuffle(frame_range)
-        # else:
-        #     frame_range = list(range(2800, 3021)) + list(range(1700 + 3021, 2100 + 3021))
-
-
-
         if train:
-            frame_range = range(0, 20)
+            # frame_range = list(range(0, 1000)) + list(range(1269 + 3021, 1700 + 3021)) + list(range(2977+ 3021, 4100+ 3021))
+            frame_range = list(range(0, 300))
+            # random.shuffle(frame_range)
         else:
-            frame_range = range(20, 100)
+            frame_range = list(range(2800, 3021)) + list(range(1700 + 3021, 2100 + 3021))
+
+
+
+        # if train:
+        #     frame_range = list(range(0, 100))
+        # else:
+        #     frame_range = frame_range = list(range(2800, 3021)) + list(range(1700 + 3021, 2100 + 3021))
 
         self.upsample_shape = list(map(lambda x: int(x / self.img_reduce), self.img_shape))
         img_reduce_local = np.array(self.img_shape) / np.array(self.upsample_shape)

@@ -16,6 +16,7 @@ from detectors.utils.logger import Logger
 from detectors.utils.draw_curve import draw_curve
 from detectors.utils.image_utils import img_color_denormalize
 from detectors.OFTTrainer import OFTtrainer
+from detectors.RPNTrainer import RPNtrainer
 import warnings
 import itertools
 from detectors.models.VGG16Head import VGG16RoIHead
@@ -63,7 +64,8 @@ def main(args):
 
     # draw curve
 
-    trainer = OFTtrainer(model, roi_head, denormalize)
+    # trainer = OFTtrainer(model, roi_head, denormalize)
+    trainer = RPNtrainer(model, roi_head, denormalize)
 
     # learn
 
@@ -76,12 +78,12 @@ def main(args):
             loss = trainer.train(epoch, train_loader, optimizer, writer)
 
             print('Testing...')
+            torch.save(model.state_dict(), os.path.join('%s/mvdet_rpn_%d.pth' % (Const.modelsavedir, epoch)))
+            torch.save(roi_head.state_dict(), os.path.join('%s/roi_rpn_head_%d.pth' % (Const.modelsavedir, epoch)))
             trainer.test(epoch, test_loader, writer)
-            torch.save(model.state_dict(), os.path.join('%s/mvdet_%d.pth' % (Const.modelsavedir, epoch)))
-            torch.save(roi_head.state_dict(), os.path.join('%s/roi_head_%d.pth' % (Const.modelsavedir, epoch)))
         else:
-            model.load_state_dict(torch.load("%s/mvdet_%d.pth" % (Const.modelsavedir, 3)))
-            roi_head.load_state_dict(torch.load("%s/roi_head_%d.pth" % (Const.modelsavedir, 3)))
+            model.load_state_dict(torch.load("%s/mvdet_%d.pth" % (Const.modelsavedir, 2)))
+            roi_head.load_state_dict(torch.load("%s/roi_head_%d.pth" % (Const.modelsavedir, 2)))
             trainer.test(epoch, test_loader, writer)
             break
     writer.close()
@@ -96,13 +98,13 @@ if __name__ == '__main__':
     parser.add_argument('-j', '--num_workers', type=int, default=8)
     parser.add_argument('-b', '--batch_size', type=int, default=1, metavar='N',
                         help='input batch size for training (default: 1)')
-    parser.add_argument('--epochs', type=int, default=6, metavar='N', help='number of epochs to train (default: 10)')
-    parser.add_argument('--lr', type=float, default=0.0002, metavar='LR', help='learning rate (default: 0.1)')
+    parser.add_argument('--epochs', type=int, default=5, metavar='N', help='number of epochs to train (default: 10)')
+    parser.add_argument('--lr', type=float, default=0.0005, metavar='LR', help='learning rate (default: 0.1)')
     parser.add_argument('--weight_decay', type=float, default=1e-5)
     parser.add_argument('--momentum', type=float, default=0.5, metavar='M', help='SGD momentum (default: 0.5)')
-    parser.add_argument('--seed', type=int, default=17, help='random seed (default: None)')
+    parser.add_argument('--seed', type=int, default=7, help='random seed (default: None)')
 
-    parser.add_argument('--resume', type=bool, default = True)
+    parser.add_argument('--resume', type=bool, default = False)
     args = parser.parse_args()
 
     main(args)

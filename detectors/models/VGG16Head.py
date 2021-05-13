@@ -64,6 +64,7 @@ class VGG16RoIHead(nn.Module):
         pool = self.roi(x, indices_and_rois).to("cuda:1")
         pool = pool.view(pool.size(0), -1)
         # print(self.classifier)
+        # print(pool.shape)
         fc7 = self.classifier(pool)
         roi_cls_locs = self.cls_loc(fc7)
         roi_scores = self.score(fc7)
