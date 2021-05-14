@@ -41,11 +41,11 @@ class PerspTransDetector(nn.Module):
                                                                                dataset.base.worldgrid2worldcoord_mat)
             self.coord_map = self.create_coord_map(self.reducedgrid_shape + [1])
             # img
-            self.upsample_shape = list(map(lambda x: int(x / dataset.img_reduce), self.img_shape))
+            self.upsample_shape = list(map(lambda x: int(x / Const.reduce), self.img_shape))
             img_reduce = np.array(self.img_shape) / np.array(self.upsample_shape)
             img_zoom_mat = np.diag(np.append(img_reduce, [1]))
             # map
-            map_zoom_mat = np.diag(np.append(np.ones([2]) / dataset.grid_reduce, [1]))
+            map_zoom_mat = np.diag(np.append(np.ones([2]) / Const.reduce, [1]))
             self.proj_mats = [torch.from_numpy(map_zoom_mat @ imgcoord2worldgrid_matrices[cam] @ img_zoom_mat)
                               for cam in range(self.num_cam)]
 
@@ -54,14 +54,14 @@ class PerspTransDetector(nn.Module):
 
         self.backbone = nn.Sequential(*list(resnet18(replace_stride_with_dilation=[False, False, False]).children())[:-2]).to('cuda:0')
         self.rpn = RegionProposalNetwork(in_channels=1026, mid_channels=1026, ratios=[1], anchor_scales=[4]).to('cuda:1')
-        my_cls = nn.Sequential(nn.Linear(50274, 2048, bias=True),
-                               nn.ReLU(inplace=True),
-                               nn.Dropout(p=0.5, inplace=False),
-                               nn.Linear(2048, 2048, bias=True),
-                               nn.ReLU(inplace=True),
-                               nn.Dropout(p=0.5, inplace=False),
-                               ).to("cuda:1")
-        self.classifier = my_cls
+        # my_cls = nn.Sequential(nn.Linear(25088, 2048, bias=True),
+        #                        nn.ReLU(inplace=True),
+        #                        nn.Dropout(p=0.5, inplace=False),
+        #                        nn.Linear(2048, 2048, bias=True),
+        #                        nn.ReLU(inplace=True),
+        #                        nn.Dropout(p=0.5, inplace=False),
+        #                        ).to("cuda:1")
+        # self.classifier = my_cls
 
         # anchor_generator = torchvision_rpn.AnchorGenerator(sizes=[64], aspect_ratios=[1]).to("cuda:1")
         # rpn_head = torchvision_rpn.RPNHead(in_channels=1026, num_anchors=None).to("cuda:1")

@@ -21,6 +21,7 @@ import warnings
 import itertools
 from detectors.models.VGG16Head import VGG16RoIHead
 from tensorboardX import SummaryWriter
+import torch.nn as nn
 warnings.filterwarnings("ignore")
 
 def main(args):
@@ -55,17 +56,16 @@ def main(args):
 
     # model
     model = PerspTransDetector(train_set)
-    classifier = model.classifier
-    roi_head = VGG16RoIHead(Const.roi_classes + 1,  7, 1/4, classifier)
-
-    optimizer = optim.Adam(params=itertools.chain(model.parameters(), classifier.parameters(), roi_head.parameters()), lr=args.lr, weight_decay=args.weight_decay)
+    # classifier = model.classifier
+    roi_head = VGG16RoIHead(Const.roi_classes + 1,  7, 1/Const.reduce)
+    optimizer = optim.Adam(params=itertools.chain(model.parameters(), roi_head.parameters()), lr=args.lr, weight_decay=args.weight_decay)
     print('Settings:')
     print(vars(args))
 
     # draw curve
 
-    # trainer = OFTtrainer(model, roi_head, denormalize)
-    trainer = RPNtrainer(model, roi_head, denormalize)
+    trainer = OFTtrainer(model, roi_head, denormalize)
+    # trainer = RPNtrainer(model, roi_head, denormalize)
 
     # learn
 
@@ -82,8 +82,8 @@ def main(args):
             torch.save(roi_head.state_dict(), os.path.join('%s/roi_rpn_head_%d.pth' % (Const.modelsavedir, epoch)))
             trainer.test(epoch, test_loader, writer)
         else:
-            model.load_state_dict(torch.load("%s/mvdet_%d.pth" % (Const.modelsavedir, 2)))
-            roi_head.load_state_dict(torch.load("%s/roi_head_%d.pth" % (Const.modelsavedir, 2)))
+            model.load_state_dict(torch.load("%s/mvdet_rpn_%d.pth" % (Const.modelsavedir, 5)))
+            roi_head.load_state_dict(torch.load("%s/roi_rpn_head_%d.pth" % (Const.modelsavedir, 5)))
             trainer.test(epoch, test_loader, writer)
             break
     writer.close()
@@ -98,8 +98,8 @@ if __name__ == '__main__':
     parser.add_argument('-j', '--num_workers', type=int, default=8)
     parser.add_argument('-b', '--batch_size', type=int, default=1, metavar='N',
                         help='input batch size for training (default: 1)')
-    parser.add_argument('--epochs', type=int, default=5, metavar='N', help='number of epochs to train (default: 10)')
-    parser.add_argument('--lr', type=float, default=0.0005, metavar='LR', help='learning rate (default: 0.1)')
+    parser.add_argument('--epochs', type=int, default=6, metavar='N', help='number of epochs to train (default: 10)')
+    parser.add_argument('--lr', type=float, default=0.0003, metavar='LR', help='learning rate (default: 0.1)')
     parser.add_argument('--weight_decay', type=float, default=1e-5)
     parser.add_argument('--momentum', type=float, default=0.5, metavar='M', help='SGD momentum (default: 0.5)')
     parser.add_argument('--seed', type=int, default=7, help='random seed (default: None)')

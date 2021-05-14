@@ -31,8 +31,8 @@ class oftFrameDataset(VisionDataset):
         self.intrinsic_matrix2 = base.intrinsic_matrices
 
         if train:
-            frame_range = list(range(0, 1000)) + list(range(1269 + 3021, 1700 + 3021)) + list(range(2977+ 3021, 4100+ 3021))
-            # frame_range = list(range(0, 300))
+            # frame_range = list(range(0, 1000)) + list(range(1269 + 3021, 1700 + 3021)) + list(range(2977+ 3021, 4100+ 3021))
+            frame_range = list(range(1269 + 3021, 1700 + 3021)) + list(range(2977+ 3021, 4100+ 3021))
             # random.shuffle(frame_range)
         else:
             frame_range = list(range(2800, 3021)) + list(range(1700 + 3021, 2100 + 3021))
@@ -180,13 +180,12 @@ class oftFrameDataset(VisionDataset):
                         # print(np.arctan(np.sin(left_target) / np.cos(left_target)))
                     frame_left_ang.append([np.sin(left_target), np.cos(left_target)]) # 方案1, 回归sin cos
 
-                    frame_bev_angle.append(bev_angle)
-
 
                     # 右角度标签, 颠倒一下正方向
                     bev_angle -= np.pi
                     if bev_angle < 0:
                         bev_angle += 2 * np.pi
+                    frame_bev_angle.append(bev_angle)
                     alpha = np.arctan(wy / (Const.grid_width - wx))
                     right_target = bev_angle - alpha if bev_angle - alpha > 0 else 2 * np.pi + (bev_angle - alpha)
                     frame_right_ang.append([np.sin(right_target), np.cos(right_target)]) # 方案1, 回归sin cos

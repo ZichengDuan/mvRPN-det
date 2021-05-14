@@ -71,6 +71,37 @@ def nms_new(bboxes, confidence, sincos, position_mark, threshold=0.01, prob_thre
     return bbox_keep, confidence[indices_keep], sincos_keep, position_mark_keep
 
 
+def nms_new2(bboxes, confidence, threshold=0.00, prob_threshold = 0.7):
+    bbox = bboxes.squeeze()
+    confidence = torch.tensor(confidence)
+    keep = torch.zeros(confidence.shape).long()
+    if len(bbox) == 0:
+        return keep
+
+    v, indices = confidence.sort(0)  # sort in ascending order
+    # print(v)
+    bbox_keep = []
+    indices_keep = []
+    sincos_keep = []
+    position_mark_keep = []
+    i = 0
+    while len(indices) > 0:
+        # print(keep_box(bbox_keep, bbox[indices[-1]], iou_threash=threshold))
+        # print(v[-1], threshold)
+        if len(bbox_keep) == 0:
+            bbox_keep.append(bbox[indices[-1]])
+        elif keep_box(bbox_keep, bbox[indices[-1]], iou_threash=threshold):
+            if v[-1] < prob_threshold:
+                return bbox_keep, confidence[indices_keep]
+            bbox_keep.append(bbox[indices[-1]])
+            indices_keep.append((indices[-1]).item())
+        indices = indices[:-1]
+        v = v[:-1]
+        i += 1
+
+    return bbox_keep, confidence[indices_keep]
+
+
 def bbox_iou(bbox_a, bbox_b):
     """Calculate the Intersection of Unions (IoUs) between bounding boxes.
 
@@ -119,7 +150,7 @@ def bbox_iou(bbox_a, bbox_b):
 def keep_box(boxes, target, iou_threash=0.4):
     res = True
     for box in boxes:
-        res = res and (bbox_iou(box, target)[0][0] < iou_threash)
+        res = res and (bbox_iou(box, target)[0][0] <= iou_threash)
         if not res:
             return res
     return res

@@ -7,7 +7,7 @@ import torch.nn.functional as F
 import matplotlib
 matplotlib.use('Agg')
 import matplotlib.pyplot as plt
-from detectors.utils.nms_new import nms_new, _suppress, vis_nms
+from detectors.utils.nms_new import nms_new, _suppress, vis_nms, nms_new2
 import torch.nn as nn
 import warnings
 from detectors.loss.gaussian_mse import GaussianMSE
@@ -37,13 +37,12 @@ class RPNtrainer(BaseTrainer):
         self.anchor_target_creator = AnchorTargetCreator()
         self.proposal_target_creator = ProposalTargetCreator()
         self.proposal_target_creator_ori = ProposalTargetCreator_ori()
-        self.rpn_sigma = 2.5
+        self.rpn_sigma = 3
         self.loc_normalize_mean = (0., 0., 0., 0.)
         self.loc_normalize_std = (0.1, 0.1, 0.2, 0.2)
 
     def train(self, epoch, data_loader, optimizer, writer):
         self.model.train()
-
         # -----------------init local params----------------------
         Loss = 0
         RPN_CLS_LOSS = 0
@@ -198,14 +197,14 @@ class RPNtrainer(BaseTrainer):
 
             prob = F.softmax(torch.tensor(roi_score).to(roi.device), dim=1)
             prob = prob[:, 1]
+            bbox, conf = nms_new2(at.tonumpy(roi), at.tonumpy(prob), prob_threshold=0.7)
+            # keep = box_ops.nms(roi, prob, 0.1)
 
-            keep = box_ops.nms(roi, prob, 0.1)
-
-            roi = roi[keep]
+            # roi = roi[keep]
 
             bev_img = cv2.imread("/home/dzc/Data/mix/bevimgs/%d.jpg" % frame)
             if len(roi) != 0:
-                for bbx in roi:
+                for bbx in bbox:
                     cv2.rectangle(bev_img, (int(bbx[1]), int(bbx[0])), (int(bbx[3]), int(bbx[2])), color=(255, 255, 0), thickness=2)
             # print(anchor.shape, rpn_locs[0].detach().cpu().numpy().shape)
             # bbox = loc2bbox(np.array(anchor, dtype=np.float), rpn_locs[0].detach().cpu().numpy())
