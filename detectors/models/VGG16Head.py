@@ -21,19 +21,41 @@ class VGG16RoIHead(nn.Module):
         # n_class includes the background
         super(VGG16RoIHead, self).__init__()
 
+<<<<<<< HEAD
         classifier = nn.Sequential(nn.Linear(25186, 1024, bias=True),
                                    nn.ReLU(inplace=True),
                                    nn.Dropout(p=0.5, inplace=False),
                                    nn.Linear(1024, 512, bias=True),
+=======
+        classifier = nn.Sequential(nn.Linear(25088, 2048, bias=True),
+                                   nn.ReLU(inplace=True),
+                                   nn.Dropout(p=0.5, inplace=False),
+                                   nn.Linear(2048, 2048, bias=True),
+                                   nn.ReLU(inplace=True),
+                                   nn.Dropout(p=0.5, inplace=False),
+                                   ).to("cuda:1")
+
+        classifier_ang = nn.Sequential(nn.Linear(25088, 1024, bias=True),
+                                   nn.ReLU(inplace=True),
+                                   nn.Dropout(p=0.5, inplace=False),
+                                   nn.Linear(1024, 1024, bias=True),
+>>>>>>> a39cc54... 数据集好像有问题
                                    nn.ReLU(inplace=True),
                                    nn.Dropout(p=0.5, inplace=False),
                                    ).to("cuda:1")
 
         self.classifier = classifier
+<<<<<<< HEAD
         # self.classifier2 = classifier_ang
         self.cls_loc = nn.Linear(512, n_class * 4).to("cuda:1")
         self.score = nn.Linear(512, n_class).to("cuda:1")
 
+=======
+        self.classifier2 = classifier_ang
+        self.cls_loc = nn.Linear(2048, n_class * 4).to("cuda:1")
+        self.score = nn.Linear(2048, n_class).to("cuda:1")
+        self.ang_regressor = nn.Linear(1024, 2).to("cuda:1")
+>>>>>>> a39cc54... 数据集好像有问题
 
         normal_init(self.cls_loc, 0, 0.001)
         normal_init(self.score, 0, 0.01)
@@ -73,9 +95,15 @@ class VGG16RoIHead(nn.Module):
         # print(self.classifier)
         # print(pool.shape)
         fc7 = self.classifier(pool)
+        fc8 = self.classifier2(pool)
         roi_cls_locs = self.cls_loc(fc7)
         roi_scores = self.score(fc7)
+<<<<<<< HEAD
         return roi_cls_locs, roi_scores
+=======
+        sin_cos = self.ang_regressor(fc8)
+        return roi_cls_locs, roi_scores, sin_cos
+>>>>>>> a39cc54... 数据集好像有问题
 
 
 def normal_init(m, mean, stddev, truncated=False):

@@ -73,6 +73,13 @@
             </Attribute>
           </value>
         </entry>
+        <entry key="/prune/train7_subdivision_lambda_resnet.py">
+          <value>
+            <Attribute>
+              <option name="separator" value="," />
+            </Attribute>
+          </value>
+        </entry>
         <entry key="/sentry_detection.py">
           <value>
             <Attribute>

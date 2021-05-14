@@ -205,7 +205,7 @@ class Resnet(nn.Module):  # 继承nn.module类 # 在子类进行初始化时，�
 
         # Open the weights file
         with open(weights_path, "rb") as f:
-            header = np.fromfile(f, dtype=np.int32, count=5)  # First five are header values
+            header = np.fromfile(uf, dtype=np.int32, count=5)  # First five are header values
             self.header_info = header  # Needed to write header when saving weights
             self.seen = header[3]  # number of images seen during training
             weights = np.fromfile(f, dtype=np.float32)  # The rest are weights

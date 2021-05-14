@@ -179,11 +179,18 @@ class RPNtrainer(BaseTrainer):
             prob = prob[:, 1]
             bbox, conf = nms_new2(at.tonumpy(roi), at.tonumpy(prob), prob_threshold=0.7)
             # keep = box_ops.nms(roi, prob, 0.1)
+<<<<<<< HEAD
             total_end = time.time()
             print(total_end - total_start)
             # roi = roi[keep]
 
             bev_img = cv2.imread("/home/nvidia/Desktop/dzc/Data/mix/bevimgs/%d.jpg" % frame)
+=======
+
+            # roi = roi[keep]
+
+            bev_img = cv2.imread("/home/dzc/Data/mix/bevimgs/%d.jpg" % frame)
+>>>>>>> a39cc54... 数据集好像有问题
             if len(roi) != 0:
                 for bbx in bbox:
                     cv2.rectangle(bev_img, (int(bbx[1]), int(bbx[0])), (int(bbx[3]), int(bbx[2])), color=(255, 255, 0), thickness=2)
