@@ -84,7 +84,7 @@ class RegionProposalNetwork(nn.Module):
             roi = self.proposal_layer(
                 rpn_locs[i].cpu().data.numpy(),
                 rpn_fg_scores[i].cpu().data.numpy(),
-                anchor, img_size,
+                anchor,img_size,
                 scale=scale)
             batch_index = i * np.ones((len(roi),), dtype=np.int32)
             rois.append(roi)

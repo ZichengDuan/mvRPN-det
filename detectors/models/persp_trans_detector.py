@@ -52,8 +52,8 @@ class PerspTransDetector(nn.Module):
             self.proj_mats2 = [torch.from_numpy(map_zoom_mat @ imgcoord2worldgrid_matrices2[cam] @ img_zoom_mat)
                               for cam in range(self.num_cam)]
 
-        self.backbone = nn.Sequential(*list(resnet18(replace_stride_with_dilation=[False, False, False]).children())[:-2]).to('cuda:0')
-        self.rpn = RegionProposalNetwork(in_channels=1026, mid_channels=1026, ratios=[1], anchor_scales=[4]).to('cuda:1')
+        self.backbone = nn.Sequential(*list(resnet18(replace_stride_with_dilation=[False, True, True]).children())[:-3]).to('cuda:0')
+        self.rpn = RegionProposalNetwork(in_channels=514, mid_channels=514, ratios=[1], anchor_scales=[4]).to('cuda:1')
         # my_cls = nn.Sequential(nn.Linear(25088, 2048, bias=True),
         #                        nn.ReLU(inplace=True),
         #                        nn.Dropout(p=0.5, inplace=False),
@@ -62,9 +62,9 @@ class PerspTransDetector(nn.Module):
         #                        nn.Dropout(p=0.5, inplace=False),
         #                        ).to("cuda:1")
         # self.classifier = my_cls
-
+        #
         # anchor_generator = torchvision_rpn.AnchorGenerator(sizes=[64], aspect_ratios=[1]).to("cuda:1")
-        # rpn_head = torchvision_rpn.RPNHead(in_channels=1026, num_anchors=None).to("cuda:1")
+        # rpn_head = torchvision_rpn.RPNHead(in_channels=1026, num_anchors=anchor_generator.num_anchors_per_location()[0]).to("cuda:1")
         # self.torchvis_rpn = torchvision_rpn.RegionProposalNetwork(anchor_generator, head=rpn_head, fg_iou_thresh=0.8,
         #                                                  bg_iou_thresh=0.3, batch_size_per_image=256,
         #                                                  positive_fraction=0.8, pre_nms_top_n={'training': 12000, 'testing': 6000},
@@ -93,17 +93,18 @@ class PerspTransDetector(nn.Module):
         world_features = torch.cat(world_features + [self.coord_map.repeat([B, 1, 1, 1]).to('cuda:1')], dim=1)
 
         rpn_locs, rpn_scores, anchor, rois, roi_indices = self.rpn(world_features, Const.grid_size) # 0.08
-
+        #
         # batch_images = torch.zeros((1, 3, Const.grid_height, Const.grid_width))
         # image_sizes = [(Const.grid_height, Const.grid_width)]
-        # image_list_ = image_list.ImageList(batch_images, image_sizes)
+        # image_list_ = image_list.ImageList(batch_images, image_sizes).to(world_features.device)
         # # 需要对gt box转换格式从ymin, xmin, ymax, xmax转换成 x1, y1, x2, y2
-        # gt_boxes = torch.cat((gt_boxes.squeeze()[:, 1].reshape(-1, 1),
+        # gt_b = torch.cat((gt_boxes.squeeze()[:, 1].reshape(-1, 1),
         #                       gt_boxes.squeeze()[:, 0].reshape(-1, 1),
         #                       gt_boxes.squeeze()[:, 3].reshape(-1, 1),
-        #                       gt_boxes.squeeze()[:, 2].reshape(-1, 1)), dim=1)
+        #                       gt_boxes.squeeze()[:, 2].reshape(-1, 1)), dim=1).to(world_features.device)
+        # print(gt_b.shape)
+        # boxes, losses = self.torchvis_rpn(images=image_list_, features={"feature: ": world_features}, targets =[{"boxes": gt_b}])
 
-        # boxes, losses = self.torchvis_rpn(images=image_list_, features=world_features, targets = gt_boxes)
 
         # vis_feature(world_features, max_num=5, out_path='/home/dzc/Desktop/CASIA/proj/mvRPN-det/images/')
         # roi_indices = list()

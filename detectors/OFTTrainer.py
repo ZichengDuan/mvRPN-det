@@ -22,6 +22,11 @@ warnings.filterwarnings("ignore")
 import time
 import cv2
 
+def fix_bn(m):
+   classname = m.__class__.__name__
+   if classname.find('BatchNorm') != -1:
+       m.eval()
+
 class BaseTrainer(object):
     def __init__(self):
         super(BaseTrainer, self).__init__()
@@ -37,41 +42,44 @@ class OFTtrainer(BaseTrainer):
         self.anchor_target_creator = AnchorTargetCreator()
         self.proposal_target_creator = ProposalTargetCreator()
         self.proposal_target_creator_ori = ProposalTargetCreator_ori()
-        self.rpn_sigma = 2.5
+        self.rpn_sigma = 3
         self.loc_normalize_mean = (0., 0., 0., 0.)
         self.loc_normalize_std = (0.1, 0.1, 0.2, 0.2)
 
     def train(self, epoch, data_loader, optimizer, writer):
-        self.model.train()
+        # self.model.train()
+        # self.roi_head.train()
+        # # 训练骨干+rpn
+        #
+        # self.model.train()
+        # self.roi_head.eval()
+        # self.roi_head.apply(fix_bn)
 
-        # 训练骨干+rpn
-        if epoch - 1 < 2:
-            for name, param in self.model.named_parameters():
-                param.requires_grad = True
-            for name, param in self.roi_head.named_parameters():
-                param.requires_grad = False
+        # for name, param in self.model.named_parameters():
+        #     param.requires_grad = True
+        # for name, param in self.roi_head.named_parameters():
+        #     param.requires_grad = False
 
         # 训练roi pooling
-        if 4 > epoch - 1 >= 2:
-            for name, param in self.model.named_parameters():
-                param.requires_grad = False
-            for name, param in self.roi_head.named_parameters():
-                # 锁定角度回归，训练roi pooling
-                if 'ang_regressor' in name or 'classifier2' in name:
-                    param.requires_grad = False
-                else:
-                    param.requires_grad = True
+        # if 5 > epoch - 1 >= 2:
+        # self.model.backbone.eval()
+        # self.model.apply(fix_bn)
+        # self.roi_head.train()
+        #
+        # for name, param in self.model.named_parameters():
+        #     param.requires_grad = False
+        # for name, param in self.roi_head.named_parameters():
+        #     param.requires_grad = True
 
-        # 训练angle_regression
-        if 6 > epoch - 1 >= 4:
-            for name, param in self.model.named_parameters():
-                param.requires_grad = False
-            for name, param in self.roi_head.named_parameters():
-                # 锁定roi pooling，训练角度回归
-                if 'ang_regressor' in name or 'classifier2' in name:
-                    param.requires_grad = True
-                else:
-                    param.requires_grad = False
+        # print("---Backbone and RPN: ")
+        # for name, param in self.model.named_parameters():
+        #     if param.requires_grad is True:
+        #         print(name)
+        #
+        # print("---RoiHead: ")
+        # for name, param in self.roi_head.named_parameters():
+        #     if param.requires_grad is True:
+        #         print(name)
         # -----------------init local params----------------------
         Loss = 0
         RPN_CLS_LOSS = 0
@@ -90,29 +98,28 @@ class OFTtrainer(BaseTrainer):
             rpn_locs, rpn_scores, anchor, rois, roi_indices, img_featuremaps, bev_featuremaps = self.model(imgs, gt_bbox, mark=mark)
 
             # visualize angle
-            bev_img = cv2.imread("/home/dzc/Data/mix/bevimgs/%d.jpg" % frame)
-            for idx, pt in enumerate(bev_xy.squeeze()):
-                # print("right sin cos", right_sincos)
-                # print(pt)
-                x, y = pt[0], pt[1]
-                cv2.circle(bev_img, (x, y), radius=2, color=(255, 255, 0))
-                cv2.line(bev_img, (0, Const.grid_height - 1), (x, y), color = (255, 255, 0))
-                ray = np.arctan(y / (Const.grid_width - x))
-                theta_l = bev_angle.squeeze()[idx]
-                theta = theta_l + ray
-
-                x1_rot = x - 30
-                y1_rot = Const.grid_height - y
-
-                # print(theta)
-                nrx = (x1_rot - x) * np.cos(theta) - (y1_rot - (Const.grid_height - y)) * np.sin(theta) + x
-                nry = (x1_rot - x) * np.sin(theta) + (y1_rot - (Const.grid_height - y)) * np.cos(theta) + (Const.grid_height - y)
-
-                # print(x, y, nrx, nry)
-                cv2.arrowedLine(bev_img, (x, y), (nrx, Const.grid_height - nry), color=(255, 255, 0))
-                cv2.line(bev_img, (Const.grid_width - 1, 0), (x, y), color = (155, 25, 0))
-            cv2.imwrite("/home/dzc/Desktop/CASIA/proj/mvRPN-det/results/images/angle.jpg", bev_img)
-
+            # bev_img = cv2.imread("/home/dzc/Data/mix/bevimgs/%d.jpg" % frame)
+            # for idx, pt in enumerate(bev_xy.squeeze()):
+            #     # print("right sin cos", right_sincos)
+            #     # print(pt)
+            #     x, y = pt[0], pt[1]
+            #     cv2.circle(bev_img, (x, y), radius=2, color=(255, 255, 0))
+            #     cv2.line(bev_img, (0, Const.grid_height - 1), (x, y), color = (255, 255, 0))
+            #     ray = np.arctan(y / (Const.grid_width - x))
+            #     theta_l = bev_angle.squeeze()[idx]
+            #     theta = theta_l + ray
+            #
+            #     x1_rot = x - 30
+            #     y1_rot = Const.grid_height - y
+            #
+            #     # print(theta)
+            #     nrx = (x1_rot - x) * np.cos(theta) - (y1_rot - (Const.grid_height - y)) * np.sin(theta) + x
+            #     nry = (x1_rot - x) * np.sin(theta) + (y1_rot - (Const.grid_height - y)) * np.cos(theta) + (Const.grid_height - y)
+            #
+            #     # print(x, y, nrx, nry)
+            #     cv2.arrowedLine(bev_img, (x, y), (nrx, Const.grid_height - nry), color=(255, 255, 0))
+            #     cv2.line(bev_img, (Const.grid_width - 1, 0), (x, y), color = (155, 25, 0))
+            # cv2.imwrite("/home/dzc/Desktop/CASIA/proj/mvRPN-det/results/images/angle.jpg", bev_img)
 
             rpn_loc = rpn_locs[0]
             rpn_score = rpn_scores[0]
@@ -135,7 +142,7 @@ class OFTtrainer(BaseTrainer):
                 self.rpn_sigma)
 
             gt_rpn_label = torch.tensor(gt_rpn_label).long()
-            rpn_cls_loss = nn.CrossEntropyLoss(ignore_index=-1)(rpn_score, gt_rpn_label.to("cuda:1"))
+            rpn_cls_loss = nn.CrossEntropyLoss(ignore_index=-1)(rpn_score, gt_rpn_label.to(rpn_score.device))
 
             # ----------------ROI------------------------------
             # 还需要在双视角下的回归gt，以及筛选过后的分类gt，gt_left_loc, gt_left_label, gt_right_loc, gt_right_label
@@ -244,8 +251,16 @@ class OFTtrainer(BaseTrainer):
             #     for name, param in self.model.rpn.named_parameters():
             #         param.requires_grad = False
 
-            loss = rpn_loc_loss + rpn_cls_loss + left_roi_loc_loss / 2 + left_roi_cls_loss  + left_sincos_loss / 4 + right_roi_loc_loss / 2 + right_roi_cls_loss + right_sincos_loss / 4
-            # loss = rpn_loc_loss + rpn_cls_loss + left_roi_loc_loss + left_roi_cls_loss + right_roi_loc_loss + right_roi_cls_loss
+            # loss = rpn_loc_loss + rpn_cls_loss + left_roi_loc_loss / 2 + left_roi_cls_loss + left_sincos_loss / 4 + right_roi_loc_loss / 2 + right_roi_cls_loss + right_sincos_loss / 4
+            loss = rpn_loc_loss + rpn_cls_loss + left_roi_cls_loss + left_roi_loc_loss * 0 + left_sincos_loss / 4 + right_roi_cls_loss + right_roi_loc_loss * 0  +right_sincos_loss / 4
+
+            # loss = rpn_loc_loss + rpn_cls_loss + \
+            #         (left_roi_loc_loss / 2 + left_roi_cls_loss + left_sincos_loss / 4 + right_roi_loc_loss / 2 + right_roi_cls_loss + right_sincos_loss / 4) * 0
+            # # 训练roi pooling
+
+            # loss =(rpn_loc_loss + rpn_cls_loss) * 0 +  \
+            #         left_roi_loc_loss / 2 + left_roi_cls_loss + left_sincos_loss / 4 + right_roi_loc_loss / 2 + right_roi_cls_loss + right_sincos_loss / 4
+
             Loss += loss
             RPN_CLS_LOSS += rpn_cls_loss
             RPN_LOC_LOSS += rpn_loc_loss
@@ -448,7 +463,8 @@ class OFTtrainer(BaseTrainer):
             # all_bev_boxes, _, all_sincos_remain, position_mark_keep = nms_new(all_roi_remain, all_front_prob, all_pred_sincos, position_mark)
             # s = time.time()
             v, indices = torch.tensor(all_front_prob).sort(0)
-            indices_remain = indices[v > 0.65]
+            indices_remain = indices[v > 0.8]
+            print(frame)
             all_roi_remain = all_roi_remain[indices_remain].reshape(len(indices_remain), 4)
             all_pred_sincos = all_pred_sincos[indices_remain].reshape(len(indices_remain), 2)
             all_front_prob = all_front_prob[indices_remain].reshape(len(indices_remain),)
@@ -712,7 +728,7 @@ def visualize_3dbox(pred_ori, pred_angle, position_mark, extrin, intrin, idx):
         #
         cv2.arrowedLine(left_img, (int((projected_2d[k][0][0] + projected_2d[k][2][0]) / 2), int((projected_2d[k][0][1] + projected_2d[k][2][1]) / 2)), (projected_2d[k][8][0], projected_2d[k][8][1]), color = (255, 60, 199), thickness=2)
         # cv2.line(left_img, (int((projected_2d[k][0+ 9][0] + projected_2d[k][2+ 9][0]) / 2), int((projected_2d[k][0+ 9][1] + projected_2d[k][2+ 9][1]) / 2)), (projected_2d[k][8+ 9][0], projected_2d[k][8+ 9][1]), color = (255, 60, 199), thickness=2)
-    cv2.imwrite("/home/dzc/Desktop/CASIA/proj/mvRPN-det/results/images/3d_box/%d.jpg" % idx, left_img)
+    cv2.imwrite("/home/dzc/Desktop/CASIA/proj/mvRPN-det/results/images/3d_box_blend/%d.jpg" % idx, left_img)
 
 def _smooth_l1_loss(x, t, in_weight, sigma):
     sigma2 = sigma ** 2
@@ -725,9 +741,9 @@ def _smooth_l1_loss(x, t, in_weight, sigma):
     return y.sum()
 
 def _fast_rcnn_loc_loss(pred_loc, gt_loc, gt_label, sigma):
-    in_weight = torch.zeros(gt_loc.shape).to("cuda:1")
-    gt_loc = torch.tensor(gt_loc).to("cuda:1")
-    gt_label = torch.tensor(gt_label).to("cuda:1")
+    in_weight = torch.zeros(gt_loc.shape).to(pred_loc.device)
+    gt_loc = torch.tensor(gt_loc).to(pred_loc.device)
+    gt_label = torch.tensor(gt_label).to(pred_loc.device)
 
     # print(in_weight.shape, gt_loc.shape, gt_label.shape)
     # Localization loss is calculated only for positive rois.
