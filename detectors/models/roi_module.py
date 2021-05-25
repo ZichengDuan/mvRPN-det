@@ -6,7 +6,7 @@ import cupy as cp
 import torch as t
 from torch.autograd import Function
 
-from utils.roi_cupy import kernel_backward, kernel_forward
+from detectors.models.utils.roi_cupy import kernel_backward, kernel_forward
 from torchvision.ops import roi_pool
 
 Stream = namedtuple('Stream', ['ptr'])

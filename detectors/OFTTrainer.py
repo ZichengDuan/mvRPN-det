@@ -44,34 +44,34 @@ class OFTtrainer(BaseTrainer):
     def train(self, epoch, data_loader, optimizer, writer):
         self.model.train()
 
-        # 训练骨干+rpn
-        if epoch - 1 < 2:
-            for name, param in self.model.named_parameters():
-                param.requires_grad = True
-            for name, param in self.roi_head.named_parameters():
-                param.requires_grad = False
+        # # 训练骨干+rpn
+        # if epoch - 1 < 2:
+        #     for name, param in self.model.named_parameters():
+        #         param.requires_grad = True
+        #     for name, param in self.roi_head.named_parameters():
+        #         param.requires_grad = False
 
-        # 训练roi pooling
-        if 4 > epoch - 1 >= 2:
-            for name, param in self.model.named_parameters():
-                param.requires_grad = False
-            for name, param in self.roi_head.named_parameters():
-                # 锁定角度回归，训练roi pooling
-                if 'ang_regressor' in name or 'classifier2' in name:
-                    param.requires_grad = False
-                else:
-                    param.requires_grad = True
+        # # 训练roi pooling
+        # if 4 > epoch - 1 >= 2:
+        #     for name, param in self.model.named_parameters():
+        #         param.requires_grad = False
+        #     for name, param in self.roi_head.named_parameters():
+        #         # 锁定角度回归，训练roi pooling
+        #         if 'ang_regressor' in name or 'classifier2' in name:
+        #             param.requires_grad = False
+        #         else:
+        #             param.requires_grad = True
 
-        # 训练angle_regression
-        if 6 > epoch - 1 >= 4:
-            for name, param in self.model.named_parameters():
-                param.requires_grad = False
-            for name, param in self.roi_head.named_parameters():
-                # 锁定roi pooling，训练角度回归
-                if 'ang_regressor' in name or 'classifier2' in name:
-                    param.requires_grad = True
-                else:
-                    param.requires_grad = False
+        # # 训练angle_regression
+        # if 6 > epoch - 1 >= 4:
+        #     for name, param in self.model.named_parameters():
+        #         param.requires_grad = False
+        #     for name, param in self.roi_head.named_parameters():
+        #         # 锁定roi pooling，训练角度回归
+        #         if 'ang_regressor' in name or 'classifier2' in name:
+        #             param.requires_grad = True
+        #         else:
+        #             param.requires_grad = False
         # -----------------init local params----------------------
         Loss = 0
         RPN_CLS_LOSS = 0
@@ -90,28 +90,28 @@ class OFTtrainer(BaseTrainer):
             rpn_locs, rpn_scores, anchor, rois, roi_indices, img_featuremaps, bev_featuremaps = self.model(imgs, gt_bbox, mark=mark)
 
             # visualize angle
-            bev_img = cv2.imread("/home/dzc/Data/mix/bevimgs/%d.jpg" % frame)
-            for idx, pt in enumerate(bev_xy.squeeze()):
-                # print("right sin cos", right_sincos)
-                # print(pt)
-                x, y = pt[0], pt[1]
-                cv2.circle(bev_img, (x, y), radius=2, color=(255, 255, 0))
-                cv2.line(bev_img, (0, Const.grid_height - 1), (x, y), color = (255, 255, 0))
-                ray = np.arctan(y / (Const.grid_width - x))
-                theta_l = bev_angle.squeeze()[idx]
-                theta = theta_l + ray
+            # bev_img = cv2.imread("/home/dzc/Data/mix/bevimgs/%d.jpg" % frame)
+            # for idx, pt in enumerate(bev_xy.squeeze()):
+            #     # print("right sin cos", right_sincos)
+            #     # print(pt)
+            #     x, y = pt[0], pt[1]
+            #     cv2.circle(bev_img, (x, y), radius=2, color=(255, 255, 0))
+            #     cv2.line(bev_img, (0, Const.grid_height - 1), (x, y), color = (255, 255, 0))
+            #     ray = np.arctan(y / (Const.grid_width - x))
+            #     theta_l = bev_angle.squeeze()[idx]
+            #     theta = theta_l + ray
 
-                x1_rot = x - 30
-                y1_rot = Const.grid_height - y
+            #     x1_rot = x - 30
+            #     y1_rot = Const.grid_height - y
 
-                # print(theta)
-                nrx = (x1_rot - x) * np.cos(theta) - (y1_rot - (Const.grid_height - y)) * np.sin(theta) + x
-                nry = (x1_rot - x) * np.sin(theta) + (y1_rot - (Const.grid_height - y)) * np.cos(theta) + (Const.grid_height - y)
+            #     # print(theta)
+            #     nrx = (x1_rot - x) * np.cos(theta) - (y1_rot - (Const.grid_height - y)) * np.sin(theta) + x
+            #     nry = (x1_rot - x) * np.sin(theta) + (y1_rot - (Const.grid_height - y)) * np.cos(theta) + (Const.grid_height - y)
 
-                # print(x, y, nrx, nry)
-                cv2.arrowedLine(bev_img, (x, y), (nrx, Const.grid_height - nry), color=(255, 255, 0))
-                cv2.line(bev_img, (Const.grid_width - 1, 0), (x, y), color = (155, 25, 0))
-            cv2.imwrite("/home/dzc/Desktop/CASIA/proj/mvRPN-det/results/images/angle.jpg", bev_img)
+            #     # print(x, y, nrx, nry)
+            #     cv2.arrowedLine(bev_img, (x, y), (nrx, Const.grid_height - nry), color=(255, 255, 0))
+            #     cv2.line(bev_img, (Const.grid_width - 1, 0), (x, y), color = (155, 25, 0))
+            # cv2.imwrite("/home/dzc/Desktop/CASIA/proj/mvRPN-det/results/images/angle.jpg", bev_img)
 
 
             rpn_loc = rpn_locs[0]

@@ -27,12 +27,12 @@ class oftFrameDataset(VisionDataset):
         self.extrinsic_matrix = base.extrinsic_matrices
         self.intrinsic_matrix = base.intrinsic_matrices
 
-        self.extrinsic_matrix2 = base.extrinsic_matrices
-        self.intrinsic_matrix2 = base.intrinsic_matrices
+        self.extrinsic_matrix2 = base.extrinsic_matrices2
+        self.intrinsic_matrix2 = base.intrinsic_matrices2
 
         if train:
-            # frame_range = list(range(0, 1000)) + list(range(1269 + 3021, 1700 + 3021)) + list(range(2977+ 3021, 4100+ 3021))
-            frame_range = list(range(1269 + 3021, 1700 + 3021)) + list(range(2977+ 3021, 4100+ 3021))
+            frame_range = list(range(0, 2000)) + list(range(1269 + 3021, 1700 + 3021)) + list(range(2977+ 3021, 4100+ 3021))
+            # frame_range = range(0, 100)
             # random.shuffle(frame_range)
         else:
             frame_range = list(range(2800, 3021)) + list(range(1700 + 3021, 2100 + 3021))

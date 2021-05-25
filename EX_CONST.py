@@ -6,7 +6,15 @@ class Const:
     cam_height = 179
 
     # 哨兵的方位，左下角、右上角是1, 左上角、右下角是0
-    cam_pos = 0
+    cam_pos = 1
+    
+    Width_set = 1280
+    Height_set = 1024
+    Width_output = 640
+    Height_output = 480
+    framerate_set = 100
+    exposure = 15000.0
+    data_path = "/home/nvidia/Desktop/dzc/MVDet/2.realCam"
 
     # 场地大小
 
@@ -25,7 +33,7 @@ class Const:
     dataset = "mix"
 
     car_dist = math.sqrt(50/2 * 50/2 + 60/2 * 60/2)
-
+	
     car_width = 50
 
     car_length = 60
@@ -41,7 +49,7 @@ class Const:
 
     roi_classes = 1
 
-    modelsavedir = "/home/dzc/Desktop/CASIA/proj/mvRPN-det/results/trained/testing_set"
+    modelsavedir = "/home/nvidia/Desktop/dzc/trains/mvRPN-det/results/trained/testing_set"
 
-    imgsavedir = "/home/dzc/Desktop/CASIA/proj/mvRPN-det/results/images/testing_set"
+    imgsavedir = "/home/nvidia/Desktop/dzc/trains/mvRPN-det/results/images/testing_set"
 

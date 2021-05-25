@@ -60,8 +60,7 @@ class Robomaster_1_dataset(VisionDataset):
         for i in range(3):
             extrinsic_matrix[i,3] /= 10
         return intrinsic_matrix, extrinsic_matrix
-
-
+    
     def get_intrinsic_extrinsic_matrix2(self, camera_i):
         intrinsic_camera_path = os.path.join(self.root, 'calibration2', 'intrinsic')
         intrinsic_params_file = cv2.FileStorage(os.path.join(intrinsic_camera_path,

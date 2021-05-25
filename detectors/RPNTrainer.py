@@ -110,7 +110,7 @@ class RPNtrainer(BaseTrainer):
             sample_roi, gt_roi_loc, gt_roi_label = self.proposal_target_creator_ori(roi, at.tonumpy(gt_bbox), at.tonumpy(left_dir), self.loc_normalize_mean, self.loc_normalize_std)
             sample_roi_index = torch.zeros(len(sample_roi))
 
-            roi_cls_loc, roi_score, _ = self.roi_head(bev_featuremaps, sample_roi, sample_roi_index)
+            roi_cls_loc, roi_score = self.roi_head(bev_featuremaps, sample_roi, sample_roi_index)
 
             n_sample = roi_cls_loc.shape[0]
             roi_cls_loc = roi_cls_loc.view(n_sample, -1, 4)
@@ -181,6 +181,7 @@ class RPNtrainer(BaseTrainer):
         getoutter_time = 0
 
         for batch_idx, data in enumerate(data_loader):
+
             imgs, gt_bev_xy,bev_angle, gt_bbox, gt_left_bbox, gt_right_bbox, gt_left_dirs, gt_right_dirs, gt_left_sincos, gt_right_sincos, frame, extrin, intrin, extrin2, intrin2, mark = data
             total_start = time.time()
             rpn_start = time.time()
@@ -193,16 +194,17 @@ class RPNtrainer(BaseTrainer):
                 rpn_locs, rpn_scores, anchor, rois, roi_indices, img_featuremaps, bev_featuremaps = self.model(imgs, mark=mark)
             rpn_end = time.time()
             roi = torch.tensor(rois).to(rpn_locs.device)
-            roi_cls_loc, roi_score, _ = self.roi_head(bev_featuremaps, roi, roi_indices)
+            roi_cls_loc, roi_score = self.roi_head(bev_featuremaps, roi, roi_indices)
 
             prob = F.softmax(torch.tensor(roi_score).to(roi.device), dim=1)
             prob = prob[:, 1]
             bbox, conf = nms_new2(at.tonumpy(roi), at.tonumpy(prob), prob_threshold=0.7)
             # keep = box_ops.nms(roi, prob, 0.1)
-
+            total_end = time.time()
+            print(total_end - total_start)
             # roi = roi[keep]
 
-            bev_img = cv2.imread("/home/dzc/Data/mix/bevimgs/%d.jpg" % frame)
+            bev_img = cv2.imread("/home/nvidia/Desktop/dzc/Data/mix/bevimgs/%d.jpg" % frame)
             if len(roi) != 0:
                 for bbx in bbox:
                     cv2.rectangle(bev_img, (int(bbx[1]), int(bbx[0])), (int(bbx[3]), int(bbx[2])), color=(255, 255, 0), thickness=2)
@@ -222,14 +224,14 @@ class RPNtrainer(BaseTrainer):
             # for idx, bbx in enumerate(left_bbox):
             #     cv2.rectangle(bev_img, (int(bbx[1]), int(bbx[0])), (int(bbx[3]), int(bbx[2])), color=(255, 255, 0),
             #                   thickness=1)
-            cv2.imwrite("/home/dzc/Desktop/CASIA/proj/mvRPN-det/results/images/rpn_boxes/%d.jpg" % frame, bev_img)
+            cv2.imwrite("/home/nvidia/Desktop/dzc/trains/mvRPN-det/results/images/rpn_boxes/%d.jpg" % frame, bev_img)
     @property
     def n_class(self):
         # Total number of classes including the background.
         return self.roi_head.n_class
 
 def visualize_3dbox(pred_ori, pred_angle, position_mark, extrin, intrin, idx):
-    left_img = cv2.imread("/home/dzc/Data/mix/img/left1/%d.jpg" % (idx))
+    left_img = cv2.imread("/home/nvidia/Desktop/dzc/Data/mix/img/left1/%d.jpg" % (idx))
     boxes_3d = []
     n_bbox = pred_ori.shape[0]
     for i, bbox in enumerate(pred_ori):
@@ -379,7 +381,7 @@ def visualize_3dbox(pred_ori, pred_angle, position_mark, extrin, intrin, idx):
         #
         cv2.arrowedLine(left_img, (int((projected_2d[k][0][0] + projected_2d[k][2][0]) / 2), int((projected_2d[k][0][1] + projected_2d[k][2][1]) / 2)), (projected_2d[k][8][0], projected_2d[k][8][1]), color = (255, 60, 199), thickness=2)
         # cv2.line(left_img, (int((projected_2d[k][0+ 9][0] + projected_2d[k][2+ 9][0]) / 2), int((projected_2d[k][0+ 9][1] + projected_2d[k][2+ 9][1]) / 2)), (projected_2d[k][8+ 9][0], projected_2d[k][8+ 9][1]), color = (255, 60, 199), thickness=2)
-    cv2.imwrite("/home/dzc/Desktop/CASIA/proj/mvRPN-det/results/images/3d_box/%d.jpg" % idx, left_img)
+    cv2.imwrite("/home/nvidia/Desktop/dzc/trains/mvRPN-det/results/images/3d_box/%d.jpg" % idx, left_img)
 
 def _smooth_l1_loss(x, t, in_weight, sigma):
     sigma2 = sigma ** 2

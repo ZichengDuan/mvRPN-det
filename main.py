@@ -26,7 +26,7 @@ warnings.filterwarnings("ignore")
 
 def main(args):
     # seed
-    writer = SummaryWriter('/home/dzc/Desktop/CASIA/proj/mvRPN-det/results/tensorboard/log')
+    writer = SummaryWriter('/home/nvidia/Desktop/dzc/trains/mvRPN-det/results/tensorboard/log')
 
     if args.seed is not None:
         np.random.seed(args.seed)
@@ -38,14 +38,18 @@ def main(args):
         torch.backends.cudnn.benchmark = True
 
     # dataset
+    saturation = T.ColorJitter(saturation=0.5)
+    contrast = T.ColorJitter(contrast=0.5)
+    brightness = T.ColorJitter(brightness=0.5)
+
     normalize = T.Normalize((0.485, 0.456, 0.406), (0.229, 0.224, 0.225))
     denormalize = img_color_denormalize((0.485, 0.456, 0.406), (0.229, 0.224, 0.225))
     resize = T.Resize([384, 512]) # h, w
     # resize = T.Resize([240, 320]) # h, w
-    train_trans = T.Compose([resize, T.ToTensor(), normalize])
+    train_trans = T.Compose([resize, T.ToTensor(), saturation, contrast, brightness, normalize])
 
-    data_path = os.path.expanduser('/home/dzc/Data/%s' % Const.dataset)
-    data_path2 = os.path.expanduser('/home/dzc/Data/%s' % Const.dataset)
+    data_path = os.path.expanduser('/home/nvidia/Desktop/dzc/Data/%s' % Const.dataset)
+    data_path2 = os.path.expanduser('/home/nvidia/Desktop/dzc/Data/%s' % Const.dataset)
     base = Robomaster_1_dataset(data_path, args, worldgrid_shape=Const.grid_size)
     train_set = oftFrameDataset(base, train=True, transform=train_trans, grid_reduce=4)
     test_set = oftFrameDataset(base , train=False, transform=train_trans, grid_reduce=4)
@@ -64,8 +68,8 @@ def main(args):
 
     # draw curve
 
-    trainer = OFTtrainer(model, roi_head, denormalize)
-    # trainer = RPNtrainer(model, roi_head, denormalize)
+    # trainer = OFTtrainer(model, roi_head, denormalize)
+    trainer = RPNtrainer(model, roi_head, denormalize)
 
     # learn
 
@@ -78,9 +82,9 @@ def main(args):
             loss = trainer.train(epoch, train_loader, optimizer, writer)
 
             print('Testing...')
-            torch.save(model.state_dict(), os.path.join('%s/mvdet_rpn_%d.pth' % (Const.modelsavedir, epoch)))
-            torch.save(roi_head.state_dict(), os.path.join('%s/roi_rpn_head_%d.pth' % (Const.modelsavedir, epoch)))
-            trainer.test(epoch, test_loader, writer)
+            torch.save(model.state_dict(), os.path.join('%s/mvdet_aug_rpn_%d.pth' % (Const.modelsavedir, epoch)))
+            torch.save(roi_head.state_dict(), os.path.join('%s/roi_aug_rpn_head_%d.pth' % (Const.modelsavedir, epoch)))
+            # trainer.test(epoch, test_loader, writer)
         else:
             model.load_state_dict(torch.load("%s/mvdet_rpn_%d.pth" % (Const.modelsavedir, 5)))
             roi_head.load_state_dict(torch.load("%s/roi_rpn_head_%d.pth" % (Const.modelsavedir, 5)))
@@ -99,7 +103,7 @@ if __name__ == '__main__':
     parser.add_argument('-b', '--batch_size', type=int, default=1, metavar='N',
                         help='input batch size for training (default: 1)')
     parser.add_argument('--epochs', type=int, default=6, metavar='N', help='number of epochs to train (default: 10)')
-    parser.add_argument('--lr', type=float, default=0.0003, metavar='LR', help='learning rate (default: 0.1)')
+    parser.add_argument('--lr', type=float, default=0.0002, metavar='LR', help='learning rate (default: 0.1)')
     parser.add_argument('--weight_decay', type=float, default=1e-5)
     parser.add_argument('--momentum', type=float, default=0.5, metavar='M', help='SGD momentum (default: 0.5)')
     parser.add_argument('--seed', type=int, default=7, help='random seed (default: None)')
