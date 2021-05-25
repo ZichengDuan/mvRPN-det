@@ -86,6 +86,7 @@ def main(args):
             break
     writer.close()
 
+
 if __name__ == '__main__':
     # settings
     parser = argparse.ArgumentParser(description='Multiview detector')

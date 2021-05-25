@@ -41,10 +41,12 @@ class PerspTransDetector(nn.Module):
             self.upsample_shape = list(map(lambda x: int(x / dataset.img_reduce), self.img_shape))
             img_reduce = np.array(self.img_shape) / np.array(self.upsample_shape)
             img_zoom_mat = np.diag(np.append(img_reduce, [1]))
+
             # map
             map_zoom_mat = np.diag(np.append(np.ones([2]) / dataset.grid_reduce, [1]))
             self.proj_mats = [torch.from_numpy(map_zoom_mat @ imgcoord2worldgrid_matrices[cam] @ img_zoom_mat)
                               for cam in range(self.num_cam)]
+
             #
             # self.proj_mats2 = [torch.from_numpy(map_zoom_mat @ imgcoord2worldgrid_matrices2[cam] @ img_zoom_mat)
             #                   for cam in range(self.num_cam)]
