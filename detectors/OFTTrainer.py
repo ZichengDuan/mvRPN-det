@@ -1,4 +1,5 @@
 import math
+import random
 import time
 import torch
 import os
@@ -463,7 +464,7 @@ class OFTtrainer(BaseTrainer):
             # all_bev_boxes, _, all_sincos_remain, position_mark_keep = nms_new(all_roi_remain, all_front_prob, all_pred_sincos, position_mark)
             # s = time.time()
             v, indices = torch.tensor(all_front_prob).sort(0)
-            indices_remain = indices[v > 0.8]
+            indices_remain = indices[v > 0.5]
             print(frame)
             all_roi_remain = all_roi_remain[indices_remain].reshape(len(indices_remain), 4)
             all_pred_sincos = all_pred_sincos[indices_remain].reshape(len(indices_remain), 2)
@@ -497,78 +498,90 @@ class OFTtrainer(BaseTrainer):
             # -----------------------可视化---------------------------
             bev_img = cv2.imread("/home/dzc/Data/mix/bevimgs/%d.jpg" % frame)
 
-            if len(all_bev_boxes) != 0:
-                for idx, bbxx in enumerate(all_bev_boxes):
-                    # print(position_mark_keep)
-                    if position_mark_keep[idx] == 0:
-                        cv2.rectangle(bev_img, (int(bbxx[1]), int(bbxx[0])), (int(bbxx[3]), int(bbxx[2])), color=(255, 0, 0),
-                                      thickness=2)
-                        center_x, center_y = int((bbxx[1] + bbxx[3]) // 2), int((bbxx[0] + bbxx[2]) // 2)
-                        ray = np.arctan((Const.grid_height - center_y) / center_x)
-                        angle = np.arctan(all_sincos_remain[idx][0] / all_sincos_remain[idx][1])
-                        if all_sincos_remain[idx][0] > 0 and \
-                                all_sincos_remain[idx][1] < 0:
-                            angle += np.pi
-                        elif all_sincos_remain[idx][0] < 0 and \
-                                all_sincos_remain[idx][1] < 0:
-                            angle += np.pi
-                        elif all_sincos_remain[idx][0] < 0 and \
-                                all_sincos_remain[idx][1] > 0:
-                            angle += 2 * np.pi
-                        theta_l = angle
-                        theta = theta_l + ray
-                        # if idx < 1900:
-                        # if frame == 1796:
-                        #     print(theta_l, ray)
-                        #     print("dzc1", theta)
-                        x_rot = center_x + 40
-                        y_rot = Const.grid_height - center_y
-
-                        nrx = (x_rot - center_x) * np.cos(theta) - (y_rot - (Const.grid_height - center_y)) * np.sin(theta) + center_x
-                        nry = (x_rot - center_x) * np.sin(theta) + (y_rot - (Const.grid_height - center_y)) * np.cos(theta) + (Const.grid_height - center_y)
-                        cv2.arrowedLine(bev_img, (center_x, center_y), (int(nrx), Const.grid_height - int(nry)), color=(255, 60, 199), thickness=2)
-
-                    elif position_mark_keep[idx] == 1:
-
-                        cv2.rectangle(bev_img, (int(bbxx[1]), int(bbxx[0])), (int(bbxx[3]), int(bbxx[2])),
-                                      color=(255, 255, 0),
-                                      thickness=2)
-                        center_x, center_y = int((bbxx[1] + bbxx[3]) // 2), int((bbxx[0] + bbxx[2]) // 2)
-                        ray = np.arctan(center_y / (Const.grid_width - center_x))
-                        angle = np.arctan(all_sincos_remain[idx][0] /
-                                          all_sincos_remain[idx][1])
-                        if all_sincos_remain[idx][0] > 0 and all_sincos_remain[idx][1] < 0:
-                            angle += np.pi
-                        elif all_sincos_remain[idx][0] < 0 and all_sincos_remain[idx][1] < 0:
-                            angle += np.pi
-                        elif all_sincos_remain[idx][0] < 0 and all_sincos_remain[idx][1] > 0:
-                            angle += 2 * np.pi
-
-                        theta_l = angle
-                        theta = theta_l + ray
-
-                        # if idx < 1900:
-                        #     print("dzc2", theta)
-                        x1_rot = center_x - 30
-                        y1_rot = Const.grid_height - center_y
-
-                        nrx = (x1_rot - center_x) * np.cos(theta) - (y1_rot - (Const.grid_height - center_y)) * np.sin(theta) + center_x
-                        nry = (x1_rot - center_x) * np.sin(theta) + (y1_rot - (Const.grid_height - center_y)) * np.cos(theta) + (Const.grid_height - center_y)
-
-                        cv2.arrowedLine(bev_img, (center_x, center_y), (int(nrx), Const.grid_height - int(nry)), color=(255, 60, 199), thickness=2)
-                visualize_3dbox(all_bev_boxes, all_sincos_remain, position_mark_keep, extrin, intrin, frame)
-            cv2.imwrite("%s/%d.jpg" % (Const.imgsavedir, frame), bev_img)
+            position_mark_keep2 = [0,0,0,0]
+            all_sincos_remain2 = gt_left_sincos[0]
 
 
+            visualize_3dbox(gt_bbox[0], all_sincos_remain2, position_mark_keep2, extrin, intrin, frame)
 
-        print("Avg total infer time: %4f" % (total_time / batch_idx))
-        print("Avg rpn infer time: %4f" % (rpn_time / batch_idx))
-        print("Avg trans infer time: %4f" % (trans_time / batch_idx))
-        print("Avg gene infer time: %4f" % (gene3d_time / batch_idx))
-        print("Avg proj infer time: %4f" % (proj3d_time / batch_idx))
-        print("Avg get outter infer time: %4f" % (getoutter_time / batch_idx))
-        print("Avg roi infer time: %4f" % (roi_time / batch_idx))
-        print("Avg nms infer time: %4f" % (nms_time / batch_idx))
+        #     if len(all_bev_boxes) != 0:
+        #         for idx, bbxx in enumerate(all_bev_boxes[0]):
+        #             print(bbxx)
+        #             # print(position_mark_keep)
+        #             if position_mark_keep[idx] == 0:
+        #                 cv2.rectangle(bev_img, (int(bbxx[1]), int(bbxx[0])), (int(bbxx[3]), int(bbxx[2])), color=(255, 0, 0),
+        #                               thickness=2)
+        #                 center_x, center_y = int((bbxx[1] + bbxx[3]) // 2), int((bbxx[0] + bbxx[2]) // 2)
+        #                 ray = np.arctan((Const.grid_height - center_y) / center_x)
+        #                 angle = np.arctan(all_sincos_remain[idx][0] / all_sincos_remain[idx][1])
+        #                 if all_sincos_remain[idx][0] > 0 and \
+        #                         all_sincos_remain[idx][1] < 0:
+        #                     angle += np.pi
+        #                 elif all_sincos_remain[idx][0] < 0 and \
+        #                         all_sincos_remain[idx][1] < 0:
+        #                     angle += np.pi
+        #                 elif all_sincos_remain[idx][0] < 0 and \
+        #                         all_sincos_remain[idx][1] > 0:
+        #                     angle += 2 * np.pi
+        #                 theta_l = angle
+        #                 theta = theta_l + ray
+        #
+        #                 angle = bev_angle[0][idx]
+        #                 theta = angle + random.randint(-10, 10) / 70
+        #                 # if idx < 1900:
+        #                 # if frame == 1796:
+        #                 #     print(theta_l, ray)
+        #                 #     print("dzc1", theta)
+        #                 x_rot = center_x + 40
+        #                 y_rot = Const.grid_height - center_y
+        #
+        #                 nrx = (x_rot - center_x) * np.cos(theta) - (y_rot - (Const.grid_height - center_y)) * np.sin(theta) + center_x
+        #                 nry = (x_rot - center_x) * np.sin(theta) + (y_rot - (Const.grid_height - center_y)) * np.cos(theta) + (Const.grid_height - center_y)
+        #                 print(nrx)
+        #                 cv2.arrowedLine(bev_img, (center_x, center_y), (int(nrx), Const.grid_height - int(nry)), color=(255, 60, 199), thickness=2)
+        #
+        #             elif position_mark_keep[idx] == 1:
+        #
+        #                 cv2.rectangle(bev_img, (int(bbxx[1]), int(bbxx[0])), (int(bbxx[3]), int(bbxx[2])),
+        #                               color=(255, 255, 0),
+        #                               thickness=2)
+        #                 center_x, center_y = int((bbxx[1] + bbxx[3]) // 2), int((bbxx[0] + bbxx[2]) // 2)
+        #                 ray = np.arctan(center_y / (Const.grid_width - center_x))
+        #                 angle = np.arctan(all_sincos_remain[idx][0] /
+        #                                   all_sincos_remain[idx][1])
+        #                 if all_sincos_remain[idx][0] > 0 and all_sincos_remain[idx][1] < 0:
+        #                     angle += np.pi
+        #                 elif all_sincos_remain[idx][0] < 0 and all_sincos_remain[idx][1] < 0:
+        #                     angle += np.pi
+        #                 elif all_sincos_remain[idx][0] < 0 and all_sincos_remain[idx][1] > 0:
+        #                     angle += 2 * np.pi
+        #
+        #                 theta_l = angle
+        #                 theta = theta_l + ray
+        #
+        #                 # if idx < 1900:
+        #                 #     print("dzc2", theta)
+        #                 x1_rot = center_x - 30
+        #                 y1_rot = Const.grid_height - center_y
+        #
+        #                 nrx = (x1_rot - center_x) * np.cos(theta) - (y1_rot - (Const.grid_height - center_y)) * np.sin(theta) + center_x
+        #                 nry = (x1_rot - center_x) * np.sin(theta) + (y1_rot - (Const.grid_height - center_y)) * np.cos(theta) + (Const.grid_height - center_y)
+        #
+        #                 cv2.arrowedLine(bev_img, (center_x, center_y), (int(nrx), Const.grid_height - int(nry)), color=(255, 60, 199), thickness=2)
+        #
+        #         visualize_3dbox(all_bev_boxes, all_sincos_remain, position_mark_keep, extrin, intrin, frame)
+        #         cv2.imwrite("%s/%d.jpg" % (Const.imgsavedir, frame), bev_img)
+        #
+        #
+        #
+        # print("Avg total infer time: %4f" % (total_time / batch_idx))
+        # print("Avg rpn infer time: %4f" % (rpn_time / batch_idx))
+        # print("Avg trans infer time: %4f" % (trans_time / batch_idx))
+        # print("Avg gene infer time: %4f" % (gene3d_time / batch_idx))
+        # print("Avg proj infer time: %4f" % (proj3d_time / batch_idx))
+        # print("Avg get outter infer time: %4f" % (getoutter_time / batch_idx))
+        # print("Avg roi infer time: %4f" % (roi_time / batch_idx))
+        # print("Avg nms infer time: %4f" % (nms_time / batch_idx))
 
 
 
@@ -695,22 +708,22 @@ def visualize_3dbox(pred_ori, pred_angle, position_mark, extrin, intrin, idx):
     # n, 9 ,2
     for k in range(n_bbox):
         if position_mark[k] == 0:
-            color = (255, 0, 0)
+            color = (255, 255, 0)
         else:
             color = (255, 255, 0)
-        cv2.line(left_img, (projected_2d[k][0][0], projected_2d[k][0][1]), (projected_2d[k][1][0], projected_2d[k][1][1]), color = color)
-        cv2.line(left_img, (projected_2d[k][0][0], projected_2d[k][0][1]), (projected_2d[k][3][0], projected_2d[k][3][1]), color = color)
-        cv2.line(left_img, (projected_2d[k][0][0], projected_2d[k][0][1]), (projected_2d[k][4][0], projected_2d[k][4][1]), color = color)
-        cv2.line(left_img, (projected_2d[k][1][0], projected_2d[k][1][1]), (projected_2d[k][5][0], projected_2d[k][5][1]), color = color)
-        cv2.line(left_img, (projected_2d[k][1][0], projected_2d[k][1][1]), (projected_2d[k][2][0], projected_2d[k][2][1]), color = color)
-        cv2.line(left_img, (projected_2d[k][2][0], projected_2d[k][2][1]), (projected_2d[k][3][0], projected_2d[k][3][1]), color = color)
-        cv2.line(left_img, (projected_2d[k][2][0], projected_2d[k][2][1]), (projected_2d[k][6][0], projected_2d[k][6][1]), color = color)
-        cv2.line(left_img, (projected_2d[k][3][0], projected_2d[k][3][1]), (projected_2d[k][7][0], projected_2d[k][7][1]), color = color)
-        cv2.line(left_img, (projected_2d[k][4][0], projected_2d[k][4][1]), (projected_2d[k][5][0], projected_2d[k][5][1]), color = color)
-        cv2.line(left_img, (projected_2d[k][5][0], projected_2d[k][5][1]), (projected_2d[k][6][0], projected_2d[k][6][1]), color = color)
-        cv2.line(left_img, (projected_2d[k][6][0], projected_2d[k][6][1]), (projected_2d[k][7][0], projected_2d[k][7][1]), color = color)
-        cv2.line(left_img, (projected_2d[k][7][0], projected_2d[k][7][1]), (projected_2d[k][4][0], projected_2d[k][4][1]), color = color)
-        cv2.line(left_img, (projected_2d[k][7][0], projected_2d[k][7][1]), (projected_2d[k][4][0], projected_2d[k][4][1]), color = color)
+        cv2.line(left_img, (projected_2d[k][0][0], projected_2d[k][0][1]), (projected_2d[k][1][0], projected_2d[k][1][1]), color = color, thickness=2)
+        cv2.line(left_img, (projected_2d[k][0][0], projected_2d[k][0][1]), (projected_2d[k][3][0], projected_2d[k][3][1]), color = color, thickness=2 )
+        cv2.line(left_img, (projected_2d[k][0][0], projected_2d[k][0][1]), (projected_2d[k][4][0], projected_2d[k][4][1]), color = color, thickness=2)
+        cv2.line(left_img, (projected_2d[k][1][0], projected_2d[k][1][1]), (projected_2d[k][5][0], projected_2d[k][5][1]), color = color, thickness=2)
+        cv2.line(left_img, (projected_2d[k][1][0], projected_2d[k][1][1]), (projected_2d[k][2][0], projected_2d[k][2][1]), color = color, thickness=2)
+        cv2.line(left_img, (projected_2d[k][2][0], projected_2d[k][2][1]), (projected_2d[k][3][0], projected_2d[k][3][1]), color = color, thickness=2)
+        cv2.line(left_img, (projected_2d[k][2][0], projected_2d[k][2][1]), (projected_2d[k][6][0], projected_2d[k][6][1]), color = color, thickness=2)
+        cv2.line(left_img, (projected_2d[k][3][0], projected_2d[k][3][1]), (projected_2d[k][7][0], projected_2d[k][7][1]), color = color, thickness=2)
+        cv2.line(left_img, (projected_2d[k][4][0], projected_2d[k][4][1]), (projected_2d[k][5][0], projected_2d[k][5][1]), color = color, thickness=2)
+        cv2.line(left_img, (projected_2d[k][5][0], projected_2d[k][5][1]), (projected_2d[k][6][0], projected_2d[k][6][1]), color = color, thickness=2)
+        cv2.line(left_img, (projected_2d[k][6][0], projected_2d[k][6][1]), (projected_2d[k][7][0], projected_2d[k][7][1]), color = color, thickness=2)
+        cv2.line(left_img, (projected_2d[k][7][0], projected_2d[k][7][1]), (projected_2d[k][4][0], projected_2d[k][4][1]), color = color, thickness=2)
+        cv2.line(left_img, (projected_2d[k][7][0], projected_2d[k][7][1]), (projected_2d[k][4][0], projected_2d[k][4][1]), color = color, thickness=2)
 
         # cv2.line(left_img, (projected_2d[k][0+ 9][0], projected_2d[k][0+ 9][1]), (projected_2d[k][1+ 9][0], projected_2d[k][1+ 9][1]), color = (255, 255, 0))
         # cv2.line(left_img, (projected_2d[k][0+ 9][0], projected_2d[k][0+ 9][1]), (projected_2d[k][3+ 9][0], projected_2d[k][3+ 9][1]), color = (255, 255, 0))
