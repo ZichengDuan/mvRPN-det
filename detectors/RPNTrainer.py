@@ -62,27 +62,6 @@ class RPNtrainer(BaseTrainer):
             img_size = (Const.grid_height, Const.grid_width)
             rpn_locs, rpn_scores, anchor, rois, roi_indices, img_featuremaps, bev_featuremaps = self.model(imgs, gt_bbox, mark=mark)
 
-            # visualize angle
-            # bev_img = cv2.imread("/home/dzc/Data/4carreal_0318blend/bevimgs/%d.jpg" % frame)
-            # for idx, pt in enumerate(bev_xy.squeeze()):
-                # print(pt)
-                # x, y = pt[0], pt[1]
-                #cv2.circle(bev_img, (x, y), radius=2, color=(255, 255, 0))
-                #cv2.line(bev_img, (0, Const.grid_height - 1), (x, y), color = (255, 255, 0))
-                #ray = np.arctan(y / (Const.grid_width - x))
-                #theta_l = right_sincos.squeeze()[idx]
-                #theta = theta_l + ray
-
-                #x1_rot = x - 30
-                #y1_rot = Const.grid_height - y
-
-                #nrx = (x1_rot - x) * np.cos(theta) - (y1_rot - (Const.grid_height - y)) * np.sin(theta) + x
-                #nry = (x1_rot - x) * np.sin(theta) + (y1_rot - (Const.grid_height - y)) * np.cos(theta) + (Const.grid_height - y)
-
-                #cv2.arrowedLine(bev_img, (x, y), (nrx, Const.grid_height - nry), color=(255, 255, 0))
-                #cv2.line(bev_img, (Const.grid_width - 1, 0), (x, y), color = (155, 25, 0))
-            #cv2.imwrite("/home/dzc/Desktop/CASIA/proj/mvRPN-det/images/angle.jpg", bev_img)
-
             rpn_loc = rpn_locs[0]
             rpn_score = rpn_scores[0]
             gt_bbox = gt_bbox[0]
