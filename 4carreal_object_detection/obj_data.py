@@ -4,21 +4,24 @@ import numpy as np
 import json
 from EX_CONST import Const
 import cv2
-
+import os
 
 def read_txt(left_right_dir):
     l_lhs = None
-    for m in range(0, 3021):
+    for m in range(0, 1600):
         print(m)
         idx = str(m)
-        # if 6 - len(idx) > 0:
-        #     for j in range(6 - len(idx)):
-        #         idx = "0" + idx
+        if 6 - len(idx) > 0:
+            for j in range(6 - len(idx)):
+                idx = "0" + idx
+
+        if not os.path.exists(left_right_dir + "/left1/%s.txt" % idx):
+            continue
 
         left = open(left_right_dir + "/left1/%s.txt" % idx)
         right = open(left_right_dir + "/right2/%s.txt" % idx)
         datas = []
-        annotation = open("/home/dzc/Data/4carreal0511_blend/annotations/%d.json" % (m), 'w')
+        annotation = open("/home/dzc/Data/4carreal_dia0526/annotations/%d.json" % (m), 'w')
 
         od_xmax = []
         od_xmin = []
@@ -55,13 +58,15 @@ def read_txt(left_right_dir):
                 if i == 1:
                     world_x *= 1000
                     world_y *= 1000
-            else:
+            elif len(left_lines) == 4:
                 world_x, world_y, left_xmax, left_ymax, left_xmin, left_ymin, _, angle = [float(tmp) for tmp in cont_left]
                 right_xmax, right_ymax, right_xmin, right_ymin = [float(tmp) for tmp in cont_right[2:-2]]
                 if i == 2:
                     world_x *= 1000
                     world_y *= 1000
-
+            elif len(left_lines) == 2:
+                world_x, world_y, left_xmax, left_ymax, left_xmin, left_ymin, angle = [float(tmp) for tmp in cont_left]
+                right_xmax, right_ymax, right_xmin, right_ymin = [float(tmp) for tmp in cont_right[2:-1]]
             pID = i
             # ## 将角度转换为0-360度
             angle = float(cont_left[-1]) # 1carreal data此处是-2
@@ -158,9 +163,17 @@ def read_txt(left_right_dir):
             # cv2.rectangle(img, (left_xmin, left_ymin), (left_xmax, left_ymax), color=(255, 0, 0))
             # cv2.imwrite("/home/dzc/Desktop/CASIA/proj/mvRPN-det/4carreal_object_detection/test/%d.jpg" % m, img)
             # 生成json,view 0: left, view 1: right
+
+            if len(left_lines) == 4:
+                mark = 0
+            elif len(left_lines) == 3:
+                mark = 1
+            elif len(left_lines) == 2:
+                mark = 2
+
             data = {}
             data = json.loads(json.dumps(data))
-            # data["mark"] = 0 if len(left_lines) == 4 else 1
+            data["mark"] = mark
             data["VehicleID"] = pID
             data["type"] = l_lhs
             # data["direc_left"] = int(direc_left)
@@ -191,4 +204,4 @@ def read_txt(left_right_dir):
         # break
 
 if __name__ == "__main__":
-    read_txt("/home/dzc/Data/mix/txt")
+    read_txt("/home/dzc/Data/4carreal_dia0526/txt")

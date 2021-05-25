@@ -17,6 +17,13 @@
             </Attribute>
           </value>
         </entry>
+        <entry key="/datasets/roboutils/transfer_matrix_to_xml.py">
+          <value>
+            <Attribute>
+              <option name="separator" value="," />
+            </Attribute>
+          </value>
+        </entry>
         <entry key="$USER_HOME$/miniconda3/envs/casia/lib/python3.7/shutil.py">
           <value>
             <Attribute>
