@@ -13,7 +13,7 @@ class Const:
     Width_output = 640
     Height_output = 480
     framerate_set = 100
-    exposure = 15000.0
+    exposure = 17000.0
     data_path = "/home/nvidia/Desktop/dzc/MVDet/2.realCam"
 
     # 场地大小
@@ -49,7 +49,7 @@ class Const:
 
     roi_classes = 1
 
-    modelsavedir = "/home/nvidia/Desktop/dzc/trains/mvRPN-det/results/trained/testing_set"
+    modelsavedir = "/home/dzc/Desktop/CASIA/proj/mvRPN-det/results/trained/testing_set"
 
-    imgsavedir = "/home/nvidia/Desktop/dzc/trains/mvRPN-det/results/images/testing_set"
+    imgsavedir = "/home/dzc/Desktop/CASIA/proj/mvRPN-det/results/trained/testing_set"
 
