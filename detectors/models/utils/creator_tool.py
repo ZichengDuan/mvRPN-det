@@ -45,7 +45,11 @@ class ProposalTargetCreator(object):
         self.neg_iou_thresh_hi = neg_iou_thresh_hi
         self.neg_iou_thresh_lo = neg_iou_thresh_lo  # NOTE:default 0.1 in py-faster-rcnn
 
-    def __call__(self, roi, gt_bev_bbox, left_label, right_label, left_angles, right_angles, left_gt_bbox, right_gt_bbox, extrin, intrin, frame,
+    def __call__(self, roi, gt_bev_bbox,
+                 left_label, right_label, left_angles, right_angles,
+                 left_confidence, right_confidence, left_orientation, right_orientation,
+                 left_gt_bbox, right_gt_bbox,
+                 extrin, intrin, frame,
                  loc_normalize_mean=(0., 0., 0., 0.),
                  loc_normalize_std=(0.1, 0.1, 0.2, 0.2)):
 
@@ -94,7 +98,9 @@ class ProposalTargetCreator(object):
         # print(left_angles.shape, left_gt_assignment.shape)
         gt_roi_angles_left = left_angles.reshape(-1, 2)[left_gt_assignment]
         gt_roi_label_left = left_label[left_gt_assignment] + 1 # 每一个roi对应的gt及其gt的分类
-
+        gt_roi_confidence_left = left_confidence.reshape(-1, 2)[left_gt_assignment]
+        # print(left_angles.shape, left_confidence.shape, left_gt_assignment, gt_roi_angles_left.shape, gt_roi_confidence_left.shape)
+        gt_roi_orientation_left = left_orientation.reshape(-1, 2, 2)[left_gt_assignment]
 
         # Select foreground RoIs as those with >= pos_iou_thresh IoU.
         left_pos_index = np.where(left_max_iou >= self.pos_iou_thresh)[0]
@@ -120,7 +126,10 @@ class ProposalTargetCreator(object):
         left_gt_label[left_pos_roi_per_this_image:] = 0  # negative labels --> 0
 
         left_gt_angles = gt_roi_angles_left[left_pos_index] # only keep the positive samples for training
+        left_gt_confidence = gt_roi_confidence_left[left_pos_index]
+        left_gt_orientation = gt_roi_orientation_left[left_pos_index]
         left_sample_roi = left_roi[left_keep_index]
+
 
         # -------------------------------right--------------------------------------
         right_n_bbox, _ = gt_right_bev_bbox.shape
@@ -133,6 +142,9 @@ class ProposalTargetCreator(object):
         # The label with value 0 is the background.
         gt_roi_label_right = right_label[right_gt_assignment] + 1
         gt_roi_angles_right = right_angles.reshape(-1, 2)[right_gt_assignment]
+        gt_roi_confidence_right = right_confidence.reshape(-1, 2)[right_gt_assignment]
+        gt_roi_orientation_right = right_orientation.reshape(-1, 2, 2)[right_gt_assignment]
+
 
         # Select foreground RoIs as those with >= pos_iou_thresh IoU.
         right_pos_index = np.where(right_max_iou >= self.pos_iou_thresh)[0]
@@ -159,8 +171,11 @@ class ProposalTargetCreator(object):
         right_gt_label[right_pos_roi_per_this_image:] = 0  # negative labels --> 0
 
         right_gt_angles = gt_roi_angles_right[right_pos_index]
-
+        right_gt_confidence = gt_roi_confidence_right[right_pos_index]
+        right_gt_orientation = gt_roi_orientation_right[right_pos_index]
         right_sample_roi = right_roi[right_keep_index]
+
+
         # ------------------------开始转换坐标-------------------------
         left_roi_3d = generate_3d_bbox(left_sample_roi)
         left_2d_bbox = getprojected_3dbox(left_roi_3d, extrin[0][0], intrin[0][0])
@@ -196,7 +211,7 @@ class ProposalTargetCreator(object):
         right_gt_loc = ((right_gt_roi_loc - np.array(loc_normalize_mean, np.float32)
                        ) / np.array(loc_normalize_std, np.float32))
 
-        return left_2d_bbox, left_sample_roi, left_gt_loc, left_gt_label, left_gt_angles, len(left_pos_index), right_2d_bbox, right_sample_roi, right_gt_loc, right_gt_label, right_gt_angles, len(right_pos_index)
+        return left_2d_bbox, left_sample_roi, left_gt_loc, left_gt_label, left_gt_angles, left_gt_confidence, left_gt_orientation, len(left_pos_index), right_2d_bbox, right_sample_roi, right_gt_loc, right_gt_label, right_gt_angles, right_gt_confidence, right_gt_orientation, len(right_pos_index)
 
 class ProposalTargetCreator_ori(object):
     """Assign ground truth bounding boxes to given RoIs.

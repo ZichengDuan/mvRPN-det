@@ -15,7 +15,7 @@ warnings.filterwarnings("ignore")
 
 class oftFrameDataset(VisionDataset):
     def __init__(self, base,  train=True, transform=ToTensor(), target_transform=ToTensor(),
-                 reID=False, grid_reduce=4, img_reduce=4, train_ratio=0.9):
+                 reID=False, grid_reduce=4, img_reduce=4, train_ratio=0.9, bins = 2, overlap = 0.1):
         super().__init__(base.root, transform=transform, target_transform=target_transform)
 
         self.reID, self.grid_reduce, self.img_reduce = reID, grid_reduce, img_reduce
@@ -27,17 +27,17 @@ class oftFrameDataset(VisionDataset):
         self.extrinsic_matrix = base.extrinsic_matrices
         self.intrinsic_matrix = base.intrinsic_matrices
 
-        if train:
-            frame_range = list(range(0, 1500)) + list(range(1616, 2500))
-        else:
-            frame_range = list(range(1500, 1616)) + list(range(2500, 3021))
-
-
-
         # if train:
-        #     frame_range = range(0, 20)
+        #     frame_range = list(range(0, 1500)) + list(range(1616, 2500))
         # else:
-        #     frame_range = range(20, 100)
+        #     frame_range = list(range(1500, 1616)) + list(range(2500, 3021))
+
+
+
+        if train:
+            frame_range = range(0, 20)
+        else:
+            frame_range = range(20, 100)
 
         self.upsample_shape = list(map(lambda x: int(x / self.img_reduce), self.img_shape))
         img_reduce_local = np.array(self.img_shape) / np.array(self.upsample_shape)
@@ -59,10 +59,33 @@ class oftFrameDataset(VisionDataset):
         self.right_angle = {}
         self.world_xy = {}
         self.bev_angle = {}
+        self.left_cls = {}
+        self.right_cls = {}
+        self.left_orientation = {}
+        self.left_confidence = {}
+        self.right_orientation = {}
+        self.right_confidence = {}
+
+
+        self.bins = bins
+        self.angle_bins = np.zeros(bins)
+        self.interval = 2 * np.pi / bins
+        for i in range(1, bins):
+            self.angle_bins[i] = i * self.interval
+        self.angle_bins += self.interval / 2  # center of the bin
+
+        self.overlap = overlap
+        # ranges for confidence
+        # [(min angle in bin, max angle in bin), ... ]
+        self.bin_ranges = []
+        for i in range(0, bins):
+            self.bin_ranges.append(((i * self.interval - overlap) % (2 * np.pi), \
+                                    (i * self.interval + self.interval + overlap) % (2 * np.pi)))
 
         self.img_fpaths = self.base.get_image_fpaths(frame_range)
         self.gt_fpath = os.path.join(self.root, 'gt.txt')
         self.prepare_gt()
+        self.prepare_bins(frame_range)
         self.prepare_bbox(frame_range)
         self.prepare_dir(frame_range)
 
@@ -128,6 +151,69 @@ class oftFrameDataset(VisionDataset):
                 self.left_bboxes[frame] = frame_left_box
                 self.right_bboxes[frame] = frame_right_box
 
+    def prepare_bins(self, frame_range):
+        for fname in sorted(os.listdir(os.path.join(self.root, 'annotations'))):
+            frame_left_orientation = []
+            frame_left_confidence = []
+            frame_right_orientation = []
+            frame_right_confidence = []
+            frame = int(fname.split('.')[0])
+            if frame in frame_range:
+                with open(os.path.join(self.root, 'annotations', fname)) as json_file:
+                    cars = [json.load(json_file)][0]
+                for i, car in enumerate(cars):
+                    bev_angle = float(car["angle"])
+
+                    wx = int(car["wx"]) // 10
+                    wy = int(car["wy"]) // 10
+
+                    if bev_angle < 0:
+                        bev_angle += 2 * np.pi
+
+                    # 左角度标签
+                    alpha = np.arctan((Const.grid_height - wy) / wx)
+                    left_ang_target = bev_angle - alpha if bev_angle - alpha > 0 else 2 * np.pi + (
+                                bev_angle - alpha)
+
+                    left_bin_idxs = self.get_bin(left_ang_target)
+
+                    left_orientation = np.zeros((self.bins, 2))
+                    left_confidence = np.zeros(self.bins)
+
+                    for bin_idx in left_bin_idxs:
+                        angle_diff = left_ang_target - self.angle_bins[bin_idx]
+
+                        left_orientation[bin_idx, :] = np.array([np.cos(angle_diff), np.sin(angle_diff)])
+                        left_confidence[bin_idx] = 1
+
+                    # 右角度标签, 颠倒一下正方向=================================================
+                    bev_angle -= np.pi
+                    if bev_angle < 0:
+                        bev_angle += 2 * np.pi
+
+                    alpha = np.arctan(wy / (Const.grid_width - wx))
+                    right_ang_target = bev_angle - alpha if bev_angle - alpha > 0 else 2 * np.pi + (bev_angle - alpha)
+                    right_bin_idxs = self.get_bin(right_ang_target)
+
+                    right_orientation = np.zeros((self.bins, 2))
+                    right_confidence = np.zeros(self.bins)
+
+                    for bin_idx in right_bin_idxs:
+                        angle_diff = right_ang_target - self.angle_bins[bin_idx]
+
+                        right_orientation[bin_idx, :] = np.array([np.cos(angle_diff), np.sin(angle_diff)])
+                        right_confidence[bin_idx] = 1
+
+                    frame_left_confidence.append(left_confidence)
+                    frame_right_confidence.append(right_confidence)
+
+                    frame_left_orientation.append(left_orientation)
+                    frame_right_orientation.append(right_orientation)
+
+                self.left_orientation[frame] = frame_left_orientation
+                self.left_confidence[frame] = frame_left_confidence
+                self.right_orientation[frame] = frame_right_orientation
+                self.right_confidence[frame] = frame_right_confidence
 
     def prepare_dir(self, frame_range):
         for fname in sorted(os.listdir(os.path.join(self.root, 'annotations'))):
@@ -137,6 +223,8 @@ class oftFrameDataset(VisionDataset):
             frame_right_ang = []
             frame_wxy = []
             frame_bev_angle = []
+            frame_left_cls = []
+            frame_right_cls = []
             frame = int(fname.split('.')[0])
             if frame in frame_range:
                 with open(os.path.join(self.root, 'annotations', fname)) as json_file:
@@ -144,6 +232,7 @@ class oftFrameDataset(VisionDataset):
                 for i, car in enumerate(cars):
                     wx = int(car["wx"]) // 10
                     wy = int(car["wy"]) // 10
+
                     # left_dir = int(car["direc_left"])
                     # right_dir = int(car["direc_right"])
                     left_dir = 0
@@ -164,32 +253,56 @@ class oftFrameDataset(VisionDataset):
                         bev_angle += 2 * np.pi
                     # 左角度标签
                     alpha = np.arctan((Const.grid_height - wy) / wx)
-                    left_target = bev_angle - alpha if bev_angle - alpha > 0 else 2 * np.pi + (bev_angle - alpha)
+                    left_ang_target = bev_angle - alpha if bev_angle - alpha > 0 else 2 * np.pi + (bev_angle - alpha)
                     # if frame in range(500, 600) and i == 2:
                         # print(wx, wy)
                         # print(np.rad2deg(bev_angle))
                         # print(np.rad2deg(alpha))
                         # print(np.rad2deg(left_target))
                         # print(np.arctan(np.sin(left_target) / np.cos(left_target)))
-                    frame_left_ang.append([np.sin(left_target), np.cos(left_target)]) # 方案1, 回归sin cos
+
+                    left_ang_target -= ((left_ang_target // (np.pi / 4)) * (np.pi / 4))
+                    left_cls_target = left_ang_target // (np.pi / 4)
+                    frame_left_ang.append([np.sin(left_ang_target), np.cos(left_ang_target)]) # 方案1, 回归sin cos
+                    frame_left_cls.append(left_cls_target)
 
                     frame_bev_angle.append(bev_angle)
 
-
                     # 右角度标签, 颠倒一下正方向
                     bev_angle -= np.pi
+
                     if bev_angle < 0:
                         bev_angle += 2 * np.pi
                     alpha = np.arctan(wy / (Const.grid_width - wx))
-                    right_target = bev_angle - alpha if bev_angle - alpha > 0 else 2 * np.pi + (bev_angle - alpha)
-                    frame_right_ang.append([np.sin(right_target), np.cos(right_target)]) # 方案1, 回归sin cos
+                    right_ang_target = bev_angle - alpha if bev_angle - alpha > 0 else 2 * np.pi + (bev_angle - alpha)
+                    right_ang_target -= ((right_ang_target // (np.pi / 4)) * (np.pi / 4))
+                    right_cls_target = right_ang_target // (np.pi / 4)
+                    frame_right_ang.append([np.sin(right_ang_target), np.cos(right_ang_target)]) # 方案1, 回归sin cos
+                    frame_right_cls.append(right_cls_target)
 
                 self.world_xy[frame] = frame_wxy
                 self.left_dir[frame] = frame_left_dir
                 self.right_dir[frame] = frame_right_dir
                 self.bev_angle[frame] = frame_bev_angle
                 self.left_angle[frame] = frame_left_ang
+                self.left_cls[frame] = frame_left_cls
                 self.right_angle[frame] = frame_right_ang
+                self.right_cls[frame] = frame_right_cls
+
+    def get_bin(self, angle):
+
+        bin_idxs = []
+
+        def is_between(min, max, angle):
+            max = (max - min) if (max - min) > 0 else (max - min) + 2*np.pi
+            angle = (angle - min) if (angle - min) > 0 else (angle - min) + 2*np.pi
+            return angle < max
+
+        for bin_idx, bin_range in enumerate(self.bin_ranges):
+            if is_between(bin_range[0], bin_range[1], angle):
+                bin_idxs.append(bin_idx)
+
+        return bin_idxs
 
     def __getitem__(self, index):
         frame = list(self.bev_bboxes.keys())[index]
@@ -210,11 +323,21 @@ class oftFrameDataset(VisionDataset):
         right_angles = torch.tensor(self.right_angle[frame])
         bev_xy =torch.tensor(self.world_xy[frame])
         bev_angle = torch.tensor(self.bev_angle[frame])
+        left_cls = torch.tensor(self.left_cls[frame])
+        right_cls = torch.tensor(self.right_cls[frame])
+        left_orientation = torch.tensor(self.left_orientation[frame])
+        left_confidence = torch.tensor(self.left_confidence[frame])
+        right_orientation = torch.tensor(self.right_orientation[frame])
+        right_confidence = torch.tensor(self.right_confidence[frame])
+
+        # print(left_orientation.shape, left_confidence.shape)
+        # left_orientation shape: torch.Size([3, 2, 2]) 3辆车，两个bin，sin cos
+        # left_confidence shape: torch.Size([3, 2]) 3两车，两个bin的confidence
 
         return imgs, bev_xy, bev_angle, bev_bboxes, \
                left_bboxes, right_bboxes,\
                left_dirs, right_dirs, \
-               left_angles, right_angles, \
+               left_angles, right_angles, left_cls, right_cls, left_orientation, left_confidence, right_orientation, right_confidence, \
                frame, \
                self.extrinsic_matrix, self.intrinsic_matrix
 

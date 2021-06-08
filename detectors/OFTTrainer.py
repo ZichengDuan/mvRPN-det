@@ -22,9 +22,25 @@ warnings.filterwarnings("ignore")
 import time
 import cv2
 
+def OrientationLoss(orient_batch, orientGT_batch, confGT_batch):
+    orient_batch = orient_batch.reshape(-1, 2, 2)
+    batch_size = orient_batch.size()[0]
+    indexes = torch.max(confGT_batch, dim=1)[1]
+
+    # extract just the important bin
+    orientGT_batch = orientGT_batch[torch.arange(batch_size), indexes]
+    orient_batch = orient_batch[torch.arange(batch_size), indexes]
+
+    theta_diff = torch.atan2(orientGT_batch[:,1], orientGT_batch[:,0]) # 每个bin的中心线和实际角度的sin cos
+    estimated_theta_diff = torch.atan2(orient_batch[:,1], orient_batch[:,0])
+
+    return -1 * torch.cos(theta_diff - estimated_theta_diff).mean()
+
+
 class BaseTrainer(object):
     def __init__(self):
         super(BaseTrainer, self).__init__()
+
 
 class OFTtrainer(BaseTrainer):
     def __init__(self, model, roi_head, denormalize):
@@ -34,6 +50,7 @@ class OFTtrainer(BaseTrainer):
         self.denormalize = denormalize
         self.MSELoss = nn.MSELoss()
         self.L1Loss = nn.SmoothL1Loss()
+        self.OriLoss = OrientationLoss
         self.anchor_target_creator = AnchorTargetCreator()
         self.proposal_target_creator = ProposalTargetCreator()
         self.proposal_target_creator_ori = ProposalTargetCreator_ori()
@@ -43,7 +60,6 @@ class OFTtrainer(BaseTrainer):
 
     def train(self, epoch, data_loader, optimizer, writer):
         self.model.train()
-
         # -----------------init local params----------------------
         Loss = 0
         RPN_CLS_LOSS = 0
@@ -51,13 +67,15 @@ class OFTtrainer(BaseTrainer):
         LEFT_ROI_LOC_LOSS = 0
         LEFT_ROI_CLS_LOSS = 0
         LEFT_ANGLE_REG_LOSS = 0
+        LEFT_ANGLE_CLS_LOSS = 0
         RIGHT_ROI_LOC_LOSS = 0
         RIGHT_ROI_CLS_LOSS = 0
         RIGHT_ANGLE_REG_LOSS = 0
+        RIGHT_ANGLE_CLS_LOSS = 0
 
         for batch_idx, data in enumerate(data_loader):
             optimizer.zero_grad()
-            imgs, bev_xy,bev_angle, gt_bbox, gt_left_bbox, gt_right_bbox, left_dirs, right_dirs, left_sincos, right_sincos, frame, extrin, intrin = data
+            imgs, bev_xy,bev_angle, gt_bbox, gt_left_bbox, gt_right_bbox, left_dirs, right_dirs, left_sincos, right_sincos, left_cls, right_cls, left_orientation, left_confidence, right_orientation, right_confidence, frame, extrin, intrin = data
             img_size = (Const.grid_height, Const.grid_width)
             rpn_locs, rpn_scores, anchor, rois, roi_indices, img_featuremaps, bev_featuremaps = self.model(imgs, gt_bbox)
 
@@ -81,7 +99,6 @@ class OFTtrainer(BaseTrainer):
                 #cv2.arrowedLine(bev_img, (x, y), (nrx, Const.grid_height - nry), color=(255, 255, 0))
                 #cv2.line(bev_img, (Const.grid_width - 1, 0), (x, y), color = (155, 25, 0))
             #cv2.imwrite("/home/dzc/Desktop/CASIA/proj/mvRPN-det/images/angle.jpg", bev_img)
-
 
             rpn_loc = rpn_locs[0]
             rpn_score = rpn_scores[0]
@@ -110,23 +127,28 @@ class OFTtrainer(BaseTrainer):
 
             # ----------------ROI------------------------------
             # 还需要在双视角下的回归gt，以及筛选过后的分类gt，gt_left_loc, gt_left_label, gt_right_loc, gt_right_label
-            left_2d_bbox, left_sample_roi, left_gt_loc, left_gt_label, left_gt_sincos, left_pos_num, right_2d_bbox,right_sample_roi, right_gt_loc, right_gt_label, right_gt_sincos, right_pos_num = self.proposal_target_creator(
+            left_2d_bbox, left_sample_roi, left_gt_loc, left_gt_label, left_gt_sincos, left_gt_confidence, left_gt_orientation, left_pos_num, right_2d_bbox,right_sample_roi, right_gt_loc, right_gt_label, right_gt_sincos, right_gt_confidence, right_gt_orientation, right_pos_num = self.proposal_target_creator(
                 roi,
                 at.tonumpy(gt_bbox),
                 at.tonumpy(left_dir),
                 at.tonumpy(right_dir),
                 at.tonumpy(left_sincos),
                 at.tonumpy(right_sincos),
+                at.tonumpy(left_confidence),
+                at.tonumpy(right_confidence),
+                at.tonumpy(left_orientation),
+                at.tonumpy(right_orientation),
                 gt_left_bbox,
                 gt_right_bbox,
                 extrin, intrin, frame,
                 self.loc_normalize_mean,
                 self.loc_normalize_std)
+
             left_sample_roi_index = torch.zeros(len(left_sample_roi))
             right_sample_roi_index = torch.zeros(len(right_sample_roi))
 
             # ---------------------------left_roi_pooling---------------------------------
-            left_roi_cls_loc, left_roi_score, left_pred_sincos = self.roi_head(
+            left_roi_cls_loc, left_roi_score, left_pred_sincos, left_pred_cls = self.roi_head(
                 img_featuremaps[0],
                 torch.tensor(left_2d_bbox).to(img_featuremaps[0].device),
                 left_sample_roi_index)
@@ -135,17 +157,30 @@ class OFTtrainer(BaseTrainer):
             left_roi_loc = left_roi_cls_loc[torch.arange(0, left_n_sample).long().cuda(), at.totensor(left_gt_label).long()]
             left_gt_label = at.totensor(left_gt_label).long()
             left_gt_loc = at.totensor(left_gt_loc)
-            # print(left_roi_loc.shape, left_gt_loc.shape)
+
+            # ==== left roi loc loss
             left_roi_loc_loss = _fast_rcnn_loc_loss(
                 left_roi_loc.contiguous(),
                 left_gt_loc,
                 left_gt_label.data,
                 1)
+
+            # ==== left roi cls loss
             left_roi_cls_loss = nn.CrossEntropyLoss()(left_roi_score, left_gt_label.to(left_roi_score.device))
             left_pred_sincos = left_pred_sincos[:left_pos_num]
-            left_sincos_loss = self.MSELoss(left_pred_sincos.float(), torch.tensor(left_gt_sincos).to(left_pred_sincos.device).float())
+            left_gt_confidence = torch.tensor(left_gt_confidence).to(left_pred_sincos.device).long()
+            left_gt_orientation = torch.tensor(left_gt_orientation).to(left_pred_sincos.device)
+
+            # ==== left angle regression loss
+            left_ang_loss = OrientationLoss(left_pred_sincos, left_gt_orientation, left_gt_confidence)
+
+            # ==== left angle confidence loss
+            left_pred_cls = left_pred_cls[:left_pos_num]
+            print(left_pred_cls.shape, left_gt_confidence.shape)
+            left_gt_confidence = torch.max(left_gt_confidence, dim=1)[1]
+            left_cls_loss = nn.CrossEntropyLoss()(left_pred_cls, left_gt_confidence.to(left_pred_cls.device))
             # ---------------------------right_roi_pooling---------------------------------
-            right_roi_cls_loc, right_roi_score, right_pred_sincos = self.roi_head(
+            right_roi_cls_loc, right_roi_score, right_pred_sincos, right_pred_cls = self.roi_head(
                 img_featuremaps[1],
                 torch.tensor(right_2d_bbox).to(img_featuremaps[1].device),
                 right_sample_roi_index)
@@ -156,17 +191,27 @@ class OFTtrainer(BaseTrainer):
                 torch.arange(0, right_n_sample).long().cuda(), at.totensor(right_gt_label).long()]
             right_gt_label = at.totensor(right_gt_label).long()
             right_gt_loc = at.totensor(right_gt_loc)
-            # print(left_roi_loc.shape, left_gt_loc.shape)
+
+            #==== right roi loc loss
             right_roi_loc_loss = _fast_rcnn_loc_loss(
                 right_roi_loc.contiguous(),
                 right_gt_loc,
                 right_gt_label.data,
                 1)
 
+            #==== right roi cls loss
             right_roi_cls_loss = nn.CrossEntropyLoss()(right_roi_score, right_gt_label.to(right_roi_score.device))
             right_pred_sincos = right_pred_sincos[:right_pos_num]
-            right_sincos_loss = self.MSELoss(right_pred_sincos.float(), torch.tensor(right_gt_sincos).to(right_pred_sincos.device).float())
+            right_gt_confidence = torch.tensor(right_gt_confidence).to(right_pred_sincos.device).long()
+            right_gt_orientation = torch.tensor(right_gt_orientation).to(right_pred_sincos.device)
 
+            #==== right angle regression loss
+            right_ang_loss = OrientationLoss(right_pred_sincos, right_gt_orientation, right_gt_confidence)
+
+            #==== right angle confidence loss
+            right_pred_cls = right_pred_cls[:right_pos_num]
+            right_gt_confidence = torch.max(right_gt_confidence, dim=1)[1]
+            right_cls_loss = nn.CrossEntropyLoss()(right_pred_cls, right_gt_confidence.to(right_pred_cls.device))
             # --------------------测试roi pooling------------------------
             # sample_roi, gt_roi_loc, gt_roi_label = self.proposal_target_creator_ori(
             #     roi,
@@ -217,16 +262,18 @@ class OFTtrainer(BaseTrainer):
             #     for name, param in self.model.rpn.named_parameters():
             #         param.requires_grad = False
 
-            loss = rpn_loc_loss * 1.5 + rpn_cls_loss * 1.5 + left_roi_loc_loss + left_roi_cls_loss + left_sincos_loss / 2 + right_roi_loc_loss + right_roi_cls_loss + right_sincos_loss / 2
+            loss = rpn_loc_loss + rpn_cls_loss + left_roi_loc_loss + left_roi_cls_loss + left_ang_loss + left_cls_loss + left_roi_loc_loss + left_roi_cls_loss + left_ang_loss + left_cls_loss
             Loss += loss
             RPN_CLS_LOSS += rpn_cls_loss
             RPN_LOC_LOSS += rpn_loc_loss
             LEFT_ROI_LOC_LOSS += left_roi_loc_loss
             LEFT_ROI_CLS_LOSS += left_roi_cls_loss
-            LEFT_ANGLE_REG_LOSS += left_sincos_loss / 2
+            LEFT_ANGLE_REG_LOSS += left_ang_loss
+            LEFT_ANGLE_CLS_LOSS += left_cls_loss
             RIGHT_ROI_LOC_LOSS += right_roi_loc_loss
             RIGHT_ROI_CLS_LOSS += right_roi_cls_loss
-            RIGHT_ANGLE_REG_LOSS += right_sincos_loss / 2
+            RIGHT_ANGLE_REG_LOSS += right_ang_loss
+            RIGHT_ANGLE_CLS_LOSS += right_cls_loss
 
             # ------------------------------------------------------------
             loss.backward()
@@ -238,10 +285,12 @@ class OFTtrainer(BaseTrainer):
             writer.add_scalar("rpn_cls_loss", RPN_CLS_LOSS / (batch_idx + 1), niter)
             writer.add_scalar("LEFT ROI_Loc LOSS", LEFT_ROI_LOC_LOSS / (batch_idx + 1), niter)
             writer.add_scalar("LEFT ROI_Cls LOSS", LEFT_ROI_CLS_LOSS / (batch_idx + 1), niter)
-            writer.add_scalar("LEFT_ANGLE_REG_LOSS", RIGHT_ROI_CLS_LOSS / (batch_idx + 1), niter)
+            writer.add_scalar("LEFT_ANGLE_REG_LOSS", LEFT_ANGLE_REG_LOSS / (batch_idx + 1), niter)
+            writer.add_scalar("LEFT_ANGLE_CLS_LOSS", LEFT_ANGLE_CLS_LOSS / (batch_idx + 1), niter)
             writer.add_scalar("RIGHT ROI_Loc LOSS", RIGHT_ROI_LOC_LOSS / (batch_idx + 1), niter)
             writer.add_scalar("RIGHT ROI_Cls LOSS", RIGHT_ROI_CLS_LOSS / (batch_idx + 1), niter)
-            writer.add_scalar("RIGHT_ANGLE_REG_LOSS", RIGHT_ROI_CLS_LOSS / (batch_idx + 1), niter)
+            writer.add_scalar("RIGHT_ANGLE_REG_LOSS", RIGHT_ANGLE_REG_LOSS / (batch_idx + 1), niter)
+            writer.add_scalar("RIGHT_ANGLE_CLS_LOSS", RIGHT_ANGLE_CLS_LOSS / (batch_idx + 1), niter)
 
             if batch_idx % 10 == 0:
                 print("Iteration: %d\n" % batch_idx,
@@ -323,7 +372,7 @@ class OFTtrainer(BaseTrainer):
 
 
         for batch_idx, data in enumerate(data_loader):
-            imgs, gt_bev_xy,bev_angle, gt_bbox, gt_left_bbox, gt_right_bbox, gt_left_dirs, gt_right_dirs, gt_left_sincos, gt_right_sincos, frame, extrin, intrin = data
+            imgs, gt_bev_xy,bev_angle, gt_bbox, gt_left_bbox, gt_right_bbox, gt_left_dirs, gt_right_dirs, gt_left_sincos, gt_right_sincos, left_cls, right_cls, frame, extrin, intrin = data
             total_start = time.time()
             rpn_start = time.time()
 
@@ -391,12 +440,12 @@ class OFTtrainer(BaseTrainer):
 
             roi_start = time.time()
             #------------左右ROI pooling-----------
-            left_roi_cls_loc, left_roi_score, left_pred_sincos = self.roi_head(
+            left_roi_cls_loc, left_roi_score, left_pred_sincos, left_pred_cls = self.roi_head(
                 img_featuremaps[0],
                 left_2d_bbox.to(img_featuremaps[0].device),
                 left_rois_indices)
 
-            right_roi_cls_loc, right_roi_score, right_pred_sincos = self.roi_head(
+            right_roi_cls_loc, right_roi_score, right_pred_sincos, right_pred_cls = self.roi_head(
                 img_featuremaps[1],
                 right_2d_bbox.to(img_featuremaps[1].device),
                 right_rois_indices)
@@ -409,10 +458,16 @@ class OFTtrainer(BaseTrainer):
             right_prob = at.tonumpy(F.softmax(at.totensor(right_roi_score), dim=1))
             right_front_prob = right_prob[:, 1]
 
+            left_angcls = at.tonumpy(F.softmax(at.totensor(left_pred_cls), dim=1))
+            left_pred_cls = left_angcls.max(axis = 1, keepdims = True)
+            right_angcls = at.tonumpy(F.softmax(at.totensor(right_pred_cls), dim=1))
+            right_pred_cls = right_angcls.max(axis = 1, keepdims = True)
+
             position_mark = np.concatenate((np.zeros((left_front_prob.shape[0], )), np.ones((right_front_prob.shape[0]))))
             all_front_prob = np.concatenate((left_front_prob, right_front_prob))
             all_roi_remain = np.concatenate((roi[left_index_inside], roi[right_index_inside]))
             all_pred_sincos = np.concatenate((at.tonumpy(left_pred_sincos), at.tonumpy(right_pred_sincos)))
+            all_pred_angcls = np.concatenate(at.tonumpy(left_pred_cls), at.tonumpy(right_pred_cls))
             # all_bev_boxes, _, all_sincos_remain, position_mark_keep = nms_new(all_roi_remain, all_front_prob, all_pred_sincos, position_mark)
             # s = time.time()
             v, indices = torch.tensor(all_front_prob).sort(0)
@@ -421,6 +476,7 @@ class OFTtrainer(BaseTrainer):
             all_pred_sincos = all_pred_sincos[indices_remain].reshape(len(indices_remain), 2)
             all_front_prob = all_front_prob[indices_remain].reshape(len(indices_remain),)
             position_mark = position_mark[indices_remain].reshape(len(indices_remain), 1)
+            all_pred_angcls = all_pred_angcls[indices_remain].reshape(len(indices_remain),)
 
             all_bev_boxes = []
             if indices_remain.shape[0] != 0:
@@ -431,10 +487,11 @@ class OFTtrainer(BaseTrainer):
                     keep = [0]
                 else:
                     keep = box_ops.nms(torch.tensor(all_roi_remain), torch.tensor(all_front_prob), 0)
-                all_bev_boxes, all_sincos_remain, position_mark_keep, front_prob_keep = all_roi_remain[keep].reshape(len(keep), 4), \
-                                                                       all_pred_sincos[keep].reshape(len(keep), 2), \
-                                                                       position_mark[keep].reshape(len(keep)), \
-                                                                                        all_front_prob[keep].reshape(len(keep))
+                all_bev_boxes, all_sincos_remain, position_mark_keep, front_prob_keep, pred_angcls_keep = all_roi_remain[keep].reshape(len(keep), 4), \
+                                                                                        all_pred_sincos[keep].reshape(len(keep), 2), \
+                                                                                        position_mark[keep].reshape(len(keep)), \
+                                                                                        all_front_prob[keep].reshape(len(keep)), \
+                                                                                        all_pred_angcls[keep].reshape(len(keep))
 
             # all_bev_boxes, all_sincos_remain, position_mark_keep = all_roi_remain2[keep].reshape(len(keep), 4), all_pred_sincos2[keep].reshape(len(keep), 2), position_mark2[keep].reshape(len(keep))
             nms_end = time.time()
@@ -470,7 +527,7 @@ class OFTtrainer(BaseTrainer):
                         elif all_sincos_remain[idx][0] < 0 and \
                                 all_sincos_remain[idx][1] > 0:
                             angle += 2 * np.pi
-                        theta_l = angle
+                        theta_l = angle + (pred_angcls_keep * (np.pi / 4))
                         theta = theta_l + ray
                         # if idx < 1900:
                         # if frame == 1796:
@@ -500,11 +557,9 @@ class OFTtrainer(BaseTrainer):
                         elif all_sincos_remain[idx][0] < 0 and all_sincos_remain[idx][1] > 0:
                             angle += 2 * np.pi
 
-                        theta_l = angle
+                        theta_l = angle + (pred_angcls_keep * (np.pi / 4))
                         theta = theta_l + ray
 
-                        # if idx < 1900:
-                        #     print("dzc2", theta)
                         x1_rot = center_x - 30
                         y1_rot = Const.grid_height - center_y
 
@@ -517,8 +572,6 @@ class OFTtrainer(BaseTrainer):
                 visualize_3dbox(all_bev_boxes, all_sincos_remain, position_mark_keep, front_prob_keep, extrin, intrin, frame)
             cv2.imwrite("%s/%d.jpg" % (Const.imgsavedir, frame), bev_img)
 
-
-
         print("Avg total infer time: %4f" % (total_time / batch_idx))
         print("Avg rpn infer time: %4f" % (rpn_time / batch_idx))
         print("Avg trans infer time: %4f" % (trans_time / batch_idx))
@@ -527,8 +580,6 @@ class OFTtrainer(BaseTrainer):
         print("Avg get outter infer time: %4f" % (getoutter_time / batch_idx))
         print("Avg roi infer time: %4f" % (roi_time / batch_idx))
         print("Avg nms infer time: %4f" % (nms_time / batch_idx))
-
-
 
     @property
     def n_class(self):
