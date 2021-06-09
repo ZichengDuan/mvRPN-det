@@ -80,9 +80,9 @@ def main(args):
             torch.save(model.state_dict(), os.path.join('%s/mvdet_%d.pth' % (Const.modelsavedir, epoch)))
             torch.save(roi_head.state_dict(), os.path.join('%s/roi_head_%d.pth' % (Const.modelsavedir, epoch)))
         else:
-            model.load_state_dict(torch.load("%s/mvdet_%d.pth" % (Const.modelsavedir, 1)))
-            roi_head.load_state_dict(torch.load("%s/roi_head_%d.pth" % (Const.modelsavedir, 1)))
-            trainer.test(epoch, test_loader, writer)
+            model.load_state_dict(torch.load("%s/mvdet_%d.pth" % (Const.modelsavedir, 6)))
+            roi_head.load_state_dict(torch.load("%s/roi_head_%d.pth" % (Const.modelsavedir, 6)))
+            trainer.test(epoch, test_loader, test_set, writer)
             break
     writer.close()
 
@@ -103,7 +103,7 @@ if __name__ == '__main__':
     parser.add_argument('--momentum', type=float, default=0.5, metavar='M', help='SGD momentum (default: 0.5)')
     parser.add_argument('--seed', type=int, default=18, help='random seed (default: None)')
 
-    parser.add_argument('--resume', type=bool, default = False)
+    parser.add_argument('--resume', type=bool, default = True)
     args = parser.parse_args()
 
     main(args)

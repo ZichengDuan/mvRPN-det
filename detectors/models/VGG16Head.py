@@ -2,6 +2,7 @@ from roi_module import RoIPooling2D
 from ..utils import array_tool as at
 import torch.nn as nn
 import torch
+import torch.nn.functional as F
 
 class VGG16RoIHead(nn.Module):
     """Faster R-CNN Head for VGG-16 based implementation.
@@ -90,9 +91,13 @@ class VGG16RoIHead(nn.Module):
         fc7 = self.classifier(pool)
         roi_cls_locs = self.cls_loc(fc7)
         roi_scores = self.score(fc7)
-        sin_cos = self.ang_regressor(fc7)
+        orientation = self.ang_regressor(fc7)
         ang_cls = self.ang_classifier(fc7)
-        return roi_cls_locs, roi_scores, sin_cos, ang_cls
+
+        orientation = orientation.view(-1, 2, 2)
+        orientation = F.normalize(orientation, dim=2)
+
+        return roi_cls_locs, roi_scores, orientation, ang_cls
 
 
 def normal_init(m, mean, stddev, truncated=False):

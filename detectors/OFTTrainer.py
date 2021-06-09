@@ -363,7 +363,7 @@ class OFTtrainer(BaseTrainer):
 
             # ----------------生成3D外接框，并投影回原图，先拿左图为例子------------------
 
-    def test(self,epoch, data_loader, writer):
+    def test(self,epoch, data_loader, dataset, writer):
         self.model.eval()
         rpn_time = 0
         trans_time = 0
@@ -376,7 +376,7 @@ class OFTtrainer(BaseTrainer):
 
 
         for batch_idx, data in enumerate(data_loader):
-            imgs, gt_bev_xy,bev_angle, gt_bbox, gt_left_bbox, gt_right_bbox, gt_left_dirs, gt_right_dirs, gt_left_sincos, gt_right_sincos, left_cls, right_cls, frame, extrin, intrin = data
+            imgs, bev_xy, bev_angle, gt_bbox, gt_left_bbox, gt_right_bbox, left_dirs, right_dirs, left_sincos, right_sincos, left_cls, right_cls, left_orientation, left_confidence, right_orientation, right_confidence, frame, extrin, intrin = data
             total_start = time.time()
             rpn_start = time.time()
 
@@ -444,12 +444,12 @@ class OFTtrainer(BaseTrainer):
 
             roi_start = time.time()
             #------------左右ROI pooling-----------
-            left_roi_cls_loc, left_roi_score, left_pred_sincos, left_pred_cls = self.roi_head(
+            left_roi_cls_loc, left_roi_score, left_pred_orientation, left_pred_conf = self.roi_head(
                 img_featuremaps[0],
                 left_2d_bbox.to(img_featuremaps[0].device),
                 left_rois_indices)
 
-            right_roi_cls_loc, right_roi_score, right_pred_sincos, right_pred_cls = self.roi_head(
+            right_roi_cls_loc, right_roi_score, right_pred_orientation, right_pred_conf = self.roi_head(
                 img_featuremaps[1],
                 right_2d_bbox.to(img_featuremaps[1].device),
                 right_rois_indices)
@@ -462,41 +462,38 @@ class OFTtrainer(BaseTrainer):
             right_prob = at.tonumpy(F.softmax(at.totensor(right_roi_score), dim=1))
             right_front_prob = right_prob[:, 1]
 
-            left_angcls = at.tonumpy(F.softmax(at.totensor(left_pred_cls), dim=1))
-            left_pred_cls = left_angcls.max(axis = 1, keepdims = True)
-            right_angcls = at.tonumpy(F.softmax(at.totensor(right_pred_cls), dim=1))
-            right_pred_cls = right_angcls.max(axis = 1, keepdims = True)
+            left_conf = at.tonumpy(F.softmax(at.totensor(left_pred_conf), dim=1))
+            left_pred_conf = left_conf.argmax(axis = 1)
+            right_conf = at.tonumpy(F.softmax(at.totensor(right_pred_conf), dim=1))
+            right_pred_conf = right_conf.argmax(axis = 1)
 
             position_mark = np.concatenate((np.zeros((left_front_prob.shape[0], )), np.ones((right_front_prob.shape[0]))))
             all_front_prob = np.concatenate((left_front_prob, right_front_prob))
             all_roi_remain = np.concatenate((roi[left_index_inside], roi[right_index_inside]))
-            all_pred_sincos = np.concatenate((at.tonumpy(left_pred_sincos), at.tonumpy(right_pred_sincos)))
-            all_pred_angcls = np.concatenate(at.tonumpy(left_pred_cls), at.tonumpy(right_pred_cls))
+            all_pred_orientation = np.concatenate((at.tonumpy(left_pred_orientation), at.tonumpy(right_pred_orientation)))
+            all_pred_conf = np.concatenate((at.tonumpy(left_pred_conf), at.tonumpy(right_pred_conf)))
             # all_bev_boxes, _, all_sincos_remain, position_mark_keep = nms_new(all_roi_remain, all_front_prob, all_pred_sincos, position_mark)
-            # s = time.time()
             v, indices = torch.tensor(all_front_prob).sort(0)
             indices_remain = indices[v > 0.7]
             all_roi_remain = all_roi_remain[indices_remain].reshape(len(indices_remain), 4)
-            all_pred_sincos = all_pred_sincos[indices_remain].reshape(len(indices_remain), 2)
+            all_pred_orientation = all_pred_orientation[indices_remain].reshape(len(indices_remain), 2, 2)
             all_front_prob = all_front_prob[indices_remain].reshape(len(indices_remain),)
             position_mark = position_mark[indices_remain].reshape(len(indices_remain), 1)
-            all_pred_angcls = all_pred_angcls[indices_remain].reshape(len(indices_remain),)
-
+            all_pred_conf = all_pred_conf[indices_remain].reshape(len(indices_remain),)
             all_bev_boxes = []
             if indices_remain.shape[0] != 0:
-            #     keep = indices[np.argmax(v)].reshape(-1)
-            #     all_bev_boxes = all_roi_remain[keep]
-            # else:
                 if indices_remain.shape[0] == 1:
                     keep = [0]
                 else:
                     keep = box_ops.nms(torch.tensor(all_roi_remain), torch.tensor(all_front_prob), 0)
-                all_bev_boxes, all_sincos_remain, position_mark_keep, front_prob_keep, pred_angcls_keep = all_roi_remain[keep].reshape(len(keep), 4), \
-                                                                                        all_pred_sincos[keep].reshape(len(keep), 2), \
+                all_bev_boxes, all_orientation_keep, position_mark_keep, front_prob_keep, pred_conf_keep = all_roi_remain[keep].reshape(len(keep), 4), \
+                                                                                        all_pred_orientation[keep].reshape(len(keep), 2, 2), \
                                                                                         position_mark[keep].reshape(len(keep)), \
                                                                                         all_front_prob[keep].reshape(len(keep)), \
-                                                                                        all_pred_angcls[keep].reshape(len(keep))
-
+                                                                                        all_pred_conf[keep].reshape(len(keep))
+                # print(all_orientation_keep, pred_conf_keep)
+                selected_bin_angrange = np.array(dataset.angle_bins)[all_pred_conf]
+                # print(selected_bin_angrange)
             # all_bev_boxes, all_sincos_remain, position_mark_keep = all_roi_remain2[keep].reshape(len(keep), 4), all_pred_sincos2[keep].reshape(len(keep), 2), position_mark2[keep].reshape(len(keep))
             nms_end = time.time()
             total_end = time.time()
@@ -513,30 +510,26 @@ class OFTtrainer(BaseTrainer):
             bev_img = cv2.imread("/home/dzc/Data/4carreal0511_blend/bevimgs/%d.jpg" % frame)
 
             if len(all_bev_boxes) != 0:
-                # print(front_prob_keep, all_bev_boxes)
                 for idx, bbxx in enumerate(all_bev_boxes):
-                    # print(position_mark_keep)
+                    # print(position_mark_keep[idx])
                     if position_mark_keep[idx] == 0:
                         cv2.rectangle(bev_img, (int(bbxx[1]), int(bbxx[0])), (int(bbxx[3]), int(bbxx[2])), color=(255, 0, 0),
                                       thickness=2)
                         center_x, center_y = int((bbxx[1] + bbxx[3]) // 2), int((bbxx[0] + bbxx[2]) // 2)
                         ray = np.arctan((Const.grid_height - center_y) / center_x)
-                        angle = np.arctan(all_sincos_remain[idx][0] / all_sincos_remain[idx][1])
-                        if all_sincos_remain[idx][0] > 0 and \
-                                all_sincos_remain[idx][1] < 0:
+                        angle = np.arctan(all_orientation_keep[idx][pred_conf_keep[idx]][1] / all_orientation_keep[idx][pred_conf_keep[idx]][0])
+                        if all_orientation_keep[idx][pred_conf_keep[idx]][1] > 0 and \
+                                all_orientation_keep[idx][pred_conf_keep[idx]][0] < 0:
                             angle += np.pi
-                        elif all_sincos_remain[idx][0] < 0 and \
-                                all_sincos_remain[idx][1] < 0:
+                        elif all_orientation_keep[idx][pred_conf_keep[idx]][1] < 0 and \
+                                all_orientation_keep[idx][pred_conf_keep[idx]][0] < 0:
                             angle += np.pi
-                        elif all_sincos_remain[idx][0] < 0 and \
-                                all_sincos_remain[idx][1] > 0:
+                        elif all_orientation_keep[idx][pred_conf_keep[idx]][1] < 0 and \
+                                all_orientation_keep[idx][pred_conf_keep[idx]][0] > 0:
                             angle += 2 * np.pi
-                        theta_l = angle + (pred_angcls_keep * (np.pi / 4))
+
+                        theta_l = angle + selected_bin_angrange[idx]
                         theta = theta_l + ray
-                        # if idx < 1900:
-                        # if frame == 1796:
-                        #     print(theta_l, ray)
-                        #     print("dzc1", theta)
                         x_rot = center_x + 40
                         y_rot = Const.grid_height - center_y
 
@@ -552,28 +545,27 @@ class OFTtrainer(BaseTrainer):
                                       thickness=2)
                         center_x, center_y = int((bbxx[1] + bbxx[3]) // 2), int((bbxx[0] + bbxx[2]) // 2)
                         ray = np.arctan(center_y / (Const.grid_width - center_x))
-                        angle = np.arctan(all_sincos_remain[idx][0] /
-                                          all_sincos_remain[idx][1])
-                        if all_sincos_remain[idx][0] > 0 and all_sincos_remain[idx][1] < 0:
+                        angle = np.arctan(all_orientation_keep[idx][pred_conf_keep[idx]][1] / all_orientation_keep[idx][pred_conf_keep[idx]][0])
+                        if all_orientation_keep[idx][pred_conf_keep[idx]][1] > 0 and all_orientation_keep[idx][pred_conf_keep[idx]][0] < 0:
                             angle += np.pi
-                        elif all_sincos_remain[idx][0] < 0 and all_sincos_remain[idx][1] < 0:
+                        elif all_orientation_keep[idx][pred_conf_keep[idx]][1] < 0 and all_orientation_keep[idx][pred_conf_keep[idx]][0] < 0:
                             angle += np.pi
-                        elif all_sincos_remain[idx][0] < 0 and all_sincos_remain[idx][1] > 0:
+                        elif all_orientation_keep[idx][pred_conf_keep[idx]][1] < 0 and all_orientation_keep[idx][pred_conf_keep[idx]][0] > 0:
                             angle += 2 * np.pi
 
-                        theta_l = angle + (pred_angcls_keep * (np.pi / 4))
+                        theta_l = angle + selected_bin_angrange[idx]
                         theta = theta_l + ray
-
-                        x1_rot = center_x - 30
+                        # print(theta)
+                        x1_rot = center_x - 40
                         y1_rot = Const.grid_height - center_y
 
                         nrx = (x1_rot - center_x) * np.cos(theta) - (y1_rot - (Const.grid_height - center_y)) * np.sin(theta) + center_x
                         nry = (x1_rot - center_x) * np.sin(theta) + (y1_rot - (Const.grid_height - center_y)) * np.cos(theta) + (Const.grid_height - center_y)
 
                         cv2.arrowedLine(bev_img, (center_x, center_y), (int(nrx), Const.grid_height - int(nry)), color=(255, 60, 199), thickness=2)
-                        cv2.putText(bev_img, str(front_prob_keep[idx]),(center_x, center_y),
-                                    fontFace=cv2.FONT_HERSHEY_SIMPLEX, fontScale=2, color=(255, 60, 199))
-                visualize_3dbox(all_bev_boxes, all_sincos_remain, position_mark_keep, front_prob_keep, extrin, intrin, frame)
+                        # cv2.putText(bev_img, str(front_prob_keep[idx]),(center_x, center_y),
+                        #             fontFace=cv2.FONT_HERSHEY_SIMPLEX, fontScale=2, color=(255, 60, 199))
+                # visualize_3dbox(all_bev_boxes, all_orientation_keep, position_mark_keep, front_prob_keep, extrin, intrin, frame)
             cv2.imwrite("%s/%d.jpg" % (Const.imgsavedir, frame), bev_img)
 
         print("Avg total infer time: %4f" % (total_time / batch_idx))
@@ -614,30 +606,30 @@ def visualize_3dbox(pred_ori, pred_angle, position_mark, front_prob_keep, extrin
             #     cv2.imwrite("/home/dzc/Desktop/CASIA/proj/mvRPN-det/results/images/dddd.jpg", tmp)
             center_x, center_y = int((bbox[1] + bbox[3]) // 2), int((bbox[0] + bbox[2]) // 2)
             ray = np.arctan((Const.grid_height - center_y) / center_x)
-            angle = np.arctan(sincos[0] / sincos[1])
-            if sincos[0] > 0 and \
-                    sincos[1] < 0:
+            angle = np.arctan(sincos[1] / sincos[0])
+            if sincos[1] > 0 and \
+                    sincos[0] < 0:
                 angle += np.pi
-            elif sincos[0] < 0 and \
-                    sincos[1] < 0:
+            elif sincos[1] < 0 and \
+                    sincos[0] < 0:
                 angle += np.pi
-            elif sincos[0] < 0 and \
-                    sincos[1] > 0:
+            elif sincos[1] < 0 and \
+                    sincos[0] > 0:
                 angle += 2 * np.pi
         else:
             x1_ori, x2_ori, x3_ori, x4_ori, x_mid = xmin, xmin, xmax, xmax, (xmin + xmax) / 2 - 40
             y1_ori, y2_ori, y3_ori, y4_ori, y_mid = Const.grid_height -ymin, Const.grid_height -ymax, Const.grid_height -ymax, Const.grid_height -ymin, (Const.grid_height -ymax + Const.grid_height -ymin) / 2
             center_x, center_y = int((xmin + xmax) // 2), int((ymin + ymax) // 2)
             ray = np.arctan(center_y / (Const.grid_width - center_x))
-            angle = np.arctan(sincos[0] / sincos[1])
-            if sincos[0] > 0 and \
-                    sincos[1] < 0:
+            angle = np.arctan(sincos[1] / sincos[0])
+            if sincos[1] > 0 and \
+                    sincos[0] < 0:
                 angle += np.pi
-            elif sincos[0] < 0 and \
-                    sincos[1] < 0:
+            elif sincos[1] < 0 and \
+                    sincos[0] < 0:
                 angle += np.pi
-            elif sincos[0] < 0 and \
-                    sincos[1] > 0:
+            elif sincos[1] < 0 and \
+                    sincos[0] > 0:
                 angle += 2 * np.pi
 
         theta_l = angle
