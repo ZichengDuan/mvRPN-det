@@ -27,17 +27,17 @@ class oftFrameDataset(VisionDataset):
         self.extrinsic_matrix = base.extrinsic_matrices
         self.intrinsic_matrix = base.intrinsic_matrices
 
-        # if train:
-        #     frame_range = list(range(0, 1500)) + list(range(1616, 2500))
-        # else:
-        #     frame_range = list(range(1500, 1616)) + list(range(2500, 3021))
-
-
-
         if train:
-            frame_range = range(0, 20)
+            frame_range = list(range(0, 1500)) + list(range(1616, 2500))
         else:
-            frame_range = range(20, 100)
+            frame_range = list(range(1500, 1616)) + list(range(2500, 3021))
+
+
+
+        # if train:
+        #     frame_range = range(0, 20)
+        # else:
+        #     frame_range = range(20, 100)
 
         self.upsample_shape = list(map(lambda x: int(x / self.img_reduce), self.img_shape))
         img_reduce_local = np.array(self.img_shape) / np.array(self.upsample_shape)

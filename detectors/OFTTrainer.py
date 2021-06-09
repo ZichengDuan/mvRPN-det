@@ -176,7 +176,7 @@ class OFTtrainer(BaseTrainer):
 
             # ==== left angle confidence loss
             left_pred_cls = left_pred_cls[:left_pos_num]
-            print(left_pred_cls.shape, left_gt_confidence.shape)
+            # print(left_pred_cls.shape, left_gt_confidence.shape)
             left_gt_confidence = torch.max(left_gt_confidence, dim=1)[1]
             left_cls_loss = nn.CrossEntropyLoss()(left_pred_cls, left_gt_confidence.to(left_pred_cls.device))
             # ---------------------------right_roi_pooling---------------------------------
@@ -262,10 +262,12 @@ class OFTtrainer(BaseTrainer):
             #     for name, param in self.model.rpn.named_parameters():
             #         param.requires_grad = False
 
-            loss = rpn_loc_loss + rpn_cls_loss + left_roi_loc_loss + left_roi_cls_loss + left_ang_loss + left_cls_loss + left_roi_loc_loss + left_roi_cls_loss + left_ang_loss + left_cls_loss
+            loss = rpn_loc_loss * 2 + rpn_cls_loss * 2 + \
+                   left_roi_loc_loss + left_roi_cls_loss + left_ang_loss + left_cls_loss + \
+                   right_roi_loc_loss + right_roi_cls_loss + right_ang_loss + right_cls_loss
             Loss += loss
-            RPN_CLS_LOSS += rpn_cls_loss
-            RPN_LOC_LOSS += rpn_loc_loss
+            RPN_CLS_LOSS += rpn_cls_loss * 2
+            RPN_LOC_LOSS += rpn_loc_loss * 2
             LEFT_ROI_LOC_LOSS += left_roi_loc_loss
             LEFT_ROI_CLS_LOSS += left_roi_cls_loss
             LEFT_ANGLE_REG_LOSS += left_ang_loss
@@ -300,9 +302,11 @@ class OFTtrainer(BaseTrainer):
                       "LEFT ROI_Loc: %4f    || " % ((LEFT_ROI_LOC_LOSS.detach().cpu().item()) / (batch_idx + 1)),
                       "LEFT ROI_Cls : %4f   ||" % ((LEFT_ROI_CLS_LOSS.detach().cpu().item()) / (batch_idx + 1)),
                       "Left SinCos : %4f" % ((LEFT_ANGLE_REG_LOSS.detach().cpu().item()) / (batch_idx + 1)),
+                      "Left CLS : %4f" % ((LEFT_ANGLE_CLS_LOSS.detach().cpu().item()) / (batch_idx + 1)),
                       "RIGHT ROI_Loc : %4f  || " % ((RIGHT_ROI_LOC_LOSS.detach().cpu().item()) / (batch_idx + 1)),
                       "RIGHT ROI_Cls : %4f" % ((RIGHT_ROI_CLS_LOSS.detach().cpu().item()) / (batch_idx + 1)),
-                      "RIGHT SinCos : %4f" % ((RIGHT_ANGLE_REG_LOSS.detach().cpu().item()) / (batch_idx + 1)))
+                      "RIGHT SinCos : %4f" % ((RIGHT_ANGLE_REG_LOSS.detach().cpu().item()) / (batch_idx + 1)),
+                      "RIGHT CLS : %4f" % ((RIGHT_ANGLE_CLS_LOSS.detach().cpu().item()) / (batch_idx + 1)))
                 print("----------------------------------------------------------------------------------------------------------------------------------------------------------------------")
             # 给两个图上的框指定gt的loc，目前已经有gt_roi_label_left, gt_roi_label_right,
 

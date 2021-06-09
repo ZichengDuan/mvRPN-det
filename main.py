@@ -76,7 +76,7 @@ def main(args):
             loss = trainer.train(epoch, train_loader, optimizer, writer)
 
             print('Testing...')
-            trainer.test(epoch, test_loader, writer)
+            # trainer.test(epoch, test_loader, writer)
             torch.save(model.state_dict(), os.path.join('%s/mvdet_%d.pth' % (Const.modelsavedir, epoch)))
             torch.save(roi_head.state_dict(), os.path.join('%s/roi_head_%d.pth' % (Const.modelsavedir, epoch)))
         else:
