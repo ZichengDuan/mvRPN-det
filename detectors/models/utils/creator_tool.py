@@ -224,7 +224,7 @@ class ProposalTargetCreator_ori(object):
 
     def __init__(self,
                  n_sample=128,
-                 pos_ratio=0.25, pos_iou_thresh=0.5,
+                 pos_ratio=0.25, pos_iou_thresh=0.6,
                  neg_iou_thresh_hi=0.5, neg_iou_thresh_lo=0.0
                  ):
         self.n_sample = n_sample
@@ -609,7 +609,6 @@ class ProposalCreator:
             n_post_nms = self.n_test_post_nms
 
         # Convert anchors into proposal via bbox transformations.
-
         roi = loc2bbox(anchor, loc)
 
         # Clip predicted boxes to image.
@@ -634,6 +633,7 @@ class ProposalCreator:
         if n_pre_nms > 0:
             order = order[:n_pre_nms]
         roi = roi[order, :]
+        roi_origin = roi.copy()
         score = score[order]
 
         # s = time.time()
@@ -654,7 +654,7 @@ class ProposalCreator:
         if n_post_nms > 0:
             keep = keep[:n_post_nms]
         roi = roi[keep]
-        return roi
+        return roi, roi_origin, order.copy()
 
 def generate_3d_bbox2(pred_bboxs):
     # 输出以左下角为原点的3d坐标

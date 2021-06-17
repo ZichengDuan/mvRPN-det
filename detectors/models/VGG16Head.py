@@ -2,6 +2,7 @@ from roi_module import RoIPooling2D
 from ..utils import array_tool as at
 import torch.nn as nn
 import torch
+import torch.nn.functional as F
 
 class VGG16RoIHead(nn.Module):
     """Faster R-CNN Head for VGG-16 based implementation.
@@ -21,15 +22,21 @@ class VGG16RoIHead(nn.Module):
         # n_class includes the background
         super(VGG16RoIHead, self).__init__()
 
-        classifier = nn.Sequential(nn.Linear(12544, 2048, bias=True),
+        self.trans_layer = nn.Sequential(nn.Conv2d(512, 512, kernel_size=3, stride=1, padding=1),
+                                         nn.ReLU(True),
+                                         nn.Conv2d(512, 512, kernel_size=3, stride=1, padding=1),
+                                         nn.LeakyReLU(True),
+                                         ).to("cuda:0")
+
+        self.classifier = nn.Sequential(nn.Linear(25088, 1024, bias=True),
                                    nn.ReLU(inplace=True),
                                    nn.Dropout(p=0.5, inplace=False),
-                                   nn.Linear(2048, 2048, bias=True),
+                                   nn.Linear(1024, 1024, bias=True),
                                    nn.ReLU(inplace=True),
                                    nn.Dropout(p=0.5, inplace=False),
                                    ).to("cuda:1")
 
-        # classifier_ang = nn.Sequential(nn.Linear(25088, 1024, bias=True),
+        # self.classifier_ang = nn.Sequential(nn.Linear(25088, 1024, bias=True),
         #                            nn.ReLU(inplace=True),
         #                            nn.Dropout(p=0.5, inplace=False),
         #                            nn.Linear(1024, 1024, bias=True),
@@ -37,15 +44,27 @@ class VGG16RoIHead(nn.Module):
         #                            nn.Dropout(p=0.5, inplace=False),
         #                            ).to("cuda:1")
 
-        self.classifier = classifier
-        self.cls_loc = nn.Linear(2048, n_class * 4).to("cuda:1")
-        self.score = nn.Linear(2048, n_class).to("cuda:1")
-        self.ang_regressor = nn.Linear(2048, 2).to("cuda:1")
+        self.cls_loc = nn.Sequential(nn.Linear(1024, 512),
+                                     nn.ReLU(True),
+                                     nn.Dropout(),
+                                     nn.Linear(512, n_class * 4)).to("cuda:1")
+
+        self.score = nn.Sequential(nn.Linear(1024, 512),
+                                   nn.ReLU(True),
+                                   nn.Dropout(),
+                                   nn.Linear(512, n_class)).to("cuda:1")
+
+        self.ang_regressor = nn.Sequential(nn.Linear(1024, 512),
+                                           nn.ReLU(True),
+                                           nn.Dropout(),
+                                           nn.Linear(512, 512),
+                                           nn.ReLU(True),
+                                           nn.Dropout(),
+                                           nn.Linear(512, 2)).to("cuda:1")
 
         normal_init(self.cls_loc, 0, 0.001)
-        normal_init(self.score
-                    , 0, 0.01)
-        normal_init(self.ang_regressor, 0, 0.0001)
+        normal_init(self.score, 0, 0.01)
+        normal_init(self.ang_regressor, 0, 0.01)
 
         self.n_class = n_class
         self.roi_size = roi_size
@@ -77,6 +96,7 @@ class VGG16RoIHead(nn.Module):
         xy_indices_and_rois = indices_and_rois[:, [0, 2, 1, 4, 3]]
         indices_and_rois = xy_indices_and_rois.contiguous().to(x.device)
         # print(x.shape, x.device, indices_and_rois.shape, indices_and_rois.device)
+        x = self.trans_layer(x)
         pool = self.roi(x, indices_and_rois).to("cuda:1")
         pool = pool.view(pool.size(0), -1)
         # print(self.classifier)
@@ -85,6 +105,9 @@ class VGG16RoIHead(nn.Module):
         roi_cls_locs = self.cls_loc(fc7)
         roi_scores = self.score(fc7)
         sin_cos = self.ang_regressor(fc7)
+        # print(sin_cos)
+        # sin_cos = F.normalize(sin_cos, dim=1)
+        # print(sin_cos)
         return roi_cls_locs, roi_scores, sin_cos
 
 
@@ -93,8 +116,18 @@ def normal_init(m, mean, stddev, truncated=False):
     weight initalizer: truncated normal and random normal.
     """
     # x is a parameter
-    if truncated:
-        m.weight.data.normal_().fmod_(2).mul_(stddev).add_(mean)  # not a perfect approximation
+    if type(m) is not nn.Sequential().__class__:
+        if truncated:
+            m.weight.data.normal_().fmod_(2).mul_(stddev).add_(mean)  # not a perfect approximation
+        else:
+            m.weight.data.normal_(mean, stddev)
+            m.bias.data.zero_()
     else:
-        m.weight.data.normal_(mean, stddev)
-        m.bias.data.zero_()
+        for n in m:
+            if type(n) is not nn.Linear(1, 1).__class__:
+                continue
+            if truncated:
+                n.weight.data.normal_().fmod_(2).mul_(stddev).add_(mean)  # not a perfect approximation
+            else:
+                n.weight.data.normal_(mean, stddev)
+                n.bias.data.zero_()

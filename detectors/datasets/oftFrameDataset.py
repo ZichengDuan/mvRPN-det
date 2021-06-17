@@ -15,7 +15,7 @@ warnings.filterwarnings("ignore")
 
 class oftFrameDataset(VisionDataset):
     def __init__(self, base,  train=True, transform=ToTensor(), target_transform=ToTensor(),
-                 reID=False, grid_reduce=4, img_reduce=4, train_ratio=0.9):
+                 reID=False, grid_reduce=Const.reduce, img_reduce=Const.reduce, train_ratio=0.9):
         super().__init__(base.root, transform=transform, target_transform=target_transform)
 
         self.reID, self.grid_reduce, self.img_reduce = reID, grid_reduce, img_reduce
@@ -30,16 +30,17 @@ class oftFrameDataset(VisionDataset):
         self.extrinsic_matrix2 = base.extrinsic_matrices2
         self.intrinsic_matrix2 = base.intrinsic_matrices2
 
-        # if train:
-        #     frame_range = list(range(0, 2500)) + list(range(1269 + 3021, 1700 + 3021)) + list(range(2977+ 3021, 4100+ 3021))
-        # else:
-        #     frame_range = list(range(2500, 3021)) + list(range(1700 + 3021, 2100 + 3021))
-
-
         if train:
-            frame_range = list(range(0, 200))
+            frame_range = list(range(0, 2500)) + list(range(1269 + 3021, 1700 + 3021)) + list(range(2977+ 3021, 4100+ 3021))
         else:
-            frame_range = list(range(2500, 3021))
+            # frame_range = list(range(2500, 3021)) + list(range(1700 + 3021, 2100 + 3021))
+            frame_range = list(range(2500, 2600))
+
+
+        # if train:
+        #     frame_range = list(range(0, 200))
+        # else:
+        #     frame_range = list(range(2500, 3021))
 
         self.upsample_shape = list(map(lambda x: int(x / self.img_reduce), self.img_shape))
         img_reduce_local = np.array(self.img_shape) / np.array(self.upsample_shape)
@@ -64,38 +65,42 @@ class oftFrameDataset(VisionDataset):
         self.mark = {}
 
         self.img_fpaths = self.base.get_image_fpaths(frame_range)
-        self.gt_fpath = os.path.join(self.root, 'gt.txt')
-        self.prepare_gt()
+        if train:
+            self.gt_fpath = os.path.join(self.root, 'train_gt.txt')
+        else:
+            self.gt_fpath = os.path.join(self.root, 'test_gt.txt')
+        self.prepare_gt(frame_range)
         self.prepare_bbox(frame_range)
         self.prepare_dir(frame_range)
 
-    def prepare_gt(self):
+    def prepare_gt(self,frame_range):
         og_gt = []
         for fname in sorted(os.listdir(os.path.join(self.root, 'annotations'))):
             frame = int(fname.split('.')[0])
-            with open(os.path.join(self.root, 'annotations', fname)) as json_file:
-                all_pedestrians = [json.load(json_file)][0]
-            for single_pedestrian in all_pedestrians:
-                def is_in_cam(cam):
-                    return not (single_pedestrian['views'][cam]['xmin'] == -1 and
-                                single_pedestrian['views'][cam]['xmax'] == -1 and
-                                single_pedestrian['views'][cam]['ymin'] == -1 and
-                                single_pedestrian['views'][cam]['ymax'] == -1)
+            if frame in frame_range:
+                with open(os.path.join(self.root, 'annotations', fname)) as json_file:
+                    all_pedestrians = [json.load(json_file)][0]
+                for single_pedestrian in all_pedestrians:
+                    def is_in_cam(cam):
+                        return not (single_pedestrian['views'][cam]['xmin'] == -1 and
+                                    single_pedestrian['views'][cam]['xmax'] == -1 and
+                                    single_pedestrian['views'][cam]['ymin'] == -1 and
+                                    single_pedestrian['views'][cam]['ymax'] == -1)
 
-                in_cam_range = sum(is_in_cam(cam) for cam in range(self.num_cam))
-                if not in_cam_range:
-                    continue
+                    in_cam_range = sum(is_in_cam(cam) for cam in range(self.num_cam))
+                    if not in_cam_range:
+                        continue
 
-                wx = single_pedestrian['wx']
-                wy = single_pedestrian['wy']
+                    wx = single_pedestrian['wx']
+                    wy = single_pedestrian['wy']
 
-                if wx > Const.grid_width * 10:
-                    wx = Const.grid_width * 10 - 1
-                if wy > Const.grid_height * 10:
-                    wy = Const.grid_height * 10 - 1
+                    if wx > Const.grid_width * 10:
+                        wx = Const.grid_width * 10 - 1
+                    if wy > Const.grid_height * 10:
+                        wy = Const.grid_height * 10 - 1
 
-                grid_x, grid_y= [wx, wy]
-                og_gt.append(np.array([frame, grid_x, grid_y]))
+                    grid_x, grid_y= [wx //10, wy//10]
+                    og_gt.append(np.array([frame, grid_x, grid_y]))
         og_gt = np.stack(og_gt, axis=0)
         os.makedirs(os.path.dirname(self.gt_fpath), exist_ok=True)
         print(self.gt_fpath)

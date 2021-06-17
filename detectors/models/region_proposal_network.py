@@ -1,5 +1,5 @@
 import time
-
+from EX_CONST import Const
 import cv2
 import numpy as np
 import torch
@@ -13,7 +13,7 @@ from .utils.creator_tool import ProposalCreator
 class RegionProposalNetwork(nn.Module):
     def __init__(
             self, in_channels=1026, mid_channels=1026, ratios=[0.5, 1, 2],
-            anchor_scales=[8, 16, 32], feat_stride=4,
+            anchor_scales=[8, 16, 32], feat_stride=Const.reduce,
             proposal_creator_params=dict(),
     ):
         super(RegionProposalNetwork, self).__init__()
@@ -22,10 +22,11 @@ class RegionProposalNetwork(nn.Module):
             anchor_scales=anchor_scales, ratios=ratios)
         self.feat_stride = feat_stride
         self.proposal_layer = ProposalCreator(self, **proposal_creator_params)
-        n_anchor = self.anchor_base.shape[0]
+        self.n_anchor = self.anchor_base.shape[0]
+        # print(self.anchor_base.shape)
         self.conv1 = nn.Conv2d(in_channels, mid_channels, 3, 1, 1)
-        self.score = nn.Conv2d(mid_channels, n_anchor * 2, 1, 1, 0)
-        self.loc = nn.Conv2d(mid_channels, n_anchor * 4, 1, 1, 0)
+        self.score = nn.Conv2d(mid_channels, self.n_anchor * 2, 1, 1, 0)
+        self.loc = nn.Conv2d(mid_channels, self.n_anchor * 4, 1, 1, 0)
 
         # torchvision
 
@@ -56,6 +57,7 @@ class RegionProposalNetwork(nn.Module):
             self.feat_stride, hh, ww)
 
         n_anchor = anchor.shape[0] // (hh * ww)
+        # print("n_anchor", n_anchor)
         # a = np.zeros((img_size[0]+ 100, img_size[1]+ 100))
         # img = np.uint8(a)
         # img = cv2.cvtColor(img, cv2.COLOR_GRAY2BGR)
@@ -67,6 +69,7 @@ class RegionProposalNetwork(nn.Module):
 
         h = F.relu(self.conv1(x))
         rpn_locs = self.loc(h)
+        # print("dzcc", rpn_locs.shape)
         rpn_locs = rpn_locs.permute(0, 2, 3, 1).contiguous().view(n, -1, 4)
         # print(rpn_locs.shape)
         rpn_scores = self.score(h)
@@ -80,8 +83,10 @@ class RegionProposalNetwork(nn.Module):
         # s = time.time()
         rois = list()
         roi_indices = list()
+
         for i in range(n):
-            roi = self.proposal_layer(
+            # print("dzcddzzcc", rpn_locs.shape, i,rpn_locs[i].shape )
+            roi, roi_origin, order = self.proposal_layer(
                 rpn_locs[i].cpu().data.numpy(),
                 rpn_fg_scores[i].cpu().data.numpy(),
                 anchor,img_size,
@@ -89,11 +94,43 @@ class RegionProposalNetwork(nn.Module):
             batch_index = i * np.ones((len(roi),), dtype=np.int32)
             rois.append(roi)
             roi_indices.append(batch_index)
+
         # e = time.time()
         # print(e - s)
         rois = np.concatenate(rois, axis=0)
         roi_indices = np.concatenate(roi_indices, axis=0)
 
+        # 第二个rpn
+        #
+        # new_rpn_locs = nn.Conv2d(1026, n_anchor * 4, 1, 1, 0).to("cuda:1")(h)
+        # # print("dzcccccc", new_rpn_locs.shape)
+        # new_rpn_locs = new_rpn_locs.permute(0, 2, 3, 1).contiguous().view(n, -1, 4)
+        # new_rpn_scores = nn.Conv2d(1026, n_anchor * 2, 1, 1, 0).to("cuda:1")(h)
+        # new_rpn_scores = new_rpn_scores.permute(0, 2, 3, 1).contiguous()
+        # new_rpn_softmax_scores = F.softmax(new_rpn_scores.view(n, hh, ww, n_anchor, 2), dim=4)
+        # new_rpn_fg_scores = new_rpn_softmax_scores[:, :, :, :, 1].contiguous()
+        # new_rpn_fg_scores = new_rpn_fg_scores.view(n, -1)
+        # new_rpn_scores = new_rpn_scores.view(n, -1, 2)
+        #
+        # new_rois = list()
+        # new_roi_indices = list()
+        #
+        # for k in range(n):
+        #     # print("dzc", new_rpn_locs.shape, roi_origin.shape)
+        #     new_roi, _, _ = self.proposal_layer(
+        #         new_rpn_locs[k][order].cpu().data.numpy(),
+        #         new_rpn_fg_scores[k][order].cpu().data.numpy(),
+        #         roi_origin, img_size,
+        #         scale=scale
+        #     )
+        #     new_batch_index = k * np.ones((len(new_roi),), dtype=np.int32)
+        #     new_rois.append(new_roi)
+        #     new_roi_indices.append(new_batch_index)
+        #
+        # new_rois = np.concatenate(new_rois, axis=0)
+        # new_roi_indices = np.concatenate(new_roi_indices, axis=0)
+
+        # print(len(rpn_locs[roi_indices]), len(new_roi_indices), len(new_rois))
         return rpn_locs, rpn_scores, anchor, rois, roi_indices
 
 
@@ -158,8 +195,18 @@ def normal_init(m, mean, stddev, truncated=False):
     weight initalizer: truncated normal and random normal.
     """
     # x is a parameter
-    if truncated:
-        m.weight.data.normal_().fmod_(2).mul_(stddev).add_(mean)  # not a perfect approximation
+    if type(m) is not nn.Sequential().__class__:
+        if truncated:
+            m.weight.data.normal_().fmod_(2).mul_(stddev).add_(mean)  # not a perfect approximation
+        else:
+            m.weight.data.normal_(mean, stddev)
+            m.bias.data.zero_()
     else:
-        m.weight.data.normal_(mean, stddev)
-        m.bias.data.zero_()
+        for n in m:
+            if type(n) is not nn.Linear(1, 1).__class__:
+                continue
+            if truncated:
+                n.weight.data.normal_().fmod_(2).mul_(stddev).add_(mean)  # not a perfect approximation
+            else:
+                n.weight.data.normal_(mean, stddev)
+                n.bias.data.zero_()
