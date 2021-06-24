@@ -31,10 +31,10 @@ class oftFrameDataset(VisionDataset):
         self.intrinsic_matrix2 = base.intrinsic_matrices2
 
         if train:
-            frame_range = list(range(0, 2500)) + list(range(1269 + 3021, 1700 + 3021)) + list(range(2977+ 3021, 4100+ 3021))
+            frame_range = list(range(0, 2500)) + list(range(3201, 4100+ 3021))
         else:
-            # frame_range = list(range(2500, 3021)) + list(range(1700 + 3021, 2100 + 3021))
-            frame_range = list(range(2500, 2600))
+            frame_range = list(range(2500, 3021)) + list(range(1700 + 3021, 2100 + 3021))
+            # frame_range = list(range(2500, 3021))
 
 
         # if train:
@@ -66,9 +66,9 @@ class oftFrameDataset(VisionDataset):
 
         self.img_fpaths = self.base.get_image_fpaths(frame_range)
         if train:
-            self.gt_fpath = os.path.join(self.root, 'train_gt.txt')
+            self.gt_fpath = os.path.join(self.root, 'dzc_res/train_gt.txt')
         else:
-            self.gt_fpath = os.path.join(self.root, 'test_gt.txt')
+            self.gt_fpath = os.path.join(self.root, 'dzc_res/test_gt.txt')
         self.prepare_gt(frame_range)
         self.prepare_bbox(frame_range)
         self.prepare_dir(frame_range)

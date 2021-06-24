@@ -22,11 +22,11 @@ class VGG16RoIHead(nn.Module):
         # n_class includes the background
         super(VGG16RoIHead, self).__init__()
 
-        self.trans_layer = nn.Sequential(nn.Conv2d(512, 512, kernel_size=3, stride=1, padding=1),
-                                         nn.ReLU(True),
-                                         nn.Conv2d(512, 512, kernel_size=3, stride=1, padding=1),
-                                         nn.LeakyReLU(True),
-                                         ).to("cuda:0")
+        # self.trans_layer = nn.Sequential(nn.Conv2d(512, 512, kernel_size=3, stride=1, padding=1),
+        #                                  nn.ReLU(True),
+        #                                  nn.Conv2d(512, 512, kernel_size=3, stride=1, padding=1),
+        #                                  nn.LeakyReLU(True),
+        #                                  ).to("cuda:0")
 
         self.classifier = nn.Sequential(nn.Linear(25088, 1024, bias=True),
                                    nn.ReLU(inplace=True),
@@ -96,7 +96,7 @@ class VGG16RoIHead(nn.Module):
         xy_indices_and_rois = indices_and_rois[:, [0, 2, 1, 4, 3]]
         indices_and_rois = xy_indices_and_rois.contiguous().to(x.device)
         # print(x.shape, x.device, indices_and_rois.shape, indices_and_rois.device)
-        x = self.trans_layer(x)
+        # x = self.trans_layer(x)
         pool = self.roi(x, indices_and_rois).to("cuda:1")
         pool = pool.view(pool.size(0), -1)
         # print(self.classifier)

@@ -12,7 +12,7 @@ from .utils.creator_tool import ProposalCreator
 
 class RegionProposalNetwork(nn.Module):
     def __init__(
-            self, in_channels=1026, mid_channels=1026, ratios=[0.5, 1, 2],
+            self, in_channels=1026, mid_channels=2048, ratios=[0.5, 1, 2],
             anchor_scales=[8, 16, 32], feat_stride=Const.reduce,
             proposal_creator_params=dict(),
     ):

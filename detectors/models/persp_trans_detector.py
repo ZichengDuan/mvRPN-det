@@ -71,7 +71,7 @@ class PerspTransDetector(nn.Module):
         #                                                  post_nms_top_n={'training': 3000, 'testing':300}, nms_thresh=0.7).to("cuda:1")
 
 
-    def forward(self, imgs, gt_boxes = None, epoch = None, visualize=False, train = True, mark = None):
+    def forward(self, imgs,frame, gt_boxes = None, epoch = None, visualize=False, train = True, mark = None):
         B, N, C, H, W = imgs.shape
         assert N == self.num_cam
         world_features = []
@@ -87,7 +87,8 @@ class PerspTransDetector(nn.Module):
                 proj_mat = self.proj_mats[cam].repeat([B, 1, 1]).float().to('cuda:1')
             else:
                 proj_mat = self.proj_mats2[cam].repeat([B, 1, 1]).float().to('cuda:1')
-
+            if frame == 10:
+                print(mark, proj_mat)
             world_feature = kornia.warp_perspective(img_feature.to('cuda:1'), proj_mat, self.reducedgrid_shape) # 0.0142 * 2 = 0.028
 
             world_feature = kornia.vflip(world_feature)

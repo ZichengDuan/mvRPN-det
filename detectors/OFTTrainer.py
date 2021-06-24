@@ -49,10 +49,10 @@ class OFTtrainer(BaseTrainer):
         self.loc_normalize_std = (0.1, 0.1, 0.2, 0.2)
 
     def train(self, epoch, data_loader, optimizer, writer):
-        for name, param in self.model.named_parameters():
-            param.requires_grad = True
-        for name, param in self.roi_head.named_parameters():
-            param.requires_grad = False
+        # for name, param in self.model.backbone.named_parameters():
+        #     param.requires_grad = False
+        # for name, param in self.roi_head.named_parameters():
+        #     param.requires_grad = False
 
         Loss = 0
         RPN_CLS_LOSS = 0
@@ -71,7 +71,7 @@ class OFTtrainer(BaseTrainer):
             optimizer.zero_grad()
             imgs, bev_xy,bev_angle, gt_bbox, gt_left_bbox, gt_right_bbox, left_dirs, right_dirs, left_sincos, right_sincos, frame, extrin, intrin, extrin2, intrin2, mark = data
             img_size = (Const.grid_height, Const.grid_width)
-            rpn_locs, rpn_scores, anchor, rois, roi_indices, img_featuremaps, bev_featuremaps = self.model(imgs, gt_bbox, mark=mark)
+            rpn_locs, rpn_scores, anchor, rois, roi_indices, img_featuremaps, bev_featuremaps = self.model(imgs, frame, gt_bbox, mark=mark)
 
             # visualize angle
             # bev_img = cv2.imread("/home/dzc/Data/mix/bevimgs/%d.jpg" % frame)
@@ -241,8 +241,8 @@ class OFTtrainer(BaseTrainer):
 
             # roi_cls_loss = nn.CrossEntropyLoss()(roi_score, gt_roi_label.to(roi_score.device))
             # ----------------------Loss-----------------------------
-            loss = rpn_loc_loss + rpn_cls_loss + \
-                    (all_roi_loc_loss + all_roi_cls_loss + all_sincos_loss) * 0
+            loss = rpn_loc_loss * 3 + rpn_cls_loss * 3 + \
+                    (all_roi_loc_loss + all_roi_cls_loss + all_sincos_loss)
 
             # loss = (rpn_loc_loss + rpn_cls_loss) * 0 +  all_roi_loc_loss + all_roi_cls_loss + all_sincos_loss
             Loss += loss.item()
@@ -374,7 +374,7 @@ class OFTtrainer(BaseTrainer):
                 intrin = intrin2
 
             with torch.no_grad():
-                rpn_locs, rpn_scores, anchor, rois, roi_indices, img_featuremaps, bev_featuremaps = self.model(imgs, mark=mark)
+                rpn_locs, rpn_scores, anchor, rois, roi_indices, img_featuremaps, bev_featuremaps = self.model(imgs, frame, mark=mark)
             rpn_end = time.time()
             roi = torch.tensor(rois)
 
@@ -465,7 +465,7 @@ class OFTtrainer(BaseTrainer):
             # all_bev_boxes, _, all_sincos_remain, position_mark_keep = nms_new(all_roi_remain, all_front_prob, all_pred_sincos, position_mark)
             # s = time.time()
             v, indices = torch.tensor(all_front_prob).sort(0)
-            indices_remain = indices[v > 0.95]
+            indices_remain = indices[v > 0.3]
             # print(v)
             print(frame)
             all_roi_remain = all_roi_remain[indices_remain].reshape(len(indices_remain), 4)
@@ -508,8 +508,8 @@ class OFTtrainer(BaseTrainer):
                 for bbox in all_bev_boxes:
                     ymin, xmin, ymax, xmax = bbox
                     all_res.append([frame, ((xmin + xmax) / 2), ((ymin + ymax) / 2)])
-        res_fpath = '/home/dzc/Data/%s/res.txt' % Const.dataset
-        gt_fpath = '/home/dzc/Data/%s/test_gt.txt' % Const.dataset
+        res_fpath = '/home/dzc/Data/%s/dzc_res/res.txt' % Const.dataset
+        gt_fpath = '/home/dzc/Data/%s/dzc_res/test_gt.txt' % Const.dataset
         np.savetxt(res_fpath, np.array(all_res).reshape(-1, 3), "%d")
 
         recall, precision, moda, modp = matlab_eval(os.path.abspath(res_fpath), os.path.abspath(gt_fpath),

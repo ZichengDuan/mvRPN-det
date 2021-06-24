@@ -30,7 +30,7 @@ class Const:
 
     car_length = 60
 
-    car_height = 40
+    car_height = 35
 
     #------------------------------
     nms_left = 4
@@ -41,7 +41,7 @@ class Const:
 
     roi_classes = 1
 
-    modelsavedir = "/home/dzc/Desktop/CASIA/proj/mvRPN-det/results/trained/testing_set"
+    modelsavedir = "/home/dzc/Desktop/CASIA/proj/mvRPN-det/results/trained/freeze_backbone"
 
     imgsavedir = "/home/dzc/Desktop/CASIA/proj/mvRPN-det/results/images/testing_set"
 

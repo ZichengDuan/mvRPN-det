@@ -12,6 +12,7 @@ def matlab_eval(res_fpath, gt_fpath, dataset='Robo_1'):
     eng.cd('/home/dzc/Desktop/CASIA/proj/mvRPN-det/detectors/evaluation/motchallenge-devkit')
     # res_fpath: test.txt, gt_fpath:数据集文件夹下面的那个gt.txt
     res = eng.evaluateDetection(res_fpath, gt_fpath, dataset)
+    print(res['detMets'])
     recall, precision, moda, modp = np.array(res['detMets']).squeeze()[[0, 1, -2, -1]]
     return recall, precision, moda, modp
 

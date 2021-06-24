@@ -44,10 +44,10 @@ def main(args):
 
     normalize = T.Normalize((0.485, 0.456, 0.406), (0.229, 0.224, 0.225))
     denormalize = img_color_denormalize((0.485, 0.456, 0.406), (0.229, 0.224, 0.225))
-    resize = T.Resize([384, 512]) # h, w
+    # resize = T.Resize([384, 512]) # h, w
     # resize = T.Resize([240, 320]) # h, w
-    train_trans = T.Compose([resize, T.ToTensor(), bright, contrast, saturation, normalize])
-    test_trans = T.Compose([resize, T.ToTensor(), normalize])
+    train_trans = T.Compose([T.ToTensor(), bright, contrast, saturation, normalize])
+    test_trans = T.Compose([T.ToTensor(), normalize])
     data_path = os.path.expanduser('/home/dzc/Data/%s' % Const.dataset)
     # data_path2 = os.path.expanduser('/home/dzc/Data/%s' % Const.dataset)
     base = Robomaster_1_dataset(data_path, args, worldgrid_shape=Const.grid_size)
@@ -73,22 +73,23 @@ def main(args):
     # trainer = RPNtrainer(model, roi_head, denormalize)
 
     # learn
-
+    # model.load_state_dict(torch.load('%s/mvdet_rpn_%d.pth' % (Const.modelsavedir, 30)))
+    # roi_head.load_state_dict(torch.load('%s/roi_rpn_head_%d.pth' % (Const.modelsavedir, 30)))
     print()
     # model.load_state_dict(torch.load("%s/mvdet_rpn_%d.pth" % (Const.modelsavedir, 4)))
     for epoch in tqdm.tqdm(range(1, args.epochs + 1)):
         if not args.resume:
             print('Training...')
-            # model.load_state_dict(torch.load("%s/mvdet_sep_rpn_%d.pth" % (Const.modelsavedir, 7)))
-            # roi_head.load_state_dict(torch.load("%s/roi_rpn_head_%d.pth" % (Const.modelsavedir, 5)))
+            # model.load_state_dict(torch.load("%s/mvdet_sep_rpn_%d.pth" % (Const.modelsavedir, 10)))
+            # roi_head.load_state_dict(torch.load("%s/roi_rpn_head_%d.pth" % (Const.modelsavedir, 10)))
             loss = trainer.train(epoch, train_loader, optimizer, writer)
-            torch.save(model.state_dict(), os.path.join('%s/mvdet_sep_rpn_%d.pth' % (Const.modelsavedir, epoch)))
-            torch.save(roi_head.state_dict(), os.path.join('%s/roi_sep_rpn_head_%d.pth' % (Const.modelsavedir, epoch)))
+            torch.save(model.state_dict(), os.path.join('%s/mvdet_rpn_%d.pth' % (Const.modelsavedir, epoch)))
+            torch.save(roi_head.state_dict(), os.path.join('%s/roi_rpn_head_%d.pth' % (Const.modelsavedir, epoch)))
             # trainer.test(epoch, test_loader, writer)
         else:
             print('Testing...')
-            model.load_state_dict(torch.load("%s/mvdet_rpn_%d.pth" % (Const.modelsavedir, 7)))
-            roi_head.load_state_dict(torch.load("%s/roi_rpn_head_%d.pth" % (Const.modelsavedir, 7)))
+            model.load_state_dict(torch.load("%s/mvdet_rpn_%d.pth" % (Const.modelsavedir, 20)))
+            roi_head.load_state_dict(torch.load("%s/roi_rpn_head_%d.pth" % (Const.modelsavedir, 20)))
             trainer.test(epoch, test_loader, writer)
             break
     writer.close()
@@ -100,14 +101,14 @@ if __name__ == '__main__':
     parser.add_argument('--variant', type=str, default='default',
                         choices=['default', 'img_proj', 'res_proj', 'no_joint_conv'])
     parser.add_argument('-d', '--dataset', type=str, default='robo', choices=['wildtrack', 'multiviewx','robo'])
-    parser.add_argument('-j', '--num_workers', type=int, default=6)
+    parser.add_argument('-j', '--num_workers', type=int, default=8)
     parser.add_argument('-b', '--batch_size', type=int, default=1, metavar='N',
                         help='input batch size for training (default: 1)')
-    parser.add_argument('--epochs', type=int, default=8, metavar='N', help='number of epochs to train (default: 10)')
-    parser.add_argument('--lr', type=float, default=0.00025, metavar='LR', help='learning rate (default: 0.1)')
+    parser.add_argument('--epochs', type=int, default=35, metavar='N', help='number of epochs to train (default: 10)')
+    parser.add_argument('--lr', type=float, default=0.0001, metavar='LR', help='learning rate (default: 0.1)')
     parser.add_argument('--weight_decay', type=float, default=1e-5)
     parser.add_argument('--momentum', type=float, default=0.5, metavar='M', help='SGD momentum (default: 0.5)')
-    parser.add_argument('--seed', type=int, default=46, help='random seed (default: None)')
+    parser.add_argument('--seed', type=int, default=16, help='random seed (default: None)')
 
     parser.add_argument('--resume', type=bool, default = True)
     args = parser.parse_args()
