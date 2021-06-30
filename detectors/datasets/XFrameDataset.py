@@ -140,10 +140,10 @@ class XFrameDataset(VisionDataset):
                     x, y = self.base.get_worldgrid_from_pos(single_pedestrian['positionID'])
                     frame_wxy.append([x / self.grid_reduce, y / self.grid_reduce])
 
-                    ymin_od, xmin_od, ymax_od, xmax_od = max(min(int(y - 25), self.img_shape[0] - 1), 0),\
-                                                         max(min(int(x - 25), self.img_shape[1] - 1), 0),\
-                                                         max(min(int(y + 25), self.img_shape[0] - 1), 0),\
-                                                         max(min(int(x + 25), self.img_shape[1] - 1), 0)
+                    ymin_od, xmin_od, ymax_od, xmax_od = max(min(int(y - 15), self.img_shape[0] - 1), 0),\
+                                                         max(min(int(x - 15), self.img_shape[1] - 1), 0),\
+                                                         max(min(int(y + 15), self.img_shape[0] - 1), 0),\
+                                                         max(min(int(x + 15), self.img_shape[1] - 1), 0)
                     frame_bbox_od.append([ymin_od, xmin_od, ymax_od, xmax_od])
 
                     frame_cls.append([0])

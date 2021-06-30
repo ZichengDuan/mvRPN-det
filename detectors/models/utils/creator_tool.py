@@ -457,7 +457,7 @@ class AnchorTargetCreator(object):
     """
 
     def __init__(self,
-                 n_sample=256,
+                 n_sample=512,
                  pos_iou_thresh=0.8, neg_iou_thresh=0.3,
                  pos_ratio=0.8):
         self.n_sample = n_sample
@@ -506,7 +506,6 @@ class AnchorTargetCreator(object):
 
         inside_index = _get_inside_index(anchor, img_H, img_W)
         anchor = anchor[inside_index]
-
         argmax_ious, label = self._create_label(
             inside_index, anchor, bbox)
 
@@ -523,9 +522,9 @@ class AnchorTargetCreator(object):
         tmp = cv2.cvtColor(tmp, cv2.COLOR_GRAY2BGR)
         # cv2.imwrite("/home/dzc/Desktop/CASIA/proj/mvRPN-det/anchorBase.jpg", tmp)
         # print(anchor)
-
+        print(len(label[inside_index]), len(anchor))
         for idx, anc in enumerate(anchor):
-            if label[idx] == 1:
+            if label[inside_index][idx] == 1:
                 cv2.rectangle(tmp, (int(anc[1]), int(anc[0])), (int(anc[3]), int(anc[2])), color=(255, 0, 0))
 
         for idx, bbx in enumerate(bbox):
