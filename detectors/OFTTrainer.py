@@ -97,7 +97,7 @@ class OFTtrainer(BaseTrainer):
 
             roi = torch.tensor(rois)
 
-            numcam = imgs.shape[0]
+            numcam = imgs.shape[1]
             rpn_loc = rpn_locs[0]
             rpn_score = rpn_scores[0]
             gt_bev_bbox = bboxes_od[0]
@@ -121,6 +121,11 @@ class OFTtrainer(BaseTrainer):
 
             # ----------------ROI------------------------------
             # 还需要在双视角下的回归gt，以及筛选过后的分类gt，gt_left_loc, gt_left_label, gt_right_loc, gt_right_label
+            all_gt_label = torch.zeros((0, 1)).to("cuda:0")
+            all_roi_score = torch.zeros((0, 1)).to("cuda:1")
+            all_gt_roi_loc = torch.zeros((0, 4)).to("cuda:0")
+            all_roi_loc = torch.zeros((0, 4)).to("cuda:1")
+
             for cam in range(numcam):
                 bbox_2d, sample_roi, gt_loc, gt_label, pos_num = self.proposal_target_creator(
                     roi,
@@ -130,7 +135,7 @@ class OFTtrainer(BaseTrainer):
                     extrin, intrin, frame,
                     self.loc_normalize_mean,
                     self.loc_normalize_std)
-                print(bbox_2d.shape, sample_roi.shape, gt_loc.shape, gt_label.shape)
+                # print(bbox_2d.shape, sample_roi.shape, gt_loc.shape, gt_label.shape) # (256, 4) (256, 4) (256, 4) (256, 1)
                 sample_roi_index = torch.zeros(len(sample_roi))
 
                 # ---------------------------roi_pooling---------------------------------
@@ -141,20 +146,22 @@ class OFTtrainer(BaseTrainer):
 
                 n_sample = roi_cls_loc.shape[0]
                 roi_cls_loc = roi_cls_loc.view(n_sample, -1, 4)
-                roi_loc = roi_cls_loc[torch.arange(0, n_sample).long().cuda(), at.totensor(gt_label).long()]
+                roi_loc = roi_cls_loc[torch.arange(0, n_sample).long().to("cuda:1"), at.totensor(gt_label).long()]
                 gt_label = at.totensor(gt_label).long()
                 gt_loc = at.totensor(gt_loc)
+                print(gt_label.shape,gt_loc.shape, roi_loc.shape,roi_score.shape)
 
-            all_roi_loc = torch.cat((left_roi_loc, right_roi_loc))
-            all_roi_gt_loc = torch.cat((left_gt_loc, right_gt_loc))
+                all_gt_label = torch.cat((all_gt_label, gt_label), dim=0)
+                all_gt_roi_loc = torch.cat((all_gt_roi_loc, gt_loc), dim=0)
+                print(all_roi_loc.shape, roi_loc.shape)
+                all_roi_loc = torch.cat((all_roi_loc, roi_loc), dim=0)
+                all_roi_score = torch.cat((all_roi_score, roi_score), dim=0)
 
-            all_roi_score = torch.cat((left_roi_score, right_roi_score))
-            all_gt_label = torch.cat((left_gt_label, right_gt_label))
-
+            print(all_gt_label.shape, all_gt_roi_loc.shape, all_roi_loc.shape, all_roi_score.shape)
 
             all_roi_loc_loss = _fast_rcnn_loc_loss(
                 all_roi_loc.contiguous(),
-                all_roi_gt_loc,
+                all_gt_roi_loc,
                 all_gt_label.data,
                 1)
             all_roi_cls_loss = nn.CrossEntropyLoss()(all_roi_score, all_gt_label.to(all_roi_score.device))

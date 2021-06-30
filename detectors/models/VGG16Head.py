@@ -100,6 +100,7 @@ class VGG16RoIHead(nn.Module):
         # print(sin_cos)
         # sin_cos = F.normalize(sin_cos, dim=1)
         # print(sin_cos)
+        print("dzc", roi_cls_locs.shape)
         return roi_cls_locs, roi_scores
 
 
