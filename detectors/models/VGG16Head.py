@@ -107,9 +107,6 @@ class VGG16RoIHead(nn.Module):
         roi_cls_locs = self.cls_loc(fc7)
         roi_scores = self.score(fc7)
         sin_cos = self.ang_regressor(fc7)
-        # print(sin_cos)
-        # sin_cos = F.normalize(sin_cos, dim=1)
-        # print(sin_cos)
         return roi_cls_locs, roi_scores, sin_cos
 
 

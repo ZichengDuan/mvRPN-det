@@ -57,7 +57,7 @@ class RegionProposalNetwork(nn.Module):
             self.feat_stride, hh, ww)
 
         n_anchor = anchor.shape[0] // (hh * ww)
-        # print("n_anchor", n_anchor)
+        print("n_anchor", n_anchor)
         # a = np.zeros((img_size[0]+ 100, img_size[1]+ 100))
         # img = np.uint8(a)
         # img = cv2.cvtColor(img, cv2.COLOR_GRAY2BGR)

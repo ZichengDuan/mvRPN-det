@@ -393,12 +393,6 @@ class AnchorTargetCreator(object):
         img_H, img_W = img_size
         n_anchor = len(anchor)
 
-        # anchor[:, 0::2] = np.clip(anchor[:, 0::2], 0, Const.grid_height).astype(np.int)  # ymax, ymin
-        # anchor[:, 1::2] = np.clip(anchor[:, 1::2], 0, Const.grid_width).astype(np.int)  # xmax, xmin
-        #
-        # bbox[:, 0::2] = np.clip(bbox[:, 0::2], 0, 447).astype(np.int)
-        # bbox[:, 1::2] = np.clip(bbox[:, 1::2], 0, 799).astype(np.int)
-
         inside_index = _get_inside_index(anchor, img_H, img_W)
         anchor = anchor[inside_index]
 
@@ -416,19 +410,16 @@ class AnchorTargetCreator(object):
         # tmp = np.zeros((Const.grid_height, Const.grid_width), dtype=np.uint8())
         # import cv2
         # tmp = cv2.cvtColor(tmp, cv2.COLOR_GRAY2BGR)
-        # cv2.imwrite("/home/dzc/Desktop/CASIA/proj/mvRPN-det/anchorBase.jpg", tmp)
-        # print(anchor)
         #
         # for idx, anc in enumerate(anchor):
-        #     if label[idx] == 1:
+        #     if label[inside_index][idx] == 1:
         #         cv2.rectangle(tmp, (int(anc[1]), int(anc[0])), (int(anc[3]), int(anc[2])), color=(255, 0, 0))
         #
         # for idx, bbx in enumerate(bbox):
         #     cv2.rectangle(tmp, (int(bbx[1]), int(bbx[0])), (int(bbx[3]), int(bbx[2])), color=(255, 255, 0))
         #
-        # cv2.imwrite("/images/anchorBase.jpg", tmp)
+        # cv2.imwrite("/home/dzc/Desktop/CASIA/proj/mvRPN-det/anchorBase.jpg", tmp)
         # -----------------------------------------------------------
-
         return loc, label
 
     def _create_label(self, inside_index, anchor, bbox):
