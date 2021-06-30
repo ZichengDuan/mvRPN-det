@@ -3,6 +3,7 @@ from ..utils import array_tool as at
 import torch.nn as nn
 import torch
 import torch.nn.functional as F
+import matplotlib.pyplot as plt
 
 class VGG16RoIHead(nn.Module):
     """Faster R-CNN Head for VGG-16 based implementation.
@@ -97,6 +98,7 @@ class VGG16RoIHead(nn.Module):
         indices_and_rois = xy_indices_and_rois.contiguous().to(x.device)
         # print(x.shape, x.device, indices_and_rois.shape, indices_and_rois.device)
         # x = self.trans_layer(x)
+        plt.imsave("imgfeature.jpg", torch.norm(x[0].detach(), dim=0).cpu().numpy())
         pool = self.roi(x, indices_and_rois).to("cuda:1")
         pool = pool.view(pool.size(0), -1)
         # print(self.classifier)

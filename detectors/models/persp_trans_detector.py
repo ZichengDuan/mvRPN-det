@@ -1,6 +1,6 @@
 import os
 import time
-
+from matplotlib import cm
 import numpy as np
 import torch
 import torch.nn as nn
@@ -16,6 +16,9 @@ from detectors.models.region_proposal_network import RegionProposalNetwork
 import cv2
 import torchvision.models.detection.image_list as image_list
 from EX_CONST import Const
+from mpl_toolkits.mplot3d import Axes3D
+
+import matplotlib.pyplot as plt
 matplotlib.use('Agg')
 
 class Reshape(nn.Module):
@@ -82,18 +85,34 @@ class PerspTransDetector(nn.Module):
                 torch.cuda.empty_cache()
             img_feature =self.backbone(imgs[:, cam].to('cuda:0'))
             img_feature = F.interpolate(img_feature, self.upsample_shape, mode='bilinear')
+
+            # if cam == 0:
+            #     plt.imsave("img_norm_0.jpg", img_feature[0][0].cpu().numpy())
+            # else:
+            #     plt.imsave("img_norm_1.jpg", img_feature[0][0].cpu().numpy())
+
             img_featuremap.append(img_feature)
+
             if mark == 0:
                 proj_mat = self.proj_mats[cam].repeat([B, 1, 1]).float().to('cuda:1')
             else:
                 proj_mat = self.proj_mats2[cam].repeat([B, 1, 1]).float().to('cuda:1')
-            if frame == 10:
-                print(mark, proj_mat)
+
             world_feature = kornia.warp_perspective(img_feature.to('cuda:1'), proj_mat, self.reducedgrid_shape) # 0.0142 * 2 = 0.028
 
             world_feature = kornia.vflip(world_feature)
             world_features.append(world_feature.to('cuda:1'))
         world_features = torch.cat(world_features + [self.coord_map.repeat([B, 1, 1, 1]).to('cuda:1')], dim=1)
+        # plt.imsave("world_features.jpg", torch.norm(world_features[0], dim=0).cpu().numpy())
+        # 3d特征图
+        # feature_to_plot = world_features[0][0].detach().cpu().numpy()
+        # fig = plt.figure()
+        # ax = fig.add_subplot(111, projection='3d')
+        # X, Y = np.meshgrid(np.arange(0, feature_to_plot.shape[1]), np.arange(0, feature_to_plot.shape[0]))
+        #
+        # print(X.shape, Y.shape, feature_to_plot.shape)
+        # ax.plot_surface(X, Y, feature_to_plot,  cmap=plt.get_cmap('rainbow'))
+        # plt.savefig("dzc3d.jpg" % frame)
 
         rpn_locs, rpn_scores, anchor, rois, roi_indices = self.rpn(world_features, Const.grid_size) # 0.08
         #
