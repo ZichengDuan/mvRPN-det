@@ -147,7 +147,7 @@ class OFTtrainer(BaseTrainer):
             left_roi_loc = left_roi_cls_loc[torch.arange(0, left_n_sample).long().cuda(), at.totensor(left_gt_label).long()]
             left_gt_label = at.totensor(left_gt_label).long()
             left_gt_loc = at.totensor(left_gt_loc)
-
+            print("left_roi_loc", left_roi_loc.shape)
             # left_roi_loc_loss = _fast_rcnn_loc_loss(
             #     left_roi_loc.contiguous(),
             #     left_gt_loc,
