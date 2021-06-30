@@ -146,14 +146,15 @@ class OFTtrainer(BaseTrainer):
 
                 n_sample = roi_cls_loc.shape[0]
                 roi_cls_loc = roi_cls_loc.view(n_sample, -1, 4)
-                roi_loc = roi_cls_loc[torch.arange(0, n_sample).long().to("cuda:1"), at.totensor(gt_label).long()]
+                print("aaa", roi_cls_loc.shape)
+                roi_loc = roi_cls_loc[torch.arange(0, n_sample).long().cuda(), at.totensor(gt_label).long()]
+                print("bbb", roi_cls_loc.shape, torch.arange(0, n_sample).long().shape, at.totensor(gt_label).long().shape, n_sample)
                 gt_label = at.totensor(gt_label).long()
                 gt_loc = at.totensor(gt_loc)
                 print(gt_label.shape,gt_loc.shape, roi_loc.shape,roi_score.shape)
 
                 all_gt_label = torch.cat((all_gt_label, gt_label), dim=0)
                 all_gt_roi_loc = torch.cat((all_gt_roi_loc, gt_loc), dim=0)
-                print(all_roi_loc.shape, roi_loc.shape)
                 all_roi_loc = torch.cat((all_roi_loc, roi_loc), dim=0)
                 all_roi_score = torch.cat((all_roi_score, roi_score), dim=0)
 
