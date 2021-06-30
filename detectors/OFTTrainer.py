@@ -145,6 +145,7 @@ class OFTtrainer(BaseTrainer):
             left_n_sample = left_roi_cls_loc.shape[0]
             left_roi_cls_loc = left_roi_cls_loc.view(left_n_sample, -1, 4)
             left_roi_loc = left_roi_cls_loc[torch.arange(0, left_n_sample).long().cuda(), at.totensor(left_gt_label).long()]
+            print("bbb", left_roi_cls_loc.shape, torch.arange(0, left_n_sample).long().shape, at.totensor(left_gt_label).long().shape, left_n_sample)
             left_gt_label = at.totensor(left_gt_label).long()
             left_gt_loc = at.totensor(left_gt_loc)
             print("left_roi_loc", left_roi_loc.shape)
