@@ -10,19 +10,20 @@ class Const:
 
     # 场地大小
 
-    grid_height = 449
+    grid_height = 640
 
-    grid_width = 800
+    grid_width = 1000
 
-    ori_img_height = 480
-
-    ori_img_width = 640
+    # ori_img_height = 480
+    # ori_img_width = 640
+    ori_img_height = 1080
+    ori_img_width = 1920
 
     grid_size = [grid_height, grid_width]
 
     reduce = 4
 
-    dataset = "mix"
+    dataset = "MultiviewX"
 
     car_dist = math.sqrt(50/2 * 50/2 + 60/2 * 60/2)
 
@@ -41,7 +42,7 @@ class Const:
 
     roi_classes = 1
 
-    modelsavedir = "/home/dzc/Desktop/CASIA/proj/mvRPN-det/results/trained/reduce2"
+    modelsavedir = "/home/dzc/Desktop/CASIA/proj/mvRPN-det/results/trained/multiviewX"
 
     imgsavedir = "/home/dzc/Desktop/CASIA/proj/mvRPN-det/results/images/testing_set"
 

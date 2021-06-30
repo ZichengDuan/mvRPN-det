@@ -55,17 +55,8 @@ class VGG16RoIHead(nn.Module):
                                    nn.Dropout(),
                                    nn.Linear(512, n_class)).to("cuda:1")
 
-        self.ang_regressor = nn.Sequential(nn.Linear(1024, 512),
-                                           nn.ReLU(True),
-                                           nn.Dropout(),
-                                           nn.Linear(512, 512),
-                                           nn.ReLU(True),
-                                           nn.Dropout(),
-                                           nn.Linear(512, 2)).to("cuda:1")
-
         normal_init(self.cls_loc, 0, 0.001)
         normal_init(self.score, 0, 0.01)
-        normal_init(self.ang_regressor, 0, 0.01)
 
         self.n_class = n_class
         self.roi_size = roi_size
@@ -106,11 +97,10 @@ class VGG16RoIHead(nn.Module):
         fc7 = self.classifier(pool)
         roi_cls_locs = self.cls_loc(fc7)
         roi_scores = self.score(fc7)
-        sin_cos = self.ang_regressor(fc7)
         # print(sin_cos)
         # sin_cos = F.normalize(sin_cos, dim=1)
         # print(sin_cos)
-        return roi_cls_locs, roi_scores, sin_cos
+        return roi_cls_locs, roi_scores
 
 
 def normal_init(m, mean, stddev, truncated=False):

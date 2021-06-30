@@ -45,7 +45,7 @@ class ProposalTargetCreator(object):
         self.neg_iou_thresh_hi = neg_iou_thresh_hi
         self.neg_iou_thresh_lo = neg_iou_thresh_lo  # NOTE:default 0.1 in py-faster-rcnn
 
-    def __call__(self, roi, gt_bev_bbox, left_label, right_label, left_angles, right_angles, left_gt_bbox, right_gt_bbox, extrin, intrin, frame,
+    def __call__(self, roi, gt_bev_bbox, left_label, right_label, left_gt_bbox, right_gt_bbox, extrin, intrin, frame,
                  loc_normalize_mean=(0., 0., 0., 0.),
                  loc_normalize_std=(0.1, 0.1, 0.2, 0.2)):
 
@@ -92,7 +92,6 @@ class ProposalTargetCreator(object):
         # Offset range of classes from [0, n_fg_class - 1] to [1, n_fg_class].
         # The label with value 0 is the background.
         # print(left_angles.shape, left_gt_assignment.shape)
-        gt_roi_angles_left = left_angles.reshape(-1, 2)[left_gt_assignment]
         gt_roi_label_left = left_label[left_gt_assignment] + 1 # 每一个roi对应的gt及其gt的分类
 
 
@@ -119,7 +118,6 @@ class ProposalTargetCreator(object):
         left_gt_label = gt_roi_label_left[left_keep_index]
         left_gt_label[left_pos_roi_per_this_image:] = 0  # negative labels --> 0
 
-        left_gt_angles = gt_roi_angles_left[left_pos_index] # only keep the positive samples for training
         left_sample_roi = left_roi[left_keep_index]
 
         # -------------------------------right--------------------------------------
@@ -132,7 +130,6 @@ class ProposalTargetCreator(object):
         # Offset range of classes from [0, n_fg_class - 1] to [1, n_fg_class].
         # The label with value 0 is the background.
         gt_roi_label_right = right_label[right_gt_assignment] + 1
-        gt_roi_angles_right = right_angles.reshape(-1, 2)[right_gt_assignment]
 
         # Select foreground RoIs as those with >= pos_iou_thresh IoU.
         right_pos_index = np.where(right_max_iou >= self.pos_iou_thresh)[0]
@@ -158,7 +155,6 @@ class ProposalTargetCreator(object):
         right_gt_label = gt_roi_label_right[right_keep_index]
         right_gt_label[right_pos_roi_per_this_image:] = 0  # negative labels --> 0
 
-        right_gt_angles = gt_roi_angles_right[right_pos_index]
 
         right_sample_roi = right_roi[right_keep_index]
         # ------------------------开始转换坐标-------------------------
@@ -196,7 +192,116 @@ class ProposalTargetCreator(object):
         right_gt_loc = ((right_gt_roi_loc - np.array(loc_normalize_mean, np.float32)
                        ) / np.array(loc_normalize_std, np.float32))
 
-        return left_2d_bbox, left_sample_roi, left_gt_loc, left_gt_label, left_gt_angles, len(left_pos_index), right_2d_bbox, right_sample_roi, right_gt_loc, right_gt_label, right_gt_angles, len(right_pos_index)
+        return left_2d_bbox, left_sample_roi, left_gt_loc, left_gt_label, len(left_pos_index), right_2d_bbox, right_sample_roi, right_gt_loc, right_gt_label, len(right_pos_index)
+
+class ProposalTargetCreator_percam(object):
+    """Assign ground truth bounding boxes to given RoIs.
+
+    The :meth:`__call__` of this class generates training targets
+    for each object proposal.
+    This is used to train Faster RCNN [#]_.
+
+    .. [#] Shaoqing Ren, Kaiming He, Ross Girshick, Jian Sun. \
+    Faster R-CNN: Towards Real-Time Object Detection with \
+    Region Proposal Networks. NIPS 2015.
+
+    Args:
+        n_sample (int): The number of sampled regions.
+        pos_ratio (float): Fraction of regions that is labeled as a
+            foreground.
+        pos_iou_thresh (float): IoU threshold for a RoI to be considered as a
+            foreground.
+        neg_iou_thresh_hi (float): RoI is considered to be the background
+            if IoU is in
+            [:obj:`neg_iou_thresh_hi`, :obj:`neg_iou_thresh_hi`).
+        neg_iou_thresh_lo (float): See above.
+
+    """
+
+    def __init__(self,
+                 n_sample=256,
+                 pos_ratio=0.35, pos_iou_thresh=0.5,
+                 neg_iou_thresh_hi=0.5, neg_iou_thresh_lo=0.0
+                 ):
+        self.n_sample = n_sample
+        self.pos_ratio = pos_ratio
+        self.pos_iou_thresh = pos_iou_thresh
+        self.neg_iou_thresh_hi = neg_iou_thresh_hi
+        self.neg_iou_thresh_lo = neg_iou_thresh_lo  # NOTE:default 0.1 in py-faster-rcnn
+
+    def __call__(self, roi, gt_bev_bbox, label, gt_bbox, extrin, intrin, frame,
+                 loc_normalize_mean=(0., 0., 0., 0.),
+                 loc_normalize_std=(0.1, 0.1, 0.2, 0.2)):
+
+        remove_idx = []
+        for i in range(len(gt_bbox)):
+            if gt_bbox[i][0] == -1 and gt_bbox[i][1] == -1 and gt_bbox[i][2] == -1 and gt_bbox[i][3] == -1:
+                remove_idx.append(i)
+        # 得出左右两边需要删掉的那个框，再考虑剩下的事情
+
+        gt_bev_bbox = np.delete(gt_bev_bbox, remove_idx, axis=0)
+        gt_bbox = np.delete(gt_bbox, remove_idx, axis=0)
+
+        # left
+        # 限定用于左侧的roi
+        roi_remain_idx = []
+        for id, bbox in enumerate(roi):
+            y = (bbox[0] + bbox[2]) / 2
+            x = (bbox[1] + bbox[3]) / 2
+            z = 0
+            pt2d = getimage_pt(np.array([x, Const.grid_height - y, z]).reshape(3,1), extrin[0][0], intrin[0][0])
+            if 0 < int(pt2d[0]) < Const.ori_img_width and 0 < int(pt2d[1]) < Const.ori_img_height:
+                roi_remain_idx.append(id)
+        rois = roi[roi_remain_idx]
+
+        n_bbox, _ = gt_bev_bbox.shape
+        roi = np.concatenate((rois, gt_bev_bbox), axis=0)
+        pos_roi_per_image = np.round(self.n_sample * self.pos_ratio)
+        iou = bbox_iou(roi, gt_bev_bbox) # R， 4每个roi和gt的iou
+        gt_assignment = iou.argmax(axis=1) # 每个roi对应iou最大的一个gt框的索引值
+        max_iou = iou.max(axis=1) # 每个roi对应iou最大的一个gt框的置信度值
+        # Offset range of classes from [0, n_fg_class - 1] to [1, n_fg_class].
+        # The label with value 0 is the background.
+        gt_roi_label_left = label[gt_assignment] + 1 # 每一个roi对应的gt及其gt的分类
+
+
+        # Select foreground RoIs as those with >= pos_iou_thresh IoU.
+        pos_index = np.where(max_iou >= self.pos_iou_thresh)[0]
+        pos_roi_per_this_image = int(min(pos_roi_per_image, pos_index.size))
+        if pos_index.size > 0:
+            pos_index = np.random.choice(
+                pos_index, size=pos_roi_per_this_image, replace=False)
+
+        # Select background RoIs as those within
+        # [neg_iou_thresh_lo, neg_iou_thresh_hi).
+        neg_index = np.where((max_iou < self.neg_iou_thresh_hi) &
+                             (max_iou >= self.neg_iou_thresh_lo))[0]
+        neg_roi_per_this_image = self.n_sample - pos_roi_per_this_image
+        neg_roi_per_this_image = int(min(neg_roi_per_this_image,
+                                         neg_index.size))
+        if neg_index.size > 0:
+            neg_index = np.random.choice(
+                neg_index, size=neg_roi_per_this_image, replace=False)
+
+        # The indices that we're selecting (both positive and negative).
+        keep_index = np.append(pos_index, neg_index) # 前left_pos_index个是参与角度回归的正样本
+        gt_label = gt_roi_label_left[keep_index]
+        gt_label[pos_roi_per_this_image:] = 0  # negative labels --> 0
+
+        sample_roi = roi[keep_index]
+
+        # -------------------------------right--------------------------------------
+        # ------------------------开始转换坐标-------------------------
+        roi_3d = generate_3d_bbox(sample_roi)
+        bbox_2d = getprojected_3dbox(roi_3d, extrin[0][0], intrin[0][0])
+        bbox_2d = get_outter(bbox_2d)
+
+        gt_roi_loc = bbox2loc(bbox_2d, gt_bbox[gt_assignment[keep_index]])
+
+        gt_loc = ((gt_roi_loc - np.array(loc_normalize_mean, np.float32)
+                       ) / np.array(loc_normalize_std, np.float32))
+
+        return bbox_2d, sample_roi, gt_loc, gt_label, len(pos_index)
 
 class ProposalTargetCreator_ori(object):
     """Assign ground truth bounding boxes to given RoIs.
@@ -413,20 +518,20 @@ class AnchorTargetCreator(object):
         loc = _unmap(loc, n_anchor, inside_index, fill=0)
 
         # -----------------------------------------------------------
-        # tmp = np.zeros((Const.grid_height, Const.grid_width), dtype=np.uint8())
-        # import cv2
-        # tmp = cv2.cvtColor(tmp, cv2.COLOR_GRAY2BGR)
+        tmp = np.zeros((Const.grid_height, Const.grid_width), dtype=np.uint8())
+        import cv2
+        tmp = cv2.cvtColor(tmp, cv2.COLOR_GRAY2BGR)
         # cv2.imwrite("/home/dzc/Desktop/CASIA/proj/mvRPN-det/anchorBase.jpg", tmp)
         # print(anchor)
-        #
-        # for idx, anc in enumerate(anchor):
-        #     if label[idx] == 1:
-        #         cv2.rectangle(tmp, (int(anc[1]), int(anc[0])), (int(anc[3]), int(anc[2])), color=(255, 0, 0))
-        #
-        # for idx, bbx in enumerate(bbox):
-        #     cv2.rectangle(tmp, (int(bbx[1]), int(bbx[0])), (int(bbx[3]), int(bbx[2])), color=(255, 255, 0))
-        #
-        # cv2.imwrite("/images/anchorBase.jpg", tmp)
+
+        for idx, anc in enumerate(anchor):
+            if label[idx] == 1:
+                cv2.rectangle(tmp, (int(anc[1]), int(anc[0])), (int(anc[3]), int(anc[2])), color=(255, 0, 0))
+
+        for idx, bbx in enumerate(bbox):
+            cv2.rectangle(tmp, (int(bbx[1]), int(bbx[0])), (int(bbx[3]), int(bbx[2])), color=(255, 255, 0))
+
+        cv2.imwrite("/home/dzc/Desktop/CASIA/proj/mvRPN-det/anchorBase.jpg", tmp)
         # -----------------------------------------------------------
 
         return loc, label

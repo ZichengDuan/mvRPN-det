@@ -27,10 +27,14 @@ class XFrameDataset(VisionDataset):
             frame_range = range(0, int(self.num_frame * train_ratio))
         else:
             frame_range = range(int(self.num_frame * train_ratio), self.num_frame)
-
+        self.extrinsic_matrix = base.extrinsic_matrices
+        self.intrinsic_matrix = base.intrinsic_matrices
         self.img_fpaths = self.base.get_image_fpaths(frame_range)
-        self.map_gt = {}
-        self.imgs_head_foot_gt = {}
+        self.world_xy = {}
+        self.bboxes = {}
+        self.bboxes_od = {}
+        self.mark = {}
+        self.cls = {}
         self.download(frame_range)
 
         self.gt_fpath = os.path.join(self.root, 'gt.txt')
@@ -56,9 +60,7 @@ class XFrameDataset(VisionDataset):
         self.img_kernel[0, 0] = torch.from_numpy(img_kernel)
         self.img_kernel[1, 1] = torch.from_numpy(img_kernel)
 
-        self.world_xy = {}
-        self.bboxes = {}
-        self.bboxes_od = {}
+
 
     def prepare_gt(self):
         og_gt = []
@@ -131,18 +133,21 @@ class XFrameDataset(VisionDataset):
                 frame_per_cam_bbox = [[] for _ in range(self.num_cam)]
                 frame_wxy = []
                 frame_bbox_od = []
+                frame_cls = []
                 with open(os.path.join(self.root, 'annotations_positions', fname)) as json_file:
                     all_pedestrians = json.load(json_file)
                 for single_pedestrian in all_pedestrians:
                     x, y = self.base.get_worldgrid_from_pos(single_pedestrian['positionID'])
+                    frame_wxy.append([x / self.grid_reduce, y / self.grid_reduce])
 
                     ymin_od, xmin_od, ymax_od, xmax_od = max(min(int(y - 25), self.img_shape[0] - 1), 0),\
-                                                         max(min(int(x - 25), self.img_shape[0] - 1), 0),\
+                                                         max(min(int(x - 25), self.img_shape[1] - 1), 0),\
                                                          max(min(int(y + 25), self.img_shape[0] - 1), 0),\
-                                                         max(min(int(x + 25), self.img_shape[0] - 1), 0)
+                                                         max(min(int(x + 25), self.img_shape[1] - 1), 0)
                     frame_bbox_od.append([ymin_od, xmin_od, ymax_od, xmax_od])
 
-                    frame_wxy.append([x / self.grid_reduce, y / self.grid_reduce])
+                    frame_cls.append([0])
+
                     for cam in range(self.num_cam):
                         ymin, xmin, ymax, xmax = max(min(int((single_pedestrian['views'][cam]['ymin'])), self.img_shape[0] - 1), 0),\
                                                  max(min(int((single_pedestrian['views'][cam]['xmin'])), self.img_shape[1] - 1), 0),\
@@ -153,6 +158,8 @@ class XFrameDataset(VisionDataset):
                 self.bboxes[frame] = frame_per_cam_bbox
                 self.world_xy[frame] = frame_wxy
                 self.bboxes_od[frame] = frame_bbox_od
+                self.cls[frame] = frame_cls
+
 
     def __getitem__(self, index):
         frame = list(self.world_xy.keys())[index]
@@ -167,7 +174,8 @@ class XFrameDataset(VisionDataset):
         bboxes = torch.tensor(self.bboxes[frame])
         bboxes_od = torch.tensor(self.bboxes_od[frame])
         world_xy = torch.tensor(self.world_xy[frame])
-        return imgs, bboxes, bboxes_od, world_xy, frame
+        cls = torch.tensor(self.cls[frame])
+        return imgs, bboxes, bboxes_od, world_xy, cls, frame, self.extrinsic_matrix, self.intrinsic_matrix
 
     def __len__(self):
         return len(self.world_xy.keys())
