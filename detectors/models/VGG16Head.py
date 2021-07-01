@@ -28,8 +28,8 @@ class VGG16RoIHead(nn.Module):
         #                                  nn.Conv2d(512, 512, kernel_size=3, stride=1, padding=1),
         #                                  nn.LeakyReLU(True),
         #                                  ).to("cuda:0")
-
-        self.classifier = nn.Sequential(nn.Linear(25088, 1024, bias=True),
+        # 25044
+        self.classifier = nn.Sequential(nn.Linear(12544, 1024, bias=True),
                                    nn.ReLU(inplace=True),
                                    nn.Dropout(p=0.5, inplace=False),
                                    nn.Linear(1024, 1024, bias=True),
@@ -94,13 +94,10 @@ class VGG16RoIHead(nn.Module):
         pool = pool.view(pool.size(0), -1)
         # print(self.classifier)
         # print(pool.shape)
+        print(pool.shape)
         fc7 = self.classifier(pool)
         roi_cls_locs = self.cls_loc(fc7)
         roi_scores = self.score(fc7)
-        # print(sin_cos)
-        # sin_cos = F.normalize(sin_cos, dim=1)
-        # print(sin_cos)
-        print("dzc", roi_cls_locs.shape)
         return roi_cls_locs, roi_scores
 
 

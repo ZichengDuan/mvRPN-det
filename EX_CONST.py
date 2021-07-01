@@ -31,7 +31,7 @@ class Const:
 
     car_length = 60
 
-    car_height = 40
+    car_height = 170
 
     #------------------------------
     nms_left = 4

@@ -122,7 +122,7 @@ class OFTtrainer(BaseTrainer):
             # ----------------ROI------------------------------
             # 还需要在双视角下的回归gt，以及筛选过后的分类gt，gt_left_loc, gt_left_label, gt_right_loc, gt_right_label
             all_gt_label = torch.zeros((0, 1)).to("cuda:0")
-            all_roi_score = torch.zeros((0, 1)).to("cuda:1")
+            all_roi_score = torch.zeros((0, 2)).to("cuda:1")
             all_gt_roi_loc = torch.zeros((0, 4)).to("cuda:0")
             all_roi_loc = torch.zeros((0, 4)).to("cuda:1")
 
@@ -132,7 +132,7 @@ class OFTtrainer(BaseTrainer):
                     at.tonumpy(gt_bev_bbox),
                     at.tonumpy(cls),
                     gt_percam_bbox[cam],
-                    extrin, intrin, frame,
+                    extrin[cam], intrin[cam], frame,
                     self.loc_normalize_mean,
                     self.loc_normalize_std)
                 # print(bbox_2d.shape, sample_roi.shape, gt_loc.shape, gt_label.shape) # (256, 4) (256, 4) (256, 4) (256, 1)
@@ -146,26 +146,28 @@ class OFTtrainer(BaseTrainer):
 
                 n_sample = roi_cls_loc.shape[0]
                 roi_cls_loc = roi_cls_loc.view(n_sample, -1, 4)
-                print("aaa", roi_cls_loc.shape)
-                roi_loc = roi_cls_loc[torch.arange(0, n_sample).long().cuda(), at.totensor(gt_label).long()]
-                print("bbb", roi_cls_loc.shape, torch.arange(0, n_sample).long().shape, at.totensor(gt_label).long().shape, n_sample)
+                # print("aaa", roi_cls_loc.shape)
+                roi_loc = roi_cls_loc[torch.arange(0, n_sample).long().cuda(), at.totensor(gt_label.reshape(-1)).long()]
+                # print("bbb", roi_cls_loc.shape, torch.arange(0, n_sample).long().shape, at.totensor(gt_label).long().shape, n_sample)
                 gt_label = at.totensor(gt_label).long()
                 gt_loc = at.totensor(gt_loc)
-                print(gt_label.shape,gt_loc.shape, roi_loc.shape,roi_score.shape)
+                # print(gt_label.shape,gt_loc.shape, roi_loc.shape,roi_score.shape)
 
                 all_gt_label = torch.cat((all_gt_label, gt_label), dim=0)
                 all_gt_roi_loc = torch.cat((all_gt_roi_loc, gt_loc), dim=0)
                 all_roi_loc = torch.cat((all_roi_loc, roi_loc), dim=0)
                 all_roi_score = torch.cat((all_roi_score, roi_score), dim=0)
 
-            print(all_gt_label.shape, all_gt_roi_loc.shape, all_roi_loc.shape, all_roi_score.shape)
+            # print(all_gt_label.shape, all_gt_roi_loc.shape, all_roi_loc.shape, all_roi_score.shape)
 
             all_roi_loc_loss = _fast_rcnn_loc_loss(
                 all_roi_loc.contiguous(),
                 all_gt_roi_loc,
                 all_gt_label.data,
                 1)
-            all_roi_cls_loss = nn.CrossEntropyLoss()(all_roi_score, all_gt_label.to(all_roi_score.device))
+            # print(all_roi_loc[:10], all_gt_roi_loc[:10])
+            # print(all_roi_score.shape, all_gt_label.shape)
+            all_roi_cls_loss = nn.CrossEntropyLoss()(all_roi_score, all_gt_label.squeeze().to(all_roi_score.device).long())
             # print(all_sincos_loss)
             # print(all_pred_sincos, all_gt_sincos)
             # --------------------测试roi pooling------------------------

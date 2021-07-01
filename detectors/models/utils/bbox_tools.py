@@ -3,7 +3,7 @@ import numpy as xp
 
 import six
 from six import __init__
-
+import torch
 
 def loc2bbox(src_bbox, loc):
     """Decode bounding boxes from bounding box offsets and scales.
@@ -137,7 +137,9 @@ def bbox2loc(src_bbox, dst_bbox):
     dx = (base_ctr_x - ctr_x) / width
     dh = xp.log(base_height / height)
     dw = xp.log(base_width / width)
-
+    # print(base_height[:5], height[:5], dw[:5])
+    # if dw == -np.inf:
+    #     print("aaa", base_width/ width, base_width, width)
     loc = xp.vstack((dy, dx, dh, dw)).transpose()
     return loc
 

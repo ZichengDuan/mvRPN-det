@@ -249,7 +249,7 @@ class ProposalTargetCreator_percam(object):
             y = (bbox[0] + bbox[2]) / 2
             x = (bbox[1] + bbox[3]) / 2
             z = 0
-            pt2d = getimage_pt(np.array([x, Const.grid_height - y, z]).reshape(3,1), extrin[0][0], intrin[0][0])
+            pt2d = getimage_pt(np.array([x, Const.grid_height - y, z]).reshape(3,1), extrin[0], intrin[0])
             if 0 < int(pt2d[0]) < Const.ori_img_width and 0 < int(pt2d[1]) < Const.ori_img_height:
                 roi_remain_idx.append(id)
         rois = roi[roi_remain_idx]
@@ -290,16 +290,18 @@ class ProposalTargetCreator_percam(object):
 
         sample_roi = roi[keep_index]
 
-        # -------------------------------right--------------------------------------
         # ------------------------开始转换坐标-------------------------
+
         roi_3d = generate_3d_bbox(sample_roi)
-        bbox_2d = getprojected_3dbox(roi_3d, extrin[0][0], intrin[0][0])
+        print(roi_3d[:10])
+        bbox_2d = getprojected_3dbox(roi_3d, extrin[0], intrin[0])
+        print(roi_3d[:10])
         bbox_2d = get_outter(bbox_2d)
 
-        gt_roi_loc = bbox2loc(bbox_2d, gt_bbox[gt_assignment[keep_index]])
 
-        gt_loc = ((gt_roi_loc - np.array(loc_normalize_mean, np.float32)
-                       ) / np.array(loc_normalize_std, np.float32))
+
+        gt_roi_loc = bbox2loc(bbox_2d, gt_bbox[gt_assignment[keep_index]])
+        gt_loc = ((gt_roi_loc - np.array(loc_normalize_mean, np.float32)) / np.array(loc_normalize_std, np.float32))
 
         return bbox_2d, sample_roi, gt_loc, gt_label, len(pos_index)
 
@@ -429,6 +431,7 @@ class ProposalTargetCreator_ori(object):
 
         gt_roi_loc = ((gt_roi_loc - np.array(loc_normalize_mean, np.float32)
                        ) / np.array(loc_normalize_std, np.float32))
+
         return sample_roi, gt_roi_loc, gt_roi_label
 
 class AnchorTargetCreator(object):
