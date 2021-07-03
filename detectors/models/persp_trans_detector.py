@@ -56,7 +56,7 @@ class PerspTransDetector(nn.Module):
                               for cam in range(self.num_cam)]
 
         self.backbone = nn.Sequential(*list(resnet18(pretrained=True, replace_stride_with_dilation=[False, False, False]).children())[:-2]).to('cuda:0')
-        self.rpn = RegionProposalNetwork(in_channels=1026, mid_channels=1026, ratios=[1], anchor_scales=[4 * (4 / (Const.reduce))]).to('cuda:1')
+        self.rpn = RegionProposalNetwork(in_channels=1026, mid_channels=1026, ratios=[1], anchor_scales=[4]).to('cuda:1')
         # my_cls = nn.Sequential(nn.Linear(25088, 2048, bias=True),
         #                        nn.ReLU(inplace=True),
         #                        nn.Dropout(p=0.5, inplace=False),
@@ -99,6 +99,7 @@ class PerspTransDetector(nn.Module):
                 proj_mat = self.proj_mats2[cam].repeat([B, 1, 1]).float().to('cuda:1')
 
             world_feature = kornia.warp_perspective(img_feature.to('cuda:1'), proj_mat, self.reducedgrid_shape) # 0.0142 * 2 = 0.028
+            # print("reducedgrid_shape", self.reducedgrid_shape)
 
             world_feature = kornia.vflip(world_feature)
             world_features.append(world_feature.to('cuda:1'))
@@ -113,7 +114,7 @@ class PerspTransDetector(nn.Module):
         # print(X.shape, Y.shape, feature_to_plot.shape)
         # ax.plot_surface(X, Y, feature_to_plot,  cmap=plt.get_cmap('rainbow'))
         # plt.savefig("dzc3d.jpg" % frame)
-
+        # print("world_features", world_features.shape)
         rpn_locs, rpn_scores, anchor, rois, roi_indices = self.rpn(world_features, Const.grid_size) # 0.08
         #
         # batch_images = torch.zeros((1, 3, Const.grid_height, Const.grid_width))

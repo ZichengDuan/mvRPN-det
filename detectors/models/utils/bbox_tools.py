@@ -1,6 +1,6 @@
 import numpy as np
 import numpy as xp
-
+from EX_CONST import Const
 import six
 from six import __init__
 

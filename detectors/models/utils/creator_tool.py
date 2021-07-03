@@ -413,13 +413,13 @@ class AnchorTargetCreator(object):
         #
         # for idx, anc in enumerate(anchor):
         #     if label[inside_index][idx] == 1:
-        #         cv2.rectangle(tmp, (int(anc[1]), int(anc[0])), (int(anc[3]), int(anc[2])), color=(255, 0, 0))
+        #         cv2.rectangle(tmp, (int(anc[1]), int(anc[0])), (int(anc[3]), int(anc[2])), color=(255, 255, 0))
         #
         # for idx, bbx in enumerate(bbox):
-        #     cv2.rectangle(tmp, (int(bbx[1]), int(bbx[0])), (int(bbx[3]), int(bbx[2])), color=(255, 255, 0))
+        #     cv2.rectangle(tmp, (int(bbx[1]), int(bbx[0])), (int(bbx[3]), int(bbx[2])), color=(34, 34,178), thickness=2)
         #
         # cv2.imwrite("/home/dzc/Desktop/CASIA/proj/mvRPN-det/anchorBase.jpg", tmp)
-        # -----------------------------------------------------------
+        # # -----------------------------------------------------------
         return loc, label
 
     def _create_label(self, inside_index, anchor, bbox):

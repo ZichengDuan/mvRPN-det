@@ -145,10 +145,8 @@ class OFTtrainer(BaseTrainer):
             left_n_sample = left_roi_cls_loc.shape[0]
             left_roi_cls_loc = left_roi_cls_loc.view(left_n_sample, -1, 4)
             left_roi_loc = left_roi_cls_loc[torch.arange(0, left_n_sample).long().cuda(), at.totensor(left_gt_label).long()]
-            print("bbb", left_roi_cls_loc.shape, torch.arange(0, left_n_sample).long().shape, at.totensor(left_gt_label).long().shape, left_n_sample)
             left_gt_label = at.totensor(left_gt_label).long()
             left_gt_loc = at.totensor(left_gt_loc)
-            print("left_roi_loc", left_roi_loc.shape)
             # left_roi_loc_loss = _fast_rcnn_loc_loss(
             #     left_roi_loc.contiguous(),
             #     left_gt_loc,
@@ -466,8 +464,7 @@ class OFTtrainer(BaseTrainer):
             # all_bev_boxes, _, all_sincos_remain, position_mark_keep = nms_new(all_roi_remain, all_front_prob, all_pred_sincos, position_mark)
             # s = time.time()
             v, indices = torch.tensor(all_front_prob).sort(0)
-            indices_remain = indices[v > 0.5]
-            print(v)
+            indices_remain = indices[v > 0.18  ]
             # print(v)
             print(frame)
             all_roi_remain = all_roi_remain[indices_remain].reshape(len(indices_remain), 4)
@@ -606,6 +603,7 @@ class OFTtrainer(BaseTrainer):
 
 def visualize_3dbox(pred_ori, pred_angle, position_mark, extrin, intrin, idx):
     left_img = cv2.imread("/home/dzc/Data/mix/img/left1/%d.jpg" % (idx))
+    right_img = cv2.imread("/home/dzc/Data/mix/img/right2/%d.jpg" % (idx))
     boxes_3d = []
     n_bbox = pred_ori.shape[0]
     for i, bbox in enumerate(pred_ori):
@@ -708,6 +706,7 @@ def visualize_3dbox(pred_ori, pred_angle, position_mark, extrin, intrin, idx):
     pred_ori = np.array(boxes_3d).reshape((n_bbox, 9, 3))
 
     projected_2d = getprojected_3dbox(pred_ori, extrin, intrin, isleft=True)
+    projected_2d = getprojected_3dbox(pred_ori, extrin, intrin, isleft=False)
     # projected_2d = getprojected_3dbox_ori(pred_ori, extrin, intrin, position_mark)
 
     # index_inside = np.where(
@@ -725,19 +724,19 @@ def visualize_3dbox(pred_ori, pred_angle, position_mark, extrin, intrin, idx):
             color = (255, 255, 0)
         else:
             color = (255, 255, 0)
-        cv2.line(left_img, (projected_2d[k][0][0], projected_2d[k][0][1]), (projected_2d[k][1][0], projected_2d[k][1][1]), color = color, thickness=2)
-        cv2.line(left_img, (projected_2d[k][0][0], projected_2d[k][0][1]), (projected_2d[k][3][0], projected_2d[k][3][1]), color = color, thickness=2 )
-        cv2.line(left_img, (projected_2d[k][0][0], projected_2d[k][0][1]), (projected_2d[k][4][0], projected_2d[k][4][1]), color = color, thickness=2)
-        cv2.line(left_img, (projected_2d[k][1][0], projected_2d[k][1][1]), (projected_2d[k][5][0], projected_2d[k][5][1]), color = color, thickness=2)
-        cv2.line(left_img, (projected_2d[k][1][0], projected_2d[k][1][1]), (projected_2d[k][2][0], projected_2d[k][2][1]), color = color, thickness=2)
-        cv2.line(left_img, (projected_2d[k][2][0], projected_2d[k][2][1]), (projected_2d[k][3][0], projected_2d[k][3][1]), color = color, thickness=2)
-        cv2.line(left_img, (projected_2d[k][2][0], projected_2d[k][2][1]), (projected_2d[k][6][0], projected_2d[k][6][1]), color = color, thickness=2)
-        cv2.line(left_img, (projected_2d[k][3][0], projected_2d[k][3][1]), (projected_2d[k][7][0], projected_2d[k][7][1]), color = color, thickness=2)
-        cv2.line(left_img, (projected_2d[k][4][0], projected_2d[k][4][1]), (projected_2d[k][5][0], projected_2d[k][5][1]), color = color, thickness=2)
-        cv2.line(left_img, (projected_2d[k][5][0], projected_2d[k][5][1]), (projected_2d[k][6][0], projected_2d[k][6][1]), color = color, thickness=2)
-        cv2.line(left_img, (projected_2d[k][6][0], projected_2d[k][6][1]), (projected_2d[k][7][0], projected_2d[k][7][1]), color = color, thickness=2)
-        cv2.line(left_img, (projected_2d[k][7][0], projected_2d[k][7][1]), (projected_2d[k][4][0], projected_2d[k][4][1]), color = color, thickness=2)
-        cv2.line(left_img, (projected_2d[k][7][0], projected_2d[k][7][1]), (projected_2d[k][4][0], projected_2d[k][4][1]), color = color, thickness=2)
+        cv2.line(right_img, (projected_2d[k][0][0], projected_2d[k][0][1]), (projected_2d[k][1][0], projected_2d[k][1][1]), color = color, thickness=2)
+        cv2.line(right_img, (projected_2d[k][0][0], projected_2d[k][0][1]), (projected_2d[k][3][0], projected_2d[k][3][1]), color = color, thickness=2 )
+        cv2.line(right_img, (projected_2d[k][0][0], projected_2d[k][0][1]), (projected_2d[k][4][0], projected_2d[k][4][1]), color = color, thickness=2)
+        cv2.line(right_img, (projected_2d[k][1][0], projected_2d[k][1][1]), (projected_2d[k][5][0], projected_2d[k][5][1]), color = color, thickness=2)
+        cv2.line(right_img, (projected_2d[k][1][0], projected_2d[k][1][1]), (projected_2d[k][2][0], projected_2d[k][2][1]), color = color, thickness=2)
+        cv2.line(right_img, (projected_2d[k][2][0], projected_2d[k][2][1]), (projected_2d[k][3][0], projected_2d[k][3][1]), color = color, thickness=2)
+        cv2.line(right_img, (projected_2d[k][2][0], projected_2d[k][2][1]), (projected_2d[k][6][0], projected_2d[k][6][1]), color = color, thickness=2)
+        cv2.line(right_img, (projected_2d[k][3][0], projected_2d[k][3][1]), (projected_2d[k][7][0], projected_2d[k][7][1]), color = color, thickness=2)
+        cv2.line(right_img, (projected_2d[k][4][0], projected_2d[k][4][1]), (projected_2d[k][5][0], projected_2d[k][5][1]), color = color, thickness=2)
+        cv2.line(right_img, (projected_2d[k][5][0], projected_2d[k][5][1]), (projected_2d[k][6][0], projected_2d[k][6][1]), color = color, thickness=2)
+        cv2.line(right_img, (projected_2d[k][6][0], projected_2d[k][6][1]), (projected_2d[k][7][0], projected_2d[k][7][1]), color = color, thickness=2)
+        cv2.line(right_img, (projected_2d[k][7][0], projected_2d[k][7][1]), (projected_2d[k][4][0], projected_2d[k][4][1]), color = color, thickness=2)
+        cv2.line(right_img, (projected_2d[k][7][0], projected_2d[k][7][1]), (projected_2d[k][4][0], projected_2d[k][4][1]), color = color, thickness=2)
 
         # cv2.line(left_img, (projected_2d[k][0+ 9][0], projected_2d[k][0+ 9][1]), (projected_2d[k][1+ 9][0], projected_2d[k][1+ 9][1]), color = (255, 255, 0))
         # cv2.line(left_img, (projected_2d[k][0+ 9][0], projected_2d[k][0+ 9][1]), (projected_2d[k][3+ 9][0], projected_2d[k][3+ 9][1]), color = (255, 255, 0))
@@ -753,9 +752,9 @@ def visualize_3dbox(pred_ori, pred_angle, position_mark, extrin, intrin, idx):
         # cv2.line(left_img, (projected_2d[k][7+ 9][0], projected_2d[k][7+ 9][1]), (projected_2d[k][4+ 9][0], projected_2d[k][4+ 9][1]), color = (255, 255, 0))
         # cv2.line(left_img, (projected_2d[k][7+ 9][0], projected_2d[k][7+ 9][1]), (projected_2d[k][4+ 9][0], projected_2d[k][4+ 9][1]), color = (255, 255, 0))
         #
-        cv2.arrowedLine(left_img, (int((projected_2d[k][0][0] + projected_2d[k][2][0]) / 2), int((projected_2d[k][0][1] + projected_2d[k][2][1]) / 2)), (projected_2d[k][8][0], projected_2d[k][8][1]), color = (255, 60, 199), thickness=2)
+        cv2.arrowedLine(right_img, (int((projected_2d[k][0][0] + projected_2d[k][2][0]) / 2), int((projected_2d[k][0][1] + projected_2d[k][2][1]) / 2)), (projected_2d[k][8][0], projected_2d[k][8][1]), color = (255, 60, 199), thickness=2)
         # cv2.line(left_img, (int((projected_2d[k][0+ 9][0] + projected_2d[k][2+ 9][0]) / 2), int((projected_2d[k][0+ 9][1] + projected_2d[k][2+ 9][1]) / 2)), (projected_2d[k][8+ 9][0], projected_2d[k][8+ 9][1]), color = (255, 60, 199), thickness=2)
-    cv2.imwrite("/home/dzc/Desktop/CASIA/proj/mvRPN-det/results/images/3d_box_blend/%d.jpg" % idx, left_img)
+    cv2.imwrite("/home/dzc/Desktop/CASIA/proj/mvRPN-det/results/images/3d_box_blend/%d.jpg" % idx, right_img)
 
 def _smooth_l1_loss(x, t, in_weight, sigma):
     sigma2 = sigma ** 2

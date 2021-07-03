@@ -54,17 +54,17 @@ class RegionProposalNetwork(nn.Module):
         n, _, hh, ww = x.shape
         anchor = _enumerate_shifted_anchor(
             np.array(self.anchor_base),
-            self.feat_stride, hh, ww)
+            self.feat_stride, hh, ww) # 特征图根据feat stride放大到原图，所以生成的是能覆盖原图的anchor，所以是原始grid大小
 
         n_anchor = anchor.shape[0] // (hh * ww)
-        print("n_anchor", n_anchor)
-        # a = np.zeros((img_size[0]+ 100, img_size[1]+ 100))
+        # print("n_anchor", n_anchor)
+        # a = np.zeros((img_size[0], img_size[1]))
         # img = np.uint8(a)
         # img = cv2.cvtColor(img, cv2.COLOR_GRAY2BGR)
         #
-        # for anchors in anchor[:5]:
+        # for anchors in anchor[:]:
         #     y1, x1, y2, x2 = anchors
-        #     cv2.rectangle(img, (int(x2+ 50), int(y2+ 50)),(int(x1+ 50), int(y1+ 50)), color=(255, 255, 0))
+        #     cv2.rectangle(img, (int(x2), int(y2)),(int(x1), int(y1)), color=(255, 255, 0))
         # cv2.imwrite("/home/dzc/Desktop/CASIA/proj/mvRPN-det/results/images/anchor.jpg", img)
 
         h = F.relu(self.conv1(x))

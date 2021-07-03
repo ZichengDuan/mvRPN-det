@@ -20,7 +20,7 @@ class Const:
 
     grid_size = [grid_height, grid_width]
 
-    reduce = 4
+    reduce = 2
 
     dataset = "mix"
 
