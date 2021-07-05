@@ -10,7 +10,6 @@ import torch
 import torch.optim as optim
 import torchvision.transforms as T
 from detectors.datasets import *
-from detectors.loss.gaussian_mse import GaussianMSE
 from detectors.models.persp_trans_detector import PerspTransDetector
 from detectors.utils.logger import Logger
 from detectors.utils.draw_curve import draw_curve
@@ -88,8 +87,8 @@ def main(args):
             # trainer.test(epoch, test_loader, writer)
         else:
             print('Testing...')
-            model.load_state_dict(torch.load("%s/mvdet_rpn_%d.pth" % (Const.modelsavedir, 19)))
-            roi_head.load_state_dict(torch.load("%s/roi_rpn_head_%d.pth" % (Const.modelsavedir, 19)))
+            model.load_state_dict(torch.load("%s/mvdet_rpn_%d.pth" % (Const.modelsavedir, 8)))
+            roi_head.load_state_dict(torch.load("%s/roi_rpn_head_%d.pth" % (Const.modelsavedir, 8)))
             trainer.test(epoch, test_loader, writer)
             break
     writer.close()
@@ -104,13 +103,13 @@ if __name__ == '__main__':
     parser.add_argument('-j', '--num_workers', type=int, default=8)
     parser.add_argument('-b', '--batch_size', type=int, default=1, metavar='N',
                         help='input batch size for training (default: 1)')
-    parser.add_argument('--epochs', type=int, default=35, metavar='N', help='number of epochs to train (default: 10)')
+    parser.add_argument('--epochs', type=int, default=15, metavar='N', help='number of epochs to train (default: 10)')
     parser.add_argument('--lr', type=float, default=0.0001, metavar='LR', help='learning rate (default: 0.1)')
     parser.add_argument('--weight_decay', type=float, default=1e-5)
     parser.add_argument('--momentum', type=float, default=0.5, metavar='M', help='SGD momentum (default: 0.5)')
     parser.add_argument('--seed', type=int, default=16, help='random seed (default: None)')
 
-    parser.add_argument('--resume', type=bool, default = False)
+    parser.add_argument('--resume', type=bool, default = True)
     args = parser.parse_args()
 
     main(args)

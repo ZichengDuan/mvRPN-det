@@ -13,7 +13,7 @@ class Robomaster_1_dataset(VisionDataset):
         # Robomaster_1_dataset has ij
         # MultiviewX has consistent unit: meter (m) for calibration & pos annotation
         self.__name__ = 'Robo_1'
-        # self.img_shape = [640, 480]
+        self.root = root
         self.img_shape = [480, 640]
         # in centimeters
         self.worldgrid_shape = worldgrid_shape
@@ -39,6 +39,14 @@ class Robomaster_1_dataset(VisionDataset):
                 frame = int(fname.split('.')[0][-4:])
                 if frame in frame_range:
                     img_fpaths[cam][frame] = os.path.join(self.root, 'img', camera_folder, fname)
+        return img_fpaths
+
+    def get_bev_fpath(self, frame_range):
+        img_fpaths = {}
+        for fname in sorted(os.listdir(os.path.join(self.root, 'bevimgs'))):
+            frame = int(fname.split('.')[0][-4:])
+            if frame in frame_range:
+                img_fpaths[frame] = os.path.join(self.root, 'bevimgs', fname)
         return img_fpaths
 
 

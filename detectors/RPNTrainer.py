@@ -10,7 +10,6 @@ import matplotlib.pyplot as plt
 from detectors.utils.nms_new import nms_new, _suppress, vis_nms, nms_new2
 import torch.nn as nn
 import warnings
-from detectors.loss.gaussian_mse import GaussianMSE
 from .models.utils.creator_tool import AnchorTargetCreator, ProposalTargetCreator, ProposalTargetCreator_ori
 from .utils import array_tool as at
 from EX_CONST import Const

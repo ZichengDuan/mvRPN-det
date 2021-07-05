@@ -29,7 +29,7 @@ elseif contains(filename,'res')
     elseif strcmpi(chlname,'multiviewx')
         frames = 360:399;
     elseif strcmpi(chlname, 'Robo_1')
-        frames = [2500:3021, 1700 + 3021: 2100 + 3021];
+        frames = [1400:2000];
     end
 end
 

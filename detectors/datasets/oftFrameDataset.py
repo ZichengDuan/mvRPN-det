@@ -31,10 +31,9 @@ class oftFrameDataset(VisionDataset):
         self.intrinsic_matrix2 = base.intrinsic_matrices2
 
         if train:
-            frame_range = list(range(0, 2500)) + list(range(3201, 4100+ 3021))
+            frame_range = list(range(0, 1400)) + list(range(2000, 6989))
         else:
-            # frame_range = list(range(435, 440)) + list(range(200, 300))+ list(range(2500, 3021))
-            frame_range = list(range(2500, 3021))
+            frame_range = list(range(1400, 2000))
 
 
         # if train:
@@ -65,6 +64,7 @@ class oftFrameDataset(VisionDataset):
         self.mark = {}
 
         self.img_fpaths = self.base.get_image_fpaths(frame_range)
+        self.bev_fpaths = self.base.get_bev_fpath(frame_range)
         if train:
             self.gt_fpath = os.path.join(self.root, 'dzc_res/train_gt.txt')
         else:
@@ -136,7 +136,6 @@ class oftFrameDataset(VisionDataset):
                 self.left_bboxes[frame] = frame_left_box
                 self.right_bboxes[frame] = frame_right_box
 
-
     def prepare_dir(self, frame_range):
         for fname in sorted(os.listdir(os.path.join(self.root, 'annotations'))):
             frame_left_dir = []
@@ -153,8 +152,6 @@ class oftFrameDataset(VisionDataset):
                     wx = int(car["wx"]) // 10
                     wy = int(car["wy"]) // 10
                     mk = int(car["mark"])
-                    # left_dir = int(car["direc_left"])
-                    # right_dir = int(car["direc_right"])
                     left_dir = 0
                     right_dir = 0
                     bev_angle = float(car["angle"])
@@ -210,6 +207,15 @@ class oftFrameDataset(VisionDataset):
                 img = self.transform(img)
             imgs.append(img)
         imgs = torch.stack(imgs)
+
+        bevimgs = []
+        bev_fpath = self.bev_fpaths[frame]
+        bevimg = Image.open(bev_fpath).convert('RGB')
+        if self.transform is not None:
+            bevimg = self.transform(bevimg)
+        bevimgs.append(bevimg)
+        bevimgs = torch.stack(bevimgs)
+
         bev_bboxes = torch.tensor(self.bev_bboxes[frame])
         left_bboxes = torch.tensor(self.left_bboxes[frame])
         right_bboxes = torch.tensor(self.right_bboxes[frame])
@@ -221,7 +227,7 @@ class oftFrameDataset(VisionDataset):
         bev_angle = torch.tensor(self.bev_angle[frame])
         mark = self.mark[frame]
 
-        return imgs, bev_xy, bev_angle, bev_bboxes, \
+        return bevimgs, bev_xy, bev_angle, bev_bboxes, \
                left_bboxes, right_bboxes,\
                left_dirs, right_dirs, \
                left_angles, right_angles, \
