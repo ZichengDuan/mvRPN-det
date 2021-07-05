@@ -645,7 +645,8 @@ class ProposalCreator:
         if n_post_nms > 0:
             keep = keep[:n_post_nms]
         roi = roi[keep]
-        return roi, roi_origin, order.copy()
+        score = score[keep]
+        return roi, roi_origin, score.copy()
 
 def generate_3d_bbox2(pred_bboxs):
     # 输出以左下角为原点的3d坐标

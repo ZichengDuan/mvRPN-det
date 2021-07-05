@@ -85,9 +85,9 @@ class PerspTransDetector(nn.Module):
         img_feature = F.interpolate(img_feature, self.reducedgrid_shape, mode='bilinear')
         img_features.append(img_feature)
         world_features = torch.cat(img_features + [self.coord_map.repeat([B, 1, 1, 1]).to('cuda:0')], dim=1)
-        rpn_locs, rpn_scores, anchor, rois, roi_indices = self.rpn(world_features.to('cuda:1'), Const.grid_size) # 0.08
+        rpn_locs, rpn_scores, anchor, rois, roi_indices, scores = self.rpn(world_features.to('cuda:1'), Const.grid_size) # 0.08
 
-        return rpn_locs, rpn_scores, anchor, rois, roi_indices, world_features
+        return rpn_locs, rpn_scores, anchor, rois, roi_indices, scores, world_features
 
 
     def get_imgcoord2worldgrid_matrices(self, intrinsic_matrices, extrinsic_matrices, worldgrid2worldcoord_mat):
