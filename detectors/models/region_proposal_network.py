@@ -83,10 +83,11 @@ class RegionProposalNetwork(nn.Module):
         # s = time.time()
         rois = list()
         roi_indices = list()
+        final_scores = list()
 
         for i in range(n):
             # print("dzcddzzcc", rpn_locs.shape, i,rpn_locs[i].shape )
-            roi, roi_origin, order = self.proposal_layer(
+            roi, roi_origin, score = self.proposal_layer(
                 rpn_locs[i].cpu().data.numpy(),
                 rpn_fg_scores[i].cpu().data.numpy(),
                 anchor,img_size,
@@ -94,12 +95,12 @@ class RegionProposalNetwork(nn.Module):
             batch_index = i * np.ones((len(roi),), dtype=np.int32)
             rois.append(roi)
             roi_indices.append(batch_index)
-
+            final_scores.append(score)
         # e = time.time()
         # print(e - s)
         rois = np.concatenate(rois, axis=0)
         roi_indices = np.concatenate(roi_indices, axis=0)
-
+        final_scores = np.concatenate(final_scores, axis=0)
         # 第二个rpn
         #
         # new_rpn_locs = nn.Conv2d(1026, n_anchor * 4, 1, 1, 0).to("cuda:1")(h)
@@ -131,7 +132,7 @@ class RegionProposalNetwork(nn.Module):
         # new_roi_indices = np.concatenate(new_roi_indices, axis=0)
 
         # print(len(rpn_locs[roi_indices]), len(new_roi_indices), len(new_rois))
-        return rpn_locs, rpn_scores, anchor, rois, roi_indices
+        return rpn_locs, rpn_scores, anchor, rois, roi_indices, final_scores
 
 
 def _enumerate_shifted_anchor(anchor_base, feat_stride, height, width):

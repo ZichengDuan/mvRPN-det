@@ -31,6 +31,13 @@
             </Attribute>
           </value>
         </entry>
+        <entry key="/detectors/evaluation2/evaluate.py">
+          <value>
+            <Attribute>
+              <option name="separator" value="," />
+            </Attribute>
+          </value>
+        </entry>
         <entry key="/detectors/models/VGG16Head.py">
           <value>
             <Attribute>

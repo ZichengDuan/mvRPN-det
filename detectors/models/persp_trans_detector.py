@@ -56,7 +56,7 @@ class PerspTransDetector(nn.Module):
                               for cam in range(self.num_cam)]
 
         self.backbone = nn.Sequential(*list(resnet18(pretrained=True, replace_stride_with_dilation=[False, False, False]).children())[:-2]).to('cuda:0')
-        self.rpn = RegionProposalNetwork(in_channels=1026, mid_channels=1026, ratios=[1], anchor_scales=[4]).to('cuda:1')
+        self.rpn = RegionProposalNetwork(in_channels=514, mid_channels=514, ratios=[1], anchor_scales=[4]).to('cuda:1')
         # my_cls = nn.Sequential(nn.Linear(25088, 2048, bias=True),
         #                        nn.ReLU(inplace=True),
         #                        nn.Dropout(p=0.5, inplace=False),
@@ -80,7 +80,7 @@ class PerspTransDetector(nn.Module):
         world_features = []
         img_featuremap = []
 
-        for cam in range(self.num_cam):
+        for cam in range(self.num_cam - 1):
             if hasattr(torch.cuda, 'empty_cache'):
                 torch.cuda.empty_cache()
             img_feature =self.backbone(imgs[:, cam].to('cuda:0'))
@@ -115,7 +115,7 @@ class PerspTransDetector(nn.Module):
         # ax.plot_surface(X, Y, feature_to_plot,  cmap=plt.get_cmap('rainbow'))
         # plt.savefig("dzc3d.jpg" % frame)
         # print("world_features", world_features.shape)
-        rpn_locs, rpn_scores, anchor, rois, roi_indices = self.rpn(world_features, Const.grid_size) # 0.08
+        rpn_locs, rpn_scores, anchor, rois, roi_indices, final_scores = self.rpn(world_features, Const.grid_size) # 0.08
         #
         # batch_images = torch.zeros((1, 3, Const.grid_height, Const.grid_width))
         # image_sizes = [(Const.grid_height, Const.grid_width)]
@@ -135,7 +135,7 @@ class PerspTransDetector(nn.Module):
         #     batch_index = i * np.ones((len(rois),), dtype=np.int32)
         #     roi_indices.append(batch_index)
 
-        return rpn_locs, rpn_scores, anchor, rois, roi_indices, img_featuremap, world_features
+        return rpn_locs, rpn_scores, anchor, rois, roi_indices, final_scores, img_featuremap, world_features
 
 
     def get_imgcoord2worldgrid_matrices(self, intrinsic_matrices, extrinsic_matrices, worldgrid2worldcoord_mat):
