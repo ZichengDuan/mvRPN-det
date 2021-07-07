@@ -9,7 +9,6 @@ import matplotlib
 matplotlib.use('Agg')
 import matplotlib.pyplot as plt
 from detectors.utils.nms_new import nms_new, _suppress, vis_nms
-from detectors.evaluation.evaluate import matlab_eval, python_eval
 from detectors.evaluation2.evaluate import evaluate
 import torch.nn as nn
 import warnings
@@ -223,7 +222,7 @@ class OFTtrainer(BaseTrainer):
 
             v, indices = torch.tensor(final_scores).sort(0)
             # print(v)
-            indices_remain = indices[v > 0.997]
+            indices_remain = indices[v > 0.995]
             #
             if final_scores.shape[0] != 0:
                 if final_scores.shape[0] == 1:
