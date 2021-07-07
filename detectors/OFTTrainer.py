@@ -9,7 +9,8 @@ import matplotlib
 matplotlib.use('Agg')
 import matplotlib.pyplot as plt
 from detectors.utils.nms_new import nms_new, _suppress, vis_nms
-from detectors.evaluation.evaluate import matlab_eval, python_eval
+# from detectors.evaluation.evaluate import matlab_eval, python_eval
+from detectors.evaluation.evaluate import evaluate
 import torch.nn as nn
 import warnings
 from detectors.loss.gaussian_mse import GaussianMSE
@@ -241,7 +242,7 @@ class OFTtrainer(BaseTrainer):
             # roi_cls_loss = nn.CrossEntropyLoss()(roi_score, gt_roi_label.to(roi_score.device))
             # ----------------------Loss-----------------------------
             loss = rpn_loc_loss * 3 + rpn_cls_loss * 3 + \
-                    (all_roi_loc_loss + all_roi_cls_loss + all_sincos_loss)
+                    (all_roi_loc_loss * 0 + all_roi_cls_loss + all_sincos_loss)
 
             # loss = (rpn_loc_loss + rpn_cls_loss) * 0 +  all_roi_loc_loss + all_roi_cls_loss + all_sincos_loss
             Loss += loss.item()
@@ -280,7 +281,7 @@ class OFTtrainer(BaseTrainer):
             writer.add_scalar("ALL ANGLE_REG LOSS", ALL_ANGLE_REG_LOSS / (batch_idx + 1), niter)
 
             if batch_idx % 10 == 0:
-                print("Iteration: %d\n" % batch_idx,
+                print("[Epoch %d] Iter: %d\n" % (epoch, batch_idx),
                       "Total: %4f\n" % (Loss / (batch_idx + 1)),
                       "Rpn Loc : %4f    || " % (RPN_LOC_LOSS / (batch_idx + 1)),
                       "Rpn Cls : %4f    ||" % (RPN_CLS_LOSS / (batch_idx + 1)),
@@ -464,7 +465,8 @@ class OFTtrainer(BaseTrainer):
             # all_bev_boxes, _, all_sincos_remain, position_mark_keep = nms_new(all_roi_remain, all_front_prob, all_pred_sincos, position_mark)
             # s = time.time()
             v, indices = torch.tensor(all_front_prob).sort(0)
-            indices_remain = indices[v > 0.18  ]
+            # print(v)
+            indices_remain = indices[v > 0.6]
             # print(v)
             print(frame)
             all_roi_remain = all_roi_remain[indices_remain].reshape(len(indices_remain), 4)
@@ -503,7 +505,7 @@ class OFTtrainer(BaseTrainer):
             # all_sincos_remain2 = gt_left_sincos[0]
 
             if len(all_bev_boxes) != 0:
-                visualize_3dbox(all_bev_boxes, all_sincos_remain, position_mark_keep, extrin, intrin, frame)
+                visualize_3dbox(all_bev_boxes, all_sincos_remain, position_mark_keep, gt_bbox, bev_angle, extrin, intrin, frame)
                 for bbox in all_bev_boxes:
                     ymin, xmin, ymax, xmax = bbox
                     all_res.append([frame, ((xmin + xmax) / 2), ((ymin + ymax) / 2)])
@@ -511,7 +513,7 @@ class OFTtrainer(BaseTrainer):
         gt_fpath = '/home/dzc/Data/%s/dzc_res/test_gt.txt' % Const.dataset
         np.savetxt(res_fpath, np.array(all_res).reshape(-1, 3), "%d")
 
-        recall, precision, moda, modp = matlab_eval(os.path.abspath(res_fpath), os.path.abspath(gt_fpath),
+        recall, precision, moda, modp = evaluate(os.path.abspath(res_fpath), os.path.abspath(gt_fpath),
                                                         data_loader.dataset.base.__name__)
 
         print(recall, precision, moda, modp)
@@ -601,17 +603,119 @@ class OFTtrainer(BaseTrainer):
         # Total number of classes including the background.
         return self.roi_head.n_class
 
-def visualize_3dbox(pred_ori, pred_angle, position_mark, extrin, intrin, idx):
+def visualize_3dbox(pred_ori, pred_angle, position_mark, gt_bbox, bev_angle, extrin, intrin, idx):
     left_img = cv2.imread("/home/dzc/Data/mix/img/left1/%d.jpg" % (idx))
     right_img = cv2.imread("/home/dzc/Data/mix/img/right2/%d.jpg" % (idx))
     boxes_3d = []
     n_bbox = pred_ori.shape[0]
+
+    gt_bbox = gt_bbox[0]
+    bev_angle = bev_angle[0]
+    gt_n_bbox = gt_bbox.shape[0]
+    # ---------------------------------------------
+    for j, bbox in enumerate(gt_bbox):
+        ymin, xmin, ymax, xmax = bbox
+        theta = bev_angle[j]
+
+
+        x1_ori, x2_ori, x3_ori, x4_ori, x_mid = xmin, xmin, xmax, xmax, (xmin + xmax) / 2 - 40
+        y1_ori, y2_ori, y3_ori, y4_ori, y_mid = Const.grid_height - ymin, Const.grid_height - ymax, Const.grid_height - ymax, Const.grid_height - ymin, (Const.grid_height -ymax + Const.grid_height -ymin) / 2
+        center_x, center_y = int((xmin + xmax) // 2), int((ymin + ymax) // 2)
+
+        x1_rot, x2_rot, x3_rot, x4_rot, xmid_rot = \
+            int(math.cos(theta) * (x1_ori - center_x) - math.sin(theta) * (
+                        y1_ori - (Const.grid_height - center_y)) + center_x), \
+            int(math.cos(theta) * (x2_ori - center_x) - math.sin(theta) * (
+                        y2_ori - (Const.grid_height - center_y)) + center_x), \
+            int(math.cos(theta) * (x3_ori - center_x) - math.sin(theta) * (
+                        y3_ori - (Const.grid_height - center_y)) + center_x), \
+            int(math.cos(theta) * (x4_ori - center_x) - math.sin(theta) * (
+                        y4_ori - (Const.grid_height - center_y)) + center_x), \
+            int(math.cos(theta) * (x_mid - center_x) - math.sin(theta) * (
+                        y_mid - (Const.grid_height - center_y)) + center_x)
+
+        y1_rot, y2_rot, y3_rot, y4_rot, ymid_rot = \
+            int(math.sin(theta) * (x1_ori - center_x) + math.cos(theta) * (y1_ori - (Const.grid_height - center_y)) + (
+                        Const.grid_height - center_y)), \
+            int(math.sin(theta) * (x2_ori - center_x) + math.cos(theta) * (y2_ori - (Const.grid_height - center_y)) + (
+                        Const.grid_height - center_y)), \
+            int(math.sin(theta) * (x3_ori - center_x) + math.cos(theta) * (y3_ori - (Const.grid_height - center_y)) + (
+                        Const.grid_height - center_y)), \
+            int(math.sin(theta) * (x4_ori - center_x) + math.cos(theta) * (y4_ori - (Const.grid_height - center_y)) + (
+                        Const.grid_height - center_y)), \
+            int(math.sin(theta) * (x_mid - center_x) + math.cos(theta) * (y_mid - (Const.grid_height - center_y)) + (
+                        Const.grid_height - center_y))
+
+        pt0 = [x1_rot, y1_rot, 0]
+        pt1 = [x2_rot, y2_rot, 0]
+        pt2 = [x3_rot, y3_rot, 0]
+        pt3 = [x4_rot, y4_rot, 0]
+        pt_h_0 = [x1_rot, y1_rot, Const.car_height]
+        pt_h_1 = [x2_rot, y2_rot, Const.car_height]
+        pt_h_2 = [x3_rot, y3_rot, Const.car_height]
+        pt_h_3 = [x4_rot, y4_rot, Const.car_height]
+        pt_extra = [xmid_rot, ymid_rot, 0]
+
+        boxes_3d.append([pt0, pt1, pt2, pt3, pt_h_0, pt_h_1, pt_h_2, pt_h_3, pt_extra])
+
+        pass
+    gt_ori = np.array(boxes_3d).reshape((gt_n_bbox, 9, 3))
+
+    gt_projected_2d = getprojected_3dbox(gt_ori, extrin, intrin, isleft=True)
+    gt_projected_2d = getprojected_3dbox(gt_ori, extrin, intrin, isleft=False)
+    for k in range(gt_n_bbox):
+        color = (0, 60, 199)
+        cv2.line(right_img, (gt_projected_2d[k][0][0], gt_projected_2d[k][0][1]),
+                 (gt_projected_2d[k][1][0], gt_projected_2d[k][1][1]), color=color, thickness=2)
+        cv2.line(right_img, (gt_projected_2d[k][0][0], gt_projected_2d[k][0][1]),
+                 (gt_projected_2d[k][3][0], gt_projected_2d[k][3][1]), color=color, thickness=2)
+        cv2.line(right_img, (gt_projected_2d[k][0][0], gt_projected_2d[k][0][1]),
+                 (gt_projected_2d[k][4][0], gt_projected_2d[k][4][1]), color=color, thickness=2)
+        cv2.line(right_img, (gt_projected_2d[k][1][0], gt_projected_2d[k][1][1]),
+                 (gt_projected_2d[k][5][0], gt_projected_2d[k][5][1]), color=color, thickness=2)
+        cv2.line(right_img, (gt_projected_2d[k][1][0], gt_projected_2d[k][1][1]),
+                 (gt_projected_2d[k][2][0], gt_projected_2d[k][2][1]), color=color, thickness=2)
+        cv2.line(right_img, (gt_projected_2d[k][2][0], gt_projected_2d[k][2][1]),
+                 (gt_projected_2d[k][3][0], gt_projected_2d[k][3][1]), color=color, thickness=2)
+        cv2.line(right_img, (gt_projected_2d[k][2][0], gt_projected_2d[k][2][1]),
+                 (gt_projected_2d[k][6][0], gt_projected_2d[k][6][1]), color=color, thickness=2)
+        cv2.line(right_img, (gt_projected_2d[k][3][0], gt_projected_2d[k][3][1]),
+                 (gt_projected_2d[k][7][0], gt_projected_2d[k][7][1]), color=color, thickness=2)
+        cv2.line(right_img, (gt_projected_2d[k][4][0], gt_projected_2d[k][4][1]),
+                 (gt_projected_2d[k][5][0], gt_projected_2d[k][5][1]), color=color, thickness=2)
+        cv2.line(right_img, (gt_projected_2d[k][5][0], gt_projected_2d[k][5][1]),
+                 (gt_projected_2d[k][6][0], gt_projected_2d[k][6][1]), color=color, thickness=2)
+        cv2.line(right_img, (gt_projected_2d[k][6][0], gt_projected_2d[k][6][1]),
+                 (gt_projected_2d[k][7][0], gt_projected_2d[k][7][1]), color=color, thickness=2)
+        cv2.line(right_img, (gt_projected_2d[k][7][0], gt_projected_2d[k][7][1]),
+                 (gt_projected_2d[k][4][0], gt_projected_2d[k][4][1]), color=color, thickness=2)
+        cv2.line(right_img, (gt_projected_2d[k][7][0], gt_projected_2d[k][7][1]),
+                 (gt_projected_2d[k][4][0], gt_projected_2d[k][4][1]), color=color, thickness=2)
+
+        # cv2.line(left_img, (projected_2d[k][0+ 9][0], projected_2d[k][0+ 9][1]), (projected_2d[k][1+ 9][0], projected_2d[k][1+ 9][1]), color = (255, 255, 0))
+        # cv2.line(left_img, (projected_2d[k][0+ 9][0], projected_2d[k][0+ 9][1]), (projected_2d[k][3+ 9][0], projected_2d[k][3+ 9][1]), color = (255, 255, 0))
+        # cv2.line(left_img, (projected_2d[k][0+ 9][0], projected_2d[k][0+ 9][1]), (projected_2d[k][4+ 9][0], projected_2d[k][4+ 9][1]), color = (255, 255, 0))
+        # cv2.line(left_img, (projected_2d[k][1+ 9][0], projected_2d[k][1+ 9][1]), (projected_2d[k][5+ 9][0], projected_2d[k][5+ 9][1]), color = (255, 255, 0))
+        # cv2.line(left_img, (projected_2d[k][1+ 9][0], projected_2d[k][1+ 9][1]), (projected_2d[k][2+ 9][0], projected_2d[k][2+ 9][1]), color = (255, 255, 0))
+        # cv2.line(left_img, (projected_2d[k][2+ 9][0], projected_2d[k][2+ 9][1]), (projected_2d[k][3+ 9][0], projected_2d[k][3+ 9][1]), color = (255, 255, 0))
+        # cv2.line(left_img, (projected_2d[k][2+ 9][0], projected_2d[k][2+ 9][1]), (projected_2d[k][6+ 9][0], projected_2d[k][6+ 9][1]), color = (255, 255, 0))
+        # cv2.line(left_img, (projected_2d[k][3+ 9][0], projected_2d[k][3+ 9][1]), (projected_2d[k][7+ 9][0], projected_2d[k][7+ 9][1]), color = (255, 255, 0))
+        # cv2.line(left_img, (projected_2d[k][4+ 9][0], projected_2d[k][4+ 9][1]), (projected_2d[k][5+ 9][0], projected_2d[k][5+ 9][1]), color = (255, 255, 0))
+        # cv2.line(left_img, (projected_2d[k][5+ 9][0], projected_2d[k][5+ 9][1]), (projected_2d[k][6+ 9][0], projected_2d[k][6+ 9][1]), color = (255, 255, 0))
+        # cv2.line(left_img, (projected_2d[k][6+ 9][0], projected_2d[k][6+ 9][1]), (projected_2d[k][7+ 9][0], projected_2d[k][7+ 9][1]), color = (255, 255, 0))
+        # cv2.line(left_img, (projected_2d[k][7+ 9][0], projected_2d[k][7+ 9][1]), (projected_2d[k][4+ 9][0], projected_2d[k][4+ 9][1]), color = (255, 255, 0))
+        # cv2.line(left_img, (projected_2d[k][7+ 9][0], projected_2d[k][7+ 9][1]), (projected_2d[k][4+ 9][0], projected_2d[k][4+ 9][1]), color = (255, 255, 0))
+        #
+        cv2.arrowedLine(right_img, (int((gt_projected_2d[k][0][0] + gt_projected_2d[k][2][0]) / 2),
+                                    int((gt_projected_2d[k][0][1] + gt_projected_2d[k][2][1]) / 2)),
+                        (gt_projected_2d[k][8][0], gt_projected_2d[k][8][1]), color=(255, 60, 199), thickness=2)
+        # cv2.line(left_img, (int((projected_2d[k][0+ 9][0] + projected_2d[k][2+ 9][0]) / 2), int((projected_2d[k][0+ 9][1] + projected_2d[k][2+ 9][1]) / 2)), (projected_2d[k][8+ 9][0], projected_2d[k][8+ 9][1]), color = (255, 60, 199), thickness=2)
+
+
+    boxes_3d = []
     for i, bbox in enumerate(pred_ori):
         ymin, xmin, ymax, xmax = bbox
         sincos = pred_angle[i]
-
-        # y = (bbox[0] + bbox[2]) / 2
-        # x = (bbox[1] + bbox[3]) / 2
 
         if position_mark[i] == 0:
             x1_ori, x2_ori, x3_ori, x4_ori, x_mid = xmin, xmin, xmax, xmax, (xmin + xmax) / 2 + 40
@@ -707,16 +811,6 @@ def visualize_3dbox(pred_ori, pred_angle, position_mark, extrin, intrin, idx):
 
     projected_2d = getprojected_3dbox(pred_ori, extrin, intrin, isleft=True)
     projected_2d = getprojected_3dbox(pred_ori, extrin, intrin, isleft=False)
-    # projected_2d = getprojected_3dbox_ori(pred_ori, extrin, intrin, position_mark)
-
-    # index_inside = np.where(
-    #     (projected_2d[:, 0] >= 0) &
-    #     (projected_2d[:, 1] >= 0) &
-    #     (projected_2d[:, 2] <= Const.ori_img_height) &
-    #     (projected_2d[:, 3] <= Const.ori_img_width)
-    # )[0]
-
-    # projected_2d = projected_2d[index_inside]
 
     # n, 9 ,2
     for k in range(n_bbox):

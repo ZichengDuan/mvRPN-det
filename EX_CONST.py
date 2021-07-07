@@ -20,9 +20,9 @@ class Const:
 
     grid_size = [grid_height, grid_width]
 
-    reduce = 2
+    reduce =4
 
-    dataset = "mix"
+    dataset = "mix_simp"
 
     car_dist = math.sqrt(50/2 * 50/2 + 60/2 * 60/2)
 
@@ -41,7 +41,7 @@ class Const:
 
     roi_classes = 1
 
-    modelsavedir = "/home/dzc/Desktop/CASIA/proj/mvRPN-det/results/trained/reduce2"
+    modelsavedir = "/home/dzc/Desktop/CASIA/proj/mvRPN-det/results/trained/3timesrpnloss"
 
     imgsavedir = "/home/dzc/Desktop/CASIA/proj/mvRPN-det/results/images/testing_set"
 

@@ -88,8 +88,8 @@ def main(args):
             # trainer.test(epoch, test_loader, writer)
         else:
             print('Testing...')
-            model.load_state_dict(torch.load("%s/mvdet_rpn_%d.pth" % (Const.modelsavedir, 19)))
-            roi_head.load_state_dict(torch.load("%s/roi_rpn_head_%d.pth" % (Const.modelsavedir, 19)))
+            model.load_state_dict(torch.load("%s/mvdet_rpn_%d.pth" % (Const.modelsavedir, 35)))
+            roi_head.load_state_dict(torch.load("%s/roi_rpn_head_%d.pth" % (Const.modelsavedir, 20)))
             trainer.test(epoch, test_loader, writer)
             break
     writer.close()
@@ -110,7 +110,7 @@ if __name__ == '__main__':
     parser.add_argument('--momentum', type=float, default=0.5, metavar='M', help='SGD momentum (default: 0.5)')
     parser.add_argument('--seed', type=int, default=16, help='random seed (default: None)')
 
-    parser.add_argument('--resume', type=bool, default = False)
+    parser.add_argument('--resume', type=bool, default = True)
     args = parser.parse_args()
 
     main(args)

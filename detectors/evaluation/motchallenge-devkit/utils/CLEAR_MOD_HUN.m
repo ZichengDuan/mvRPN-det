@@ -32,8 +32,7 @@ function [metrics, metricsInfo, additionalInfo]=CLEAR_MOD_HUN(gt,det,options)
 % default options: 2D
 if nargin<3
     options.eval3d=0;   % only bounding box overlap
-%    options.td=50/2.5;  % threshold as distance
-    options.td=78;
+    options.td=78;  % threshold as distance
 end
 
 
@@ -181,7 +180,6 @@ for t=1:F
 				GT=gt(GTsInFrame(o),[3:4]);
                 for e=1:Nt
 					E=det(DetsInFrame(e),[3:4]);
-                    
                     dist(o,e)=getDistance(GT(1),GT(2),E(1),E(2));
                 end
             end
@@ -193,7 +191,6 @@ for t=1:F
             % do Hungarian matching only if there is anything to match
             if numel(find(~isinf(tmpai)))>0
                 [Mtch,~]=Hungarian(tmpai);
-                
                 [u,v]=find(Mtch);
 
 %                 M=M;
@@ -209,12 +206,12 @@ for t=1:F
     
     
     alldetections=1:Nt;
+    
 %     mappedDets=intersect(M(t,find(M(t,:))),alldetections);
 %     falsepositives=setdiff(alldetections,mappedDets);
     mappedDets = [];
     if ~isempty(alldetections) && any(M(t,curdetected))
         mappedDets=intersect(M(t,curdetected),alldetections);
-      
     end
     
     falsepositives=alldetections;
@@ -225,7 +222,6 @@ for t=1:F
 %     allfalsepos(t,1:length(falsepositives))=falsepositives;
     allfalsepos(t,falsepositives)=falsepositives;
     
-  
     c(t)=numel(curdetected);
     for ct=curdetected
         eid=M(t,ct);
@@ -240,14 +236,14 @@ for t=1:F
 			stY = det(DetsInFrame(eid), 4);
             
             distances(t,ct)=getDistance(gtX, gtY, stX, stY);
-    
+
         end
     end
     
     
     fp(t)=Nt-c(t);
     m(t)=g(t)-c(t);
-   
+    
     
 end    
 
@@ -267,9 +263,11 @@ MODA=(1-((sum(m)+sum(fp))/sum(g)))*100;
 recall=sum(c)/sum(g)*100;
 precision=sum(c)/(sum(fp)+sum(c))*100;
 FAR=sum(fp)/Fgt;
+if isempty(FAR), FAR=0; end % force to 0
 GT=sum(g);
  
 metrics=[recall, precision, FAR, GT, truepositives, falsepositives, missed, MODA, MODP];
+metrics(isnan(metrics))=0;
 
 additionalInfo.allfalsepos=allfalsepos;
 
