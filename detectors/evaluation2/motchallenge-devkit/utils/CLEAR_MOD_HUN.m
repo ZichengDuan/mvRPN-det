@@ -32,7 +32,7 @@ function [metrics, metricsInfo, additionalInfo]=CLEAR_MOD_HUN(gt,det,options)
 % default options: 2D
 if nargin<3
     options.eval3d=0;   % only bounding box overlap
-    options.td=50/2.5;  % threshold as distance
+    options.td=78;  % threshold as distance
 end
 
 
