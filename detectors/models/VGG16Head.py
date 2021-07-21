@@ -1,4 +1,4 @@
-from roi_module import RoIPooling2D
+from detectors.models.roi_module import RoIPooling2D
 from ..utils import array_tool as at
 import torch.nn as nn
 import torch
