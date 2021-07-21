@@ -1,13 +1,13 @@
 import time
 import sys
-sys.path.append("..")
+sys.path.append("...")
 import cv2
 import numpy as np
 import cupy as cp
 import torch
 
 from .bbox_tools import bbox2loc, bbox_iou, loc2bbox
-# from .nms import non_maximum_suppression
+# from .nms import non_maxmimum_suppression
 from EX_CONST import Const
 from torchvision.ops import boxes as box_ops
 
