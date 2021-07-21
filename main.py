@@ -13,7 +13,7 @@ from detectors.datasets import *
 from detectors.loss.gaussian_mse import GaussianMSE
 from detectors.models.persp_trans_detector import PerspTransDetector
 from detectors.utils.logger import Logger
-from detectors.utils.draw_curve import draw_curve
+# from detectors.utils.draw_curve import draw_curve
 from detectors.utils.image_utils import img_color_denormalize
 from detectors.OFTTrainer import OFTtrainer
 from detectors.RPNTrainer import RPNtrainer
