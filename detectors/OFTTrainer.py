@@ -72,7 +72,7 @@ class OFTtrainer(BaseTrainer):
             rpn_locs, rpn_scores, anchor, rois, roi_indices, img_featuremaps, bev_featuremaps = self.model(imgs, frame)
 
             # visualize angle
-            # bev_img = cv2.imread("/home/dzc/Data/mix/bevimgs/%d.jpg" % frame)
+            # bev_img = cv2.imread("~/deep_learning/dzc/data/mix/bevimgs/%d.jpg" % frame)
             # for idx, pt in enumerate(bev_xy.squeeze()):
             #     # print("right sin cos", right_sincos)
             #     # print(pt)
@@ -121,10 +121,10 @@ class OFTtrainer(BaseTrainer):
 
             # ----------------ROI------------------------------
             # 还需要在双视角下的回归gt，以及筛选过后的分类gt，gt_left_loc, gt_left_label, gt_right_loc, gt_right_label
-            all_gt_label = torch.zeros((0, 1)).to("cuda:0")
-            all_roi_score = torch.zeros((0, 2)).to("cuda:1")
-            all_gt_roi_loc = torch.zeros((0, 4)).to("cuda:0")
-            all_roi_loc = torch.zeros((0, 4)).to("cuda:1")
+            all_gt_label = torch.zeros((0, 1)).cuda()
+            all_roi_score = torch.zeros((0, 2)).cuda()
+            all_gt_roi_loc = torch.zeros((0, 4)).cuda()
+            all_roi_loc = torch.zeros((0, 4)).cuda()
 
             for cam in range(numcam):
                 bbox_2d, sample_roi, gt_loc, gt_label, pos_num = self.proposal_target_creator(
@@ -178,7 +178,7 @@ class OFTtrainer(BaseTrainer):
             #     self.loc_normalize_mean,
             #     self.loc_normalize_std)
 
-            # bev_img = cv2.imread("/home/dzc/Data/4carreal_0318blend/bevimgs/%d.jpg" % frame)
+            # bev_img = cv2.imread("~/deep_learning/dzc/data/4carreal_0318blend/bevimgs/%d.jpg" % frame)
             # for idx, bbxx in enumerate(sample_roi):
             #     # cv2.rectangle(bev_img, (int(bbxx[1]), int(bbxx[0])), (int(bbxx[3]), int(bbxx[2])), color=(255, 0, 0), thickness=1)
             #     cv2.circle(bev_img, (int((bbxx[3] + bbxx[1]) / 2), (int((bbxx[2] + bbxx[0]) / 2))), color=(255, 0, 0), thickness=2, radius=1)
@@ -296,9 +296,9 @@ class OFTtrainer(BaseTrainer):
             # # print("dzc", max(conf_scores.squeeze()))
             # left_bbox, left_conf = nms_new(bbox, conf_scores.detach().cpu(), left=4, threshold=0.1)
             #
-            # left_img = cv2.imread("/home/dzc/Data/4carreal_0318blend/img/left1/%d.jpg" % frame)
-            # # right_img = cv2.imread("/home/dzc/Data/4carreal_0318blend/img/right2/%d.jpg" % frame)
-            # bev_img = cv2.imread("/home/dzc/Data/4carreal_0318blend/bevimgs/%d.jpg" % frame)
+            # left_img = cv2.imread("~/deep_learning/dzc/data/4carreal_0318blend/img/left1/%d.jpg" % frame)
+            # # right_img = cv2.imread("~/deep_learning/dzc/data~/deep_learning/dzc/data/4carreal_0318blend/img/right2/%d.jpg" % frame)
+            # bev_img = cv2.imread("~/deep_learning/dzc/data/4carreal_0318blend/bevimgs/%d.jpg" % frame)
             #
             # for idx, bbx in enumerate(left_bbox):
             #     cv2.rectangle(bev_img, (int(bbx[1]), int(bbx[0])), (int(bbx[3]), int(bbx[2])), color=(255, 255, 0), thickness=1)
@@ -466,7 +466,7 @@ class OFTtrainer(BaseTrainer):
             getoutter_time += (getoutter_end - getoutter_start)
 
             # -----------------------可视化---------------------------
-            bev_img = cv2.imread("/home/dzc/Data/mix/bevimgs/%d.jpg" % frame)
+            # bev_img = cv2.imread("~/deep_learning/dzc/data/mix/bevimgs/%d.jpg" % frame)
 
             # position_mark_keep2 = [0,0,0,0]
             # all_sincos_remain2 = gt_left_sincos[0]
@@ -476,8 +476,8 @@ class OFTtrainer(BaseTrainer):
                 for bbox in all_bev_boxes:
                     ymin, xmin, ymax, xmax = bbox
                     all_res.append([frame, ((xmin + xmax) / 2), ((ymin + ymax) / 2)])
-        res_fpath = '/home/dzc/Data/%s/dzc_res/res.txt' % Const.dataset
-        gt_fpath = '/home/dzc/Data/%s/dzc_res/test_gt.txt' % Const.dataset
+        res_fpath = '~/deep_learning/dzc/data/%s/dzc_res/res.txt' % Const.dataset
+        gt_fpath = '~/deep_learning/dzc/data/%s/dzc_res/test_gt.txt' % Const.dataset
         np.savetxt(res_fpath, np.array(all_res).reshape(-1, 3), "%d")
 
         recall, precision, moda, modp = matlab_eval(os.path.abspath(res_fpath), os.path.abspath(gt_fpath),
@@ -571,7 +571,7 @@ class OFTtrainer(BaseTrainer):
         return self.roi_head.n_class
 
 def visualize_3dbox(pred_ori, pred_angle, position_mark, extrin, intrin, idx):
-    left_img = cv2.imread("/home/dzc/Data/mix/img/left1/%d.jpg" % (idx))
+    left_img = cv2.imread("~/deep_learning/dzc/data/mix/img/left1/%d.jpg" % (idx))
     boxes_3d = []
     n_bbox = pred_ori.shape[0]
     for i, bbox in enumerate(pred_ori):
@@ -585,7 +585,7 @@ def visualize_3dbox(pred_ori, pred_angle, position_mark, extrin, intrin, idx):
             x1_ori, x2_ori, x3_ori, x4_ori, x_mid = xmin, xmin, xmax, xmax, (xmin + xmax) / 2 + 40
             y1_ori, y2_ori, y3_ori, y4_ori, y_mid = Const.grid_height -ymin, Const.grid_height -ymax, Const.grid_height -ymax, Const.grid_height -ymin, (Const.grid_height -ymax + Const.grid_height -ymin) / 2
             # if i == 1 and idx == 1796:
-            #     tmp = cv2.imread("/home/dzc/Data/4carreal_0318blend/bevimgs/%d.jpg" % idx)
+            #     tmp = cv2.imread("~/deep_learning/dzc/data/4carreal_0318blend/bevimgs/%d.jpg" % idx)
             #     cv2.circle(tmp, (int(x_mid), int(y_mid)), radius=1, color=(255, 244, 0))
             #     cv2.circle(tmp, (int(x1_ori), int(y1_ori)), radius=1, color=(255, 0, 0))
             #     cv2.circle(tmp, (int(x2_ori), int(y2_ori)), radius=1, color=(255, 244, 0))
@@ -642,7 +642,7 @@ def visualize_3dbox(pred_ori, pred_angle, position_mark, extrin, intrin, idx):
             int(math.sin(theta) * (x_mid - center_x) + math.cos(theta) * (y_mid - (Const.grid_height - center_y)) + (Const.grid_height - center_y))
 
         # if i == 1 and position_mark[i] == 0 and idx == 1796:
-        #     tmp = cv2.imread("/home/dzc/Data/4carreal_0318blend/bevimgs/%d.jpg" % idx)
+        #     tmp = cv2.imread("~/deep_learning/dzc/data/4carreal_0318blend/bevimgs/%d.jpg" % idx)
         #     # cv2.rectangle(tmp, (x1_rot, y1_rot), (x3_ori, y3_ori), color=(255, 244, 0))
         #     cv2.circle(tmp, (int(xmid_rot), int(Const.grid_height -ymid_rot)), radius=1, color=(255, 244, 0))
         #     cv2.circle(tmp, (int(x1_rot), int(Const.grid_height -y1_rot)), radius=2, color=(255, 0, 0))

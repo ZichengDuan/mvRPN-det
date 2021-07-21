@@ -23,7 +23,7 @@ class Const:
 
     reduce = 4
 
-    dataset = "MultiviewX"
+    dataset = "Wildtrack_dataset"
 
     car_dist = math.sqrt(50/2 * 50/2 + 60/2 * 60/2)
 

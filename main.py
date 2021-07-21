@@ -26,7 +26,7 @@ warnings.filterwarnings("ignore")
 
 def main(args):
     # seed
-    writer = SummaryWriter('/home/dzc/Desktop/CASIA/proj/mvRPN-det/results/tensorboard/log')
+    writer = SummaryWriter('/home/dzc/Desktop/CASIA/proj/mvRPN-det/tensorboardlog/log')
 
     if args.seed is not None:
         np.random.seed(args.seed)
@@ -48,7 +48,7 @@ def main(args):
     resize = T.Resize([720, 1280]) # h, w
     train_trans = T.Compose([resize, T.ToTensor(), normalize])
     test_trans = T.Compose([T.ToTensor(), normalize])
-    data_path = os.path.expanduser('/home/dzc/Data/%s' % Const.dataset)
+    data_path = os.path.expanduser('~/deep_learning/dzc/data/%s' % Const.dataset)
     # data_path2 = os.path.expanduser('/home/dzc/Data/%s' % Const.dataset)
     base = MultiviewX(data_path)
     train_set = XFrameDataset(base, train=True, transform=train_trans, grid_reduce=Const.reduce)
