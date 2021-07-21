@@ -12,8 +12,11 @@ from torchvision.models.vgg import vgg16
 import matplotlib
 from detectors.models.mobilenet import MobileNetV3_Small, MobileNetV3_Large
 import torchvision.models.detection.rpn as torchvision_rpn
+import sys
+sys.path.append("..")
 from detectors.models.region_proposal_network import RegionProposalNetwork
 import cv2
+
 import torchvision.models.detection.image_list as image_list
 from EX_CONST import Const
 from mpl_toolkits.mplot3d import Axes3D

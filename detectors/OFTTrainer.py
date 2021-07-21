@@ -6,6 +6,8 @@ import os
 import numpy as np
 import torch.nn.functional as F
 import matplotlib
+import sys
+sys.path.append("..")
 # matplotlib.use('Agg')
 # import matplotlib.pyplot as plt
 from detectors.utils.nms_new import nms_new, _suppress, vis_nms

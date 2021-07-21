@@ -1,4 +1,6 @@
 import os
+import sys
+sys.path.append("..")
 import json
 from scipy.stats import multivariate_normal
 from PIL import Image

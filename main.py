@@ -7,6 +7,8 @@ import sys
 import tqdm
 import numpy as np
 import torch
+import sys
+sys.path.append("..")
 import torch.optim as optim
 import torchvision.transforms as T
 from detectors.datasets import *

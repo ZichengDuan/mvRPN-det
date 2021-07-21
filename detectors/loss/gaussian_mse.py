@@ -1,5 +1,7 @@
 import torch
 from torch import nn
+import sys
+sys.path.append("..")
 import torch.nn.functional as F
 
 
