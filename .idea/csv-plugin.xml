@@ -94,6 +94,13 @@
             </Attribute>
           </value>
         </entry>
+        <entry key="/tests/result_test.py">
+          <value>
+            <Attribute>
+              <option name="separator" value=":" />
+            </Attribute>
+          </value>
+        </entry>
         <entry key="/tools/video_visualize.py">
           <value>
             <Attribute>

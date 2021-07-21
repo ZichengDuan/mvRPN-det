@@ -242,7 +242,7 @@ class OFTtrainer(BaseTrainer):
             # roi_cls_loss = nn.CrossEntropyLoss()(roi_score, gt_roi_label.to(roi_score.device))
             # ----------------------Loss-----------------------------
             loss = rpn_loc_loss * 3 + rpn_cls_loss * 3 + \
-                    (all_roi_loc_loss * 0 + all_roi_cls_loss + all_sincos_loss)
+                    (all_roi_loc_loss + all_roi_cls_loss + all_sincos_loss)
 
             # loss = (rpn_loc_loss + rpn_cls_loss) * 0 +  all_roi_loc_loss + all_roi_cls_loss + all_sincos_loss
             Loss += loss.item()
@@ -363,6 +363,8 @@ class OFTtrainer(BaseTrainer):
         getoutter_time = 0
 
         all_res = []
+        all_pred_res = []
+        all_gt_res = []
 
         for batch_idx, data in enumerate(data_loader):
             imgs, gt_bev_xy,bev_angle, gt_bbox, gt_left_bbox, gt_right_bbox, gt_left_dirs, gt_right_dirs, gt_left_sincos, gt_right_sincos, frame, extrin, intrin, extrin2, intrin2, mark = data
@@ -466,7 +468,7 @@ class OFTtrainer(BaseTrainer):
             # s = time.time()
             v, indices = torch.tensor(all_front_prob).sort(0)
             # print(v)
-            indices_remain = indices[v > 0.6]
+            indices_remain = indices[v > 0.73]
             # print(v)
             print(frame)
             all_roi_remain = all_roi_remain[indices_remain].reshape(len(indices_remain), 4)
@@ -505,13 +507,28 @@ class OFTtrainer(BaseTrainer):
             # all_sincos_remain2 = gt_left_sincos[0]
 
             if len(all_bev_boxes) != 0:
-                visualize_3dbox(all_bev_boxes, all_sincos_remain, position_mark_keep, gt_bbox, bev_angle, extrin, intrin, frame)
-                for bbox in all_bev_boxes:
+                test_gt_res, test_pred_res = visualize_3dbox(all_bev_boxes, all_sincos_remain, position_mark_keep, gt_bbox, bev_angle, all_front_prob[keep], extrin, intrin, frame)
+                for k, bbox in enumerate(all_bev_boxes):
                     ymin, xmin, ymax, xmax = bbox
                     all_res.append([frame, ((xmin + xmax) / 2), ((ymin + ymax) / 2)])
+
+                for p in range(len(test_gt_res)):
+                    all_gt_res.append(test_gt_res[p])
+                for l in range(len(test_pred_res)):
+                    all_pred_res.append(test_pred_res[l])
+
         res_fpath = '/home/dzc/Data/%s/dzc_res/res.txt' % Const.dataset
         gt_fpath = '/home/dzc/Data/%s/dzc_res/test_gt.txt' % Const.dataset
         np.savetxt(res_fpath, np.array(all_res).reshape(-1, 3), "%d")
+
+        all_res_fpath = '/home/dzc/Data/%s/dzc_res/all_res.txt' % Const.dataset
+        all_gt_fpath = '/home/dzc/Data/%s/dzc_res/all_test_gt.txt' % Const.dataset
+        print(all_pred_res)
+        all_gt_res = np.array(all_gt_res).reshape(-1, 6)
+        all_pred_res = np.array(all_pred_res).reshape(-1, 7)
+
+        np.savetxt(all_res_fpath, all_pred_res, "%f")
+        np.savetxt(all_gt_fpath, all_gt_res, "%f")
 
         recall, precision, moda, modp = evaluate(os.path.abspath(res_fpath), os.path.abspath(gt_fpath),
                                                         data_loader.dataset.base.__name__)
@@ -603,24 +620,31 @@ class OFTtrainer(BaseTrainer):
         # Total number of classes including the background.
         return self.roi_head.n_class
 
-def visualize_3dbox(pred_ori, pred_angle, position_mark, gt_bbox, bev_angle, extrin, intrin, idx):
+def visualize_3dbox(pred_ori, pred_angle, position_mark, gt_bbox, bev_angle, all_front_prob, extrin, intrin, idx):
     left_img = cv2.imread("/home/dzc/Data/mix/img/left1/%d.jpg" % (idx))
     right_img = cv2.imread("/home/dzc/Data/mix/img/right2/%d.jpg" % (idx))
-    boxes_3d = []
+
+    all_pred_res = []
+    all_gt_res = []
+
     n_bbox = pred_ori.shape[0]
 
     gt_bbox = gt_bbox[0]
     bev_angle = bev_angle[0]
     gt_n_bbox = gt_bbox.shape[0]
     # ---------------------------------------------
+    boxes_3d = []
     for j, bbox in enumerate(gt_bbox):
         ymin, xmin, ymax, xmax = bbox
         theta = bev_angle[j]
 
-
         x1_ori, x2_ori, x3_ori, x4_ori, x_mid = xmin, xmin, xmax, xmax, (xmin + xmax) / 2 - 40
         y1_ori, y2_ori, y3_ori, y4_ori, y_mid = Const.grid_height - ymin, Const.grid_height - ymax, Const.grid_height - ymax, Const.grid_height - ymin, (Const.grid_height -ymax + Const.grid_height -ymin) / 2
         center_x, center_y = int((xmin + xmax) // 2), int((ymin + ymax) // 2)
+        w = ymax - ymin
+        h = xmax - xmin
+        all_gt_res.append([idx.item(), center_x, center_y, w, h, np.rad2deg(theta.item())])
+
 
         x1_rot, x2_rot, x3_rot, x4_rot, xmid_rot = \
             int(math.cos(theta) * (x1_ori - center_x) - math.sin(theta) * (
@@ -660,7 +684,6 @@ def visualize_3dbox(pred_ori, pred_angle, position_mark, gt_bbox, bev_angle, ext
 
         pass
     gt_ori = np.array(boxes_3d).reshape((gt_n_bbox, 9, 3))
-
     gt_projected_2d = getprojected_3dbox(gt_ori, extrin, intrin, isleft=True)
     gt_projected_2d = getprojected_3dbox(gt_ori, extrin, intrin, isleft=False)
     for k in range(gt_n_bbox):
@@ -713,10 +736,14 @@ def visualize_3dbox(pred_ori, pred_angle, position_mark, gt_bbox, bev_angle, ext
 
 
     boxes_3d = []
+    print(all_front_prob.shape, pred_angle.shape, pred_ori.shape)
     for i, bbox in enumerate(pred_ori):
         ymin, xmin, ymax, xmax = bbox
         sincos = pred_angle[i]
-
+        if pred_angle.shape[0] == 1:
+            score = 1.0
+        else:
+            score = all_front_prob[i]
         if position_mark[i] == 0:
             x1_ori, x2_ori, x3_ori, x4_ori, x_mid = xmin, xmin, xmax, xmax, (xmin + xmax) / 2 + 40
             y1_ori, y2_ori, y3_ori, y4_ori, y_mid = Const.grid_height -ymin, Const.grid_height -ymax, Const.grid_height -ymax, Const.grid_height -ymin, (Const.grid_height -ymax + Const.grid_height -ymin) / 2
@@ -755,9 +782,12 @@ def visualize_3dbox(pred_ori, pred_angle, position_mark, gt_bbox, bev_angle, ext
             elif sincos[0] < 0 and \
                     sincos[1] > 0:
                 angle += 2 * np.pi
-
+            # angle += np.pi
         theta_l = angle
         theta = theta_l + ray
+        w = ymax - ymin
+        h = xmax - xmin
+        all_pred_res.append([idx.item(), center_x, center_y, w, h,  np.rad2deg(theta.item()), score])
         # if idx == 1796 and position_mark[i] == 0 and i == 1:
         #     print(theta_l, ray)
         # if idx < 1900:
@@ -808,16 +838,13 @@ def visualize_3dbox(pred_ori, pred_angle, position_mark, gt_bbox, bev_angle, ext
 
         boxes_3d.append([pt0, pt1, pt2, pt3, pt_h_0, pt_h_1, pt_h_2, pt_h_3, pt_extra])
     pred_ori = np.array(boxes_3d).reshape((n_bbox, 9, 3))
-
     projected_2d = getprojected_3dbox(pred_ori, extrin, intrin, isleft=True)
     projected_2d = getprojected_3dbox(pred_ori, extrin, intrin, isleft=False)
-
-    # n, 9 ,2
     for k in range(n_bbox):
         if position_mark[k] == 0:
             color = (255, 255, 0)
         else:
-            color = (255, 255, 0)
+            color = (100, 100, 200)
         cv2.line(right_img, (projected_2d[k][0][0], projected_2d[k][0][1]), (projected_2d[k][1][0], projected_2d[k][1][1]), color = color, thickness=2)
         cv2.line(right_img, (projected_2d[k][0][0], projected_2d[k][0][1]), (projected_2d[k][3][0], projected_2d[k][3][1]), color = color, thickness=2 )
         cv2.line(right_img, (projected_2d[k][0][0], projected_2d[k][0][1]), (projected_2d[k][4][0], projected_2d[k][4][1]), color = color, thickness=2)
@@ -848,7 +875,10 @@ def visualize_3dbox(pred_ori, pred_angle, position_mark, gt_bbox, bev_angle, ext
         #
         cv2.arrowedLine(right_img, (int((projected_2d[k][0][0] + projected_2d[k][2][0]) / 2), int((projected_2d[k][0][1] + projected_2d[k][2][1]) / 2)), (projected_2d[k][8][0], projected_2d[k][8][1]), color = (255, 60, 199), thickness=2)
         # cv2.line(left_img, (int((projected_2d[k][0+ 9][0] + projected_2d[k][2+ 9][0]) / 2), int((projected_2d[k][0+ 9][1] + projected_2d[k][2+ 9][1]) / 2)), (projected_2d[k][8+ 9][0], projected_2d[k][8+ 9][1]), color = (255, 60, 199), thickness=2)
+
     cv2.imwrite("/home/dzc/Desktop/CASIA/proj/mvRPN-det/results/images/3d_box_blend/%d.jpg" % idx, right_img)
+
+    return all_gt_res, all_pred_res
 
 def _smooth_l1_loss(x, t, in_weight, sigma):
     sigma2 = sigma ** 2
