@@ -26,7 +26,7 @@ warnings.filterwarnings("ignore")
 
 def main(args):
     # seed
-    writer = SummaryWriter('/home/dzc/Desktop/CASIA/proj/mvRPN-det/tensorboardlog/log')
+    writer = SummaryWriter('~/deep_learning/dzc/mvRPN-det/tensorboardlog/log')
 
     if args.seed is not None:
         np.random.seed(args.seed)
