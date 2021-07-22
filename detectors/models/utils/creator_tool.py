@@ -524,17 +524,15 @@ class AnchorTargetCreator(object):
         tmp = np.zeros((Const.grid_height, Const.grid_width), dtype=np.uint8())
         import cv2
         tmp = cv2.cvtColor(tmp, cv2.COLOR_GRAY2BGR)
-        # cv2.imwrite("/home/dzc/Desktop/CASIA/proj/mvRPN-det/anchorBase.jpg", tmp)
-        # print(anchor)
         print(len(label[inside_index]), len(anchor))
         for idx, anc in enumerate(anchor):
             if label[inside_index][idx] == 1:
                 cv2.rectangle(tmp, (int(anc[1]), int(anc[0])), (int(anc[3]), int(anc[2])), color=(255, 0, 0))
 
         for idx, bbx in enumerate(bbox):
-            cv2.rectangle(tmp, (int(bbx[1]), int(bbx[0])), (int(bbx[3]), int(bbx[2])), color=(255, 255, 0))
-
-        cv2.imwrite("/home/dzc/Desktop/CASIA/proj/mvRPN-det/anchorBase.jpg", tmp)
+            # cv2.rectangle(tmp, (int(bbx[1]), int(bbx[0])), (int(bbx[3]), int(bbx[2])), color=(255, 255, 0))
+            cv2.circle(tmp, (int((bbx[1] + bbx[3]) / 2), int((bbx[0] + bbx[2]) / 2)), color=(255, 255, 0), radius=2, thickness=2)
+        cv2.imwrite("/root/deep_learning/dzc/mvRPN-det/anchorBase.jpg", tmp)
         # -----------------------------------------------------------
 
         return loc, label

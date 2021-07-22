@@ -11,7 +11,7 @@ sys.path.append("..")
 # matplotlib.use('Agg')
 # import matplotlib.pyplot as plt
 from detectors.utils.nms_new import nms_new, _suppress, vis_nms
-from detectors.evaluation.evaluate import matlab_eval, python_eval
+# from detectors.evaluation.evaluate import matlab_eval, python_eval
 import torch.nn as nn
 import warnings
 from detectors.loss.gaussian_mse import GaussianMSE
@@ -482,10 +482,10 @@ class OFTtrainer(BaseTrainer):
         gt_fpath = '~/deep_learning/dzc/data/%s/dzc_res/test_gt.txt' % Const.dataset
         np.savetxt(res_fpath, np.array(all_res).reshape(-1, 3), "%d")
 
-        recall, precision, moda, modp = matlab_eval(os.path.abspath(res_fpath), os.path.abspath(gt_fpath),
-                                                        data_loader.dataset.base.__name__)
+        # recall, precision, moda, modp = matlab_eval(os.path.abspath(res_fpath), os.path.abspath(gt_fpath),
+        #                                                 data_loader.dataset.base.__name__)
 
-        print(recall, precision, moda, modp)
+        print("Test complete!")
         #     if len(all_bev_boxes) != 0:
         #         for idx, bbxx in enumerate(all_bev_boxes[0]):
         #             print(bbxx)

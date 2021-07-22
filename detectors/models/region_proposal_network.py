@@ -65,7 +65,8 @@ class RegionProposalNetwork(nn.Module):
         for anchors in anchor:
             y1, x1, y2, x2 = anchors
             cv2.rectangle(img, (int(x2), int(y2)),(int(x1), int(y1)), color=(255, 255, 0))
-        cv2.imwrite("/home/dzc/Desktop/CASIA/proj/mvRPN-det/results/images/anchor.jpg", img)
+            
+        cv2.imwrite("/root/deep_learning/dzc/mvRPN-det/anchor.jpg", img)
 
         h = F.relu(self.conv1(x))
         rpn_locs = self.loc(h)

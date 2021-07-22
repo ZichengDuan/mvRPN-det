@@ -47,12 +47,12 @@ def main(args):
     normalize = T.Normalize((0.485, 0.456, 0.406), (0.229, 0.224, 0.225))
     denormalize = img_color_denormalize((0.485, 0.456, 0.406), (0.229, 0.224, 0.225))
     # resize = T.Resize([384, 512]) # h, w
-    resize = T.Resize([720, 1280]) # h, w
-    train_trans = T.Compose([resize, T.ToTensor(), normalize])
+    # resize = T.Resize([720, 1280]) # h, w
+    train_trans = T.Compose([T.ToTensor(), normalize])
     test_trans = T.Compose([T.ToTensor(), normalize])
     data_path = os.path.expanduser('~/deep_learning/dzc/data/%s' % Const.dataset)
     # data_path2 = os.path.expanduser('/home/dzc/Data/%s' % Const.dataset)
-    base = MultiviewX(data_path)
+    base = Wildtrack(data_path)
     train_set = XFrameDataset(base, train=True, transform=train_trans, grid_reduce=Const.reduce)
     test_set = XFrameDataset(base , train=False, transform=test_trans, grid_reduce=Const.reduce)
     train_loader = torch.utils.data.DataLoader(train_set, batch_size=args.batch_size, shuffle=True,
@@ -102,7 +102,7 @@ if __name__ == '__main__':
     parser.add_argument('--reID', action='store_true')
     parser.add_argument('--variant', type=str, default='default',
                         choices=['default', 'img_proj', 'res_proj', 'no_joint_conv'])
-    parser.add_argument('-d', '--dataset', type=str, default='robo', choices=['wildtrack', 'multiviewx','robo'])
+    parser.add_argument('-d', '--dataset', type=str, default='wildtrack', choices=['wildtrack', 'multiviewx','robo'])
     parser.add_argument('-j', '--num_workers', type=int, default=8)
     parser.add_argument('-b', '--batch_size', type=int, default=1, metavar='N',
                         help='input batch size for training (default: 1)')

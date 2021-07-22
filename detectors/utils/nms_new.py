@@ -4,7 +4,7 @@ sys.path.append("..")
 import torch
 import numpy as np
 import cupy as cp
-from utils.nms import non_maximum_suppression
+from detectors.models.utils.nms import non_maximum_suppression
 from EX_CONST import Const
 os.system("")
 def vis_nms(boxes, scores, iou_threshold):
