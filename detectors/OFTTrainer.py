@@ -68,34 +68,24 @@ class OFTtrainer(BaseTrainer):
 
         for batch_idx, data in enumerate(data_loader):
             optimizer.zero_grad()
-            imgs, bboxes, bboxes_od, world_xy, cls, frame, extrin, intrin = data
+            imgs, bboxes, bboxes_od, world_xy, cls, frame, extrin, intrin, img_fpaths = data
+
+            # a = np.zeros((Const.grid_height, Const.grid_width))
+            # bevimg = np.uint8(a)
+            # bevimg = cv2.cvtColor(bevimg, cv2.COLOR_GRAY2BGR)
+
+            # world_xy = world_xy[0]
+
+            # for i in range(len(world_xy)):
+            #     x, y = world_xy[i]
+            #     print(x, y)
+            #     cv2.circle(bevimg, (int(x * 4),int(y * 4)), radius=2, thickness=2, color = (255,255,0))
+            # cv2.imwrite("wildtrack_coordinates.jpg", bevimg)
+
 
             img_size = (Const.grid_height, Const.grid_width)
             rpn_locs, rpn_scores, anchor, rois, roi_indices, img_featuremaps, bev_featuremaps = self.model(imgs, frame)
 
-            # visualize angle
-            # bev_img = cv2.imread("~/deep_learning/dzc/data/mix/bevimgs/%d.jpg" % frame)
-            # for idx, pt in enumerate(bev_xy.squeeze()):
-            #     # print("right sin cos", right_sincos)
-            #     # print(pt)
-            #     x, y = pt[0], pt[1]
-            #     cv2.circle(bev_img, (x, y), radius=2, color=(255, 255, 0))
-            #     cv2.line(bev_img, (0, Const.grid_height - 1), (x, y), color = (255, 255, 0))
-            #     ray = np.arctan(y / (Const.grid_width - x))
-            #     theta_l = bev_angle.squeeze()[idx]
-            #     theta = theta_l + ray
-            #
-            #     x1_rot = x - 30
-            #     y1_rot = Const.grid_height - y
-            #
-            #     # print(theta)
-            #     nrx = (x1_rot - x) * np.cos(theta) - (y1_rot - (Const.grid_height - y)) * np.sin(theta) + x
-            #     nry = (x1_rot - x) * np.sin(theta) + (y1_rot - (Const.grid_height - y)) * np.cos(theta) + (Const.grid_height - y)
-            #
-            #     # print(x, y, nrx, nry)
-            #     cv2.arrowedLine(bev_img, (x, y), (nrx, Const.grid_height - nry), color=(255, 255, 0))
-            #     cv2.line(bev_img, (Const.grid_width - 1, 0), (x, y), color = (155, 25, 0))
-            # cv2.imwrite("/home/dzc/Desktop/CASIA/proj/mvRPN-det/results/images/angle.jpg", bev_img)
 
             roi = torch.tensor(rois)
 
@@ -105,7 +95,15 @@ class OFTtrainer(BaseTrainer):
             gt_bev_bbox = bboxes_od[0]
             gt_percam_bbox = bboxes[0]
             cls = cls[0]
-            # print(gt_percam_bbox.shape, gt_bev_bbox.shape, cls.shape)
+            
+
+            
+            # for i in range(len(gt_percam_bbox[0])):
+            #     ymin, xmin, ymax, xmax = gt_percam_bbox[0][i]
+            #     cv2.rectangle(cam0_img, (int(ymin), int(xmin)), (int(ymax), int(xmax)), color = (255, 255, 0))
+            # cv2.imwrite("percam_gt.jpg", cam0_img)
+
+
             # -----------------RPN Loss----------------------
             gt_rpn_loc, gt_rpn_label = self.anchor_target_creator(
                 at.tonumpy(gt_bev_bbox),
@@ -128,8 +126,14 @@ class OFTtrainer(BaseTrainer):
             all_gt_roi_loc = torch.zeros((0, 4)).cuda()
             all_roi_loc = torch.zeros((0, 4)).cuda()
 
+
             for cam in range(numcam):
-                bbox_2d, sample_roi, gt_loc, gt_label, pos_num = self.proposal_target_creator(
+                # if cam != 8:
+                #     extrin[cam][0] @ np.array([[, 1, 0], [1, 0, 0]])
+                #     trans_x, trans_y = extrin[cam][0][0, -1].item(), extrin[cam][0][1, -1].item()
+                #     extrin[cam][0][1, -1], extrin[cam][0][0, -1] = trans_x, trans_y
+                    
+                bbox_2d, sample_roi, gt_loc, gt_label, pos_num, tmp_2ds, tmp_3d, tmp_array2 = self.proposal_target_creator(
                     roi,
                     at.tonumpy(gt_bev_bbox),
                     at.tonumpy(cls),
@@ -138,6 +142,45 @@ class OFTtrainer(BaseTrainer):
                     self.loc_normalize_mean,
                     self.loc_normalize_std)
                 # print(bbox_2d.shape, sample_roi.shape, gt_loc.shape, gt_label.shape) # (256, 4) (256, 4) (256, 4) (256, 1)
+
+                colorset = [(255, 255, 0), (205, 90, 106), (255, 0, 0), (127, 255, 0), (0,255, 255)] # 青色，紫色，深蓝色
+                if cam != 8:
+                    # print(bbox_2d.shape)
+                    cam0_img = cv2.imread(img_fpaths[cam][frame.item()][0])
+                    for f in range(len(tmp_2ds)):
+                        tmp_2d = tmp_2ds[f]
+                        for j in range(len(tmp_2d)):
+                            ymin, xmin, ymax, xmax = tmp_2d[j]
+                            cv2.rectangle(cam0_img, (int(xmin), int(ymin)), (int(xmax), int(ymax)), color = colorset[f], thickness = 2)
+                            # cv2.circle(cam0_img, (int((xmin + xmax) / 2), int(ymin)), radius=4, color=(255, 255, 0))
+                    for i in range(len(bbox_2d)):
+                        ymin, xmin, ymax, xmax = bbox_2d[i]
+                        cv2.rectangle(cam0_img, (int(xmin), int(ymin)), (int(xmax), int(ymax)), color = (255, 255, 0))
+                            
+                    for i in range(len(gt_percam_bbox[cam])):
+                        ymin, xmin, ymax, xmax = gt_percam_bbox[cam][i]
+                        cv2.rectangle(cam0_img, (int(xmin), int(ymin)), (int(xmax), int(ymax)), color = (100, 100, 200))
+
+                        # cv2.circle(cam0_img, int((xmin + xmax) / 2, y), radius=2, color=))
+                    cv2.imwrite("percam_roi%d.jpg" % cam, cam0_img)
+
+                    a = np.zeros((Const.grid_height, Const.grid_width))
+                    bevimg = np.uint8(a)
+                    bevimg = cv2.cvtColor(bevimg, cv2.COLOR_GRAY2BGR)
+
+                    for i in range(len(sample_roi)):
+                        ymin, xmin, ymax, xmax = sample_roi[i]
+                        cv2.rectangle(bevimg, (int(xmin), int(ymin)), (int(xmax), int(ymax)), color = (255, 255, 0))
+                    for i in range(len(gt_bev_bbox)):
+                        ymin, xmin, ymax, xmax = gt_bev_bbox[i]
+                        cv2.rectangle(bevimg, (int(xmin), int(ymin)), (int(xmax), int(ymax)), color = (100, 100, 200))
+                    for i in range(len(tmp_array2)):
+                        ymin, xmin, ymax, xmax = tmp_array2[i][0]
+                        cv2.rectangle(bevimg, (int(xmin), int(ymin)), (int(xmax), int(ymax)), color = colorset[i])
+                    cv2.imwrite("bev_roi%d.jpg" % cam, bevimg)
+                    
+                    # print(extrin[0], extrin[0])
+
                 sample_roi_index = torch.zeros(len(sample_roi))
 
                 # ---------------------------roi_pooling---------------------------------
@@ -161,7 +204,7 @@ class OFTtrainer(BaseTrainer):
                 all_roi_score = torch.cat((all_roi_score, roi_score), dim=0)
 
             # print(all_gt_label.shape, all_gt_roi_loc.shape, all_roi_loc.shape, all_roi_score.shape)
-
+            # print(all_roi_loc[:20], all_gt_roi_loc[:20])
             all_roi_loc_loss = _fast_rcnn_loc_loss(
                 all_roi_loc.contiguous(),
                 all_gt_roi_loc,
@@ -253,7 +296,7 @@ class OFTtrainer(BaseTrainer):
             writer.add_scalar("ALL ROI_Cls LOSS", ALL_ROI_CLS_LOSS / (batch_idx + 1), niter)
 
             if batch_idx % 10 == 0:
-                print("Iteration: %d\n" % batch_idx,
+                print("[Epoch %d] Iter: %d\n" % (epoch, batch_idx),
                       "Total: %4f\n" % (Loss / (batch_idx + 1)),
                       "Rpn Loc : %4f    || " % (RPN_LOC_LOSS / (batch_idx + 1)),
                       "Rpn Cls : %4f    ||" % (RPN_CLS_LOSS / (batch_idx + 1)),
@@ -435,9 +478,9 @@ class OFTtrainer(BaseTrainer):
             # s = time.time()
             v, indices = torch.tensor(all_front_prob).sort(0)
             indices_remain = indices[v > 0.5]
-            print(v)
             # print(v)
-            print(frame)
+            # print(v)
+            # print(frame)
             all_roi_remain = all_roi_remain[indices_remain].reshape(len(indices_remain), 4)
             all_pred_sincos = all_pred_sincos[indices_remain].reshape(len(indices_remain), 2)
             all_front_prob = all_front_prob[indices_remain].reshape(len(indices_remain),)

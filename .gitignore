@@ -6,3 +6,4 @@
 /prune/
 /prune/data/
 /prune/data/cifar-10-batches-py/
+/tensorboard/

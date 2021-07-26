@@ -265,7 +265,6 @@ class ProposalTargetCreator_percam(object):
         # The label with value 0 is the background.
         gt_roi_label_left = label[gt_assignment] + 1 # 每一个roi对应的gt及其gt的分类
 
-
         # Select foreground RoIs as those with >= pos_iou_thresh IoU.
         pos_index = np.where(max_iou >= self.pos_iou_thresh)[0]
         pos_roi_per_this_image = int(min(pos_roi_per_image, pos_index.size))
@@ -290,21 +289,97 @@ class ProposalTargetCreator_percam(object):
         gt_label[pos_roi_per_this_image:] = 0  # negative labels --> 0
 
         sample_roi = roi[keep_index]
-
+        tmp_array = []
+        tmp_array2 = []
         # ------------------------开始转换坐标-------------------------
 
+        xmid = Const.grid_width / 2
+        ymid = Const.grid_height / 2  # 中点，青色
+
+        xmin = xmid - 20
+        xmax = xmid + 20
+        ymin = ymid - 20
+        ymax = ymid + 20
+        
+        t = torch.tensor([[ymin, xmin, ymax, xmax]])
+        t_3d = generate_3d_bbox(t)
+        t_3d = getprojected_3dbox(t_3d, extrin[0], intrin[0])
+        t_2d_2d = get_outter(t_3d)
+        tmp_array.append(t_2d_2d)
+        tmp_array2.append(t)
+
+        xmid = Const.grid_width  - 30
+        ymid = Const.grid_height / 2  # xmax，ymid，最右端中点，紫色
+
+        xmin = xmid - 20
+        xmax = xmid + 20
+        ymin = ymid - 20
+        ymax = ymid + 20
+        
+        t = torch.tensor([[ymin, xmin, ymax, xmax]])
+        t_3d = generate_3d_bbox(t)
+        t_3d = getprojected_3dbox(t_3d, extrin[0], intrin[0])
+        t_2d_2d = get_outter(t_3d)
+        tmp_array.append(t_2d_2d)
+        tmp_array2.append(t)
+
+        xmid = 30
+        ymid = Const.grid_height / 2 # xmin, ymid 最左端中点，深蓝色
+
+        xmin = xmid - 20
+        xmax = xmid + 20
+        ymin = ymid - 20
+        ymax = ymid + 20
+        
+        t = torch.tensor([[ymin, xmin, ymax, xmax]])
+        t_3d = generate_3d_bbox(t)
+        t_3d = getprojected_3dbox(t_3d, extrin[0], intrin[0])
+        t_2d_2d = get_outter(t_3d)
+        tmp_array.append(t_2d_2d)
+        tmp_array2.append(t)
+
+        xmid = Const.grid_width / 2
+        ymid = Const.grid_height -30  # xmid，ymax，顶端中点，黄色
+
+        xmin = xmid - 20
+        xmax = xmid + 20
+        ymin = ymid - 20
+        ymax = ymid + 20
+        
+        t = torch.tensor([[ymin, xmin, ymax, xmax]])
+        t_3d = generate_3d_bbox(t)
+        t_3d = getprojected_3dbox(t_3d, extrin[0], intrin[0])
+        t_2d_2d = get_outter(t_3d)
+        tmp_array.append(t_2d_2d)
+        tmp_array2.append(t)
+
+        xmid = Const.grid_width / 2  # xmid，ymin，底端中点，绿色
+        ymid = 30
+
+        xmin = xmid - 20
+        xmax = xmid + 20
+        ymin = ymid - 20
+        ymax = ymid + 20
+        
+        t = torch.tensor([[ymin, xmin, ymax, xmax]])
+        t_3d = generate_3d_bbox(t)
+        t_3d = getprojected_3dbox(t_3d, extrin[0], intrin[0])
+        t_2d_2d = get_outter(t_3d)
+        tmp_array.append(t_2d_2d)
+        tmp_array2.append(t)
+        #-------------------------------------------------
+        #-------------------------------------------------
+        
+
+
         roi_3d = generate_3d_bbox(sample_roi)
-        print(roi_3d[:10])
         bbox_2d = getprojected_3dbox(roi_3d, extrin[0], intrin[0])
-        print(roi_3d[:10])
         bbox_2d = get_outter(bbox_2d)
-
-
 
         gt_roi_loc = bbox2loc(bbox_2d, gt_bbox[gt_assignment[keep_index]])
         gt_loc = ((gt_roi_loc - np.array(loc_normalize_mean, np.float32)) / np.array(loc_normalize_std, np.float32))
 
-        return bbox_2d, sample_roi, gt_loc, gt_label, len(pos_index)
+        return bbox_2d, sample_roi, gt_loc, gt_label, len(pos_index), tmp_array, t_3d, tmp_array2
 
 class ProposalTargetCreator_ori(object):
     """Assign ground truth bounding boxes to given RoIs.
@@ -521,18 +596,19 @@ class AnchorTargetCreator(object):
         loc = _unmap(loc, n_anchor, inside_index, fill=0)
 
         # -----------------------------------------------------------
-        tmp = np.zeros((Const.grid_height, Const.grid_width), dtype=np.uint8())
-        import cv2
-        tmp = cv2.cvtColor(tmp, cv2.COLOR_GRAY2BGR)
-        print(len(label[inside_index]), len(anchor))
-        for idx, anc in enumerate(anchor):
-            if label[inside_index][idx] == 1:
-                cv2.rectangle(tmp, (int(anc[1]), int(anc[0])), (int(anc[3]), int(anc[2])), color=(255, 0, 0))
+        # tmp = np.zeros((Const.grid_height, Const.grid_width), dtype=np.uint8())
+        # import cv2
+        # tmp = cv2.cvtColor(tmp, cv2.COLOR_GRAY2BGR)
+        # print(len(label[inside_index]), len(anchor))
+        # for idx, anc in enumerate(anchor):
+        #     if label[inside_index][idx] == 1:
+        #         cv2.rectangle(tmp, (int(anc[1]), int(anc[0])), (int(anc[3]), int(anc[2])), color=(255, 0, 0))
 
-        for idx, bbx in enumerate(bbox):
-            # cv2.rectangle(tmp, (int(bbx[1]), int(bbx[0])), (int(bbx[3]), int(bbx[2])), color=(255, 255, 0))
-            cv2.circle(tmp, (int((bbx[1] + bbx[3]) / 2), int((bbx[0] + bbx[2]) / 2)), color=(255, 255, 0), radius=2, thickness=2)
-        cv2.imwrite("/root/deep_learning/dzc/mvRPN-det/anchorBase.jpg", tmp)
+        # for idx, bbx in enumerate(bbox):
+        #     # cv2.rectangle(tmp, (int(bbx[1]), int(bbx[0])), (int(bbx[3]), int(bbx[2])), color=(255, 255, 0))
+        #     cv2.circle(tmp, (int((bbx[1] + bbx[3]) / 2), int((bbx[0] + bbx[2]) / 2)), color=(255, 255, 0), radius=2, thickness=2)
+        # cv2.imwrite("/root/deep_learning/dzc/mvRPN-det/anchorBase.jpg", tmp)
+        # print("anchor base drawing complete")
         # -----------------------------------------------------------
 
         return loc, label
@@ -829,12 +905,17 @@ def get_outter2(projected_3dboxes):
     return res
 
 
+
 def generate_3d_bbox(pred_bboxs):
     # 输出以左下角为原点的3d坐标
     n_bbox = pred_bboxs.shape[0]
     boxes_3d = [] #
     for i in range(pred_bboxs.shape[0]):
-        ymax, xmax, ymin, xmin = pred_bboxs[i]
+        # xmin, ymin, xmax, ymax = pred_bboxs[i]
+        xmax, ymax, xmin, ymin = pred_bboxs[i]
+        xmin, ymin = get_worldcoord_from_worldgrid([xmin, ymin])
+        xmax, ymax = get_worldcoord_from_worldgrid([xmax, ymax])
+        
         pt0 = [xmax, Const.grid_height - ymin, 0]
         pt1 = [xmin, Const.grid_height - ymin, 0]
         pt2 = [xmin, Const.grid_height - ymax, 0]
@@ -873,3 +954,13 @@ def get_outter(projected_3dboxes):
         ymin = min(boxes[:, 1])
         outter_boxes.append([ymin, xmin, ymax, xmax])
     return np.array(outter_boxes, dtype=np.float)
+
+
+def get_worldcoord_from_worldgrid(worldgrid):
+        # datasets default unit: centimeter & origin: (-300,-900)
+        grid_x, grid_y = worldgrid
+        coord_x = -300 + 2.5 * grid_x
+        coord_y = -900 + 2.5 * grid_y
+        # coord_x = -300 + 2.5 * grid_x
+        # coord_y = -900 + 2.5 * grid_y
+        return np.array([coord_x, coord_y])

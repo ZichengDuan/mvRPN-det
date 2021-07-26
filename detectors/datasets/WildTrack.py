@@ -19,7 +19,7 @@ class Wildtrack(VisionDataset):
         # WILDTRACK has ij-indexing: H*W=480*1440, so x should be \in [0,480), y \in [0,1440)
         # WILDTRACK has in-consistent unit: centi-meter (cm) for calibration & pos annotation,
         self.__name__ = 'Wildtrack'
-        self.img_shape, self.worldgrid_shape = [1080, 1920], [480, 1440]  # H,W; N_row,N_col
+        self.img_shape, self.worldgrid_shape = [1080, 1920], [1200, 3600]  # H,W; N_row,N_col
         self.num_cam, self.num_frame = 7, 2000
         # x,y actually means i,j in Wildtrack, which correspond to h,w
         self.indexing = 'ij'
@@ -91,6 +91,9 @@ class Wildtrack(VisionDataset):
         rotation_matrix, _ = cv2.Rodrigues(rvec)
         translation_matrix = np.array(tvec, dtype=np.float).reshape(3, 1)
         extrinsic_matrix = np.hstack((rotation_matrix, translation_matrix))
+        
+        # for i in range(3):
+        #     extrinsic_matrix[i,3] /= 10
 
         return intrinsic_matrix, extrinsic_matrix
 

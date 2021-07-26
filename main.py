@@ -28,7 +28,7 @@ warnings.filterwarnings("ignore")
 
 def main(args):
     # seed
-    writer = SummaryWriter('~/deep_learning/dzc/mvRPN-det/tensorboardlog/log')
+    writer = SummaryWriter('/root/deep_learning/dzc/mvRPN-det/tensorboardlog/log')
 
     if args.seed is not None:
         np.random.seed(args.seed)
@@ -46,12 +46,9 @@ def main(args):
 
     normalize = T.Normalize((0.485, 0.456, 0.406), (0.229, 0.224, 0.225))
     denormalize = img_color_denormalize((0.485, 0.456, 0.406), (0.229, 0.224, 0.225))
-    # resize = T.Resize([384, 512]) # h, w
-    # resize = T.Resize([720, 1280]) # h, w
     train_trans = T.Compose([T.ToTensor(), normalize])
     test_trans = T.Compose([T.ToTensor(), normalize])
     data_path = os.path.expanduser('~/deep_learning/dzc/data/%s' % Const.dataset)
-    # data_path2 = os.path.expanduser('/home/dzc/Data/%s' % Const.dataset)
     base = Wildtrack(data_path)
     train_set = XFrameDataset(base, train=True, transform=train_trans, grid_reduce=Const.reduce)
     test_set = XFrameDataset(base , train=False, transform=test_trans, grid_reduce=Const.reduce)
@@ -62,12 +59,8 @@ def main(args):
 
     # model
     model = PerspTransDetector(train_set)
-    # classifier = model.classifier
     roi_head = VGG16RoIHead(Const.roi_classes + 1,  7, 1/Const.reduce)
     optimizer = optim.Adam(params=itertools.chain(model.parameters(), roi_head.parameters()), lr=args.lr, weight_decay=args.weight_decay)
-    # optimizer = optim.Adam([{'params': filter(lambda p: p.requires_grad, model.backbone.parameters()), 'lr': 1e-3},
-    #                         {'params': filter(lambda p: p.requires_grad, model.rpn.parameters())},
-    #                         {'params': filter(lambda p: p.requires_grad, roi_head.parameters())}], lr=args.lr, weight_decay=args.weight_decay)
     print('Settings:')
     print(vars(args))
 

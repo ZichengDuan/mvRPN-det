@@ -53,22 +53,7 @@ class PerspTransDetector(nn.Module):
                               for cam in range(self.num_cam)]
 
         self.backbone = nn.Sequential(*list(resnet18(pretrained=False, replace_stride_with_dilation=[False, False, False]).children())[:-2]).cuda()
-        self.rpn = RegionProposalNetwork(in_channels=3586, mid_channels=3586, ratios=[1], anchor_scales=[2.5 * (4 / (Const.reduce))]).cuda()
-        # my_cls = nn.Sequential(nn.Linear(25088, 2048, bias=True),
-        #                        nn.ReLU(inplace=True),
-        #                        nn.Dropout(p=0.5, inplace=False),
-        #                        nn.Linear(2048, 2048, bias=True),
-        #                        nn.ReLU(inplace=True),
-        #                        nn.Dropout(p=0.5, inplace=False),
-        #                        ).to("cuda:1")
-        # self.classifier = my_cls
-        #
-        # anchor_generator = torchvision_rpn.AnchorGenerator(sizes=[64], aspect_ratios=[1]).to("cuda:1")
-        # rpn_head = torchvision_rpn.RPNHead(in_channels=1026, num_anchors=anchor_generator.num_anchors_per_location()[0]).to("cuda:1")
-        # self.torchvis_rpn = torchvision_rpn.RegionProposalNetwork(anchor_generator, head=rpn_head, fg_iou_thresh=0.8,
-        #                                                  bg_iou_thresh=0.3, batch_size_per_image=256,
-        #                                                  positive_fraction=0.8, pre_nms_top_n={'training': 12000, 'testing': 6000},
-        #                                                  post_nms_top_n={'training': 3000, 'testing':300}, nms_thresh=0.7).to("cuda:1")
+        self.rpn = RegionProposalNetwork(in_channels=3586, mid_channels=3586, ratios=[1], anchor_scales=[2* (4 / (Const.reduce))]).cuda()
 
 
     def forward(self, imgs, frame, gt_boxes = None, epoch = None, visualize=False, train = True, mark = None):
@@ -81,12 +66,15 @@ class PerspTransDetector(nn.Module):
             if hasattr(torch.cuda, 'empty_cache'):
                 torch.cuda.empty_cache()
             img_feature =self.backbone(imgs[:, cam].cuda())
+            # if cam == 0:
+            #     plt.imsave("img_norm_0.jpg", img_feature[0][0].detach().cpu().numpy())
             img_feature = F.interpolate(img_feature, self.upsample_shape, mode='bilinear')
 
+            # print(img_feature.shape)
             # if cam == 0:
-            #     plt.imsave("img_norm_0.jpg", img_feature[0][0].cpu().numpy())
-            # else:
-            #     plt.imsave("img_norm_1.jpg", img_feature[0][0].cpu().numpy())
+            #     plt.imsave("img_norm_0.jpg", img_feature[0][0].detach().cpu().numpy())
+            # # else:
+            # #     plt.imsave("img_norm_1.jpg", img_feature[0][0].cpu().numpy())
 
             img_featuremap.append(img_feature)
 
@@ -96,8 +84,11 @@ class PerspTransDetector(nn.Module):
 
             world_feature = kornia.vflip(world_feature)
             world_features.append(world_feature.cuda())
+            # if cam == 5:
+            #     plt.imsave("world_features.jpg", torch.norm(world_feature[0].detach(), dim=0).cpu().numpy())
+
         world_features = torch.cat(world_features + [self.coord_map.repeat([B, 1, 1, 1]).cuda()], dim=1)
-        # plt.imsave("world_features.jpg", torch.norm(world_features[0], dim=0).cpu().numpy())
+        plt.imsave("world_features.jpg", torch.norm(world_features[0].detach(), dim=0).cpu().numpy())
         # 3d特征图
         # feature_to_plot = world_features[0][0].detach().cpu().numpy()
         # fig = plt.figure()
@@ -140,7 +131,7 @@ class PerspTransDetector(nn.Module):
             imgcoord2worldgrid_mat = np.linalg.inv(worldgrid2imgcoord_mat)
             # image of shape C,H,W (C,N_row,N_col); indexed as x,y,w,h (x,y,n_col,n_row)
             # matrix of shape N_row, N_col; indexed as x,y,n_row,n_col
-            permutation_mat = np.array([[1, 0, 0], [0, 1, 0], [0, 0, 1]])
+            permutation_mat = np.array([[0, 1, 0], [1, 0, 0], [0, 0, 1]])
             projection_matrices[cam] = permutation_mat @ imgcoord2worldgrid_mat
         return projection_matrices
 

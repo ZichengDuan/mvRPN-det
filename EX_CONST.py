@@ -10,9 +10,10 @@ class Const:
 
     # 场地大小
 
-    grid_height = 640
-
-    grid_width = 1000
+    # grid_height = 480
+    # grid_width = 1440
+    grid_height = 480
+    grid_width = 1440
 
     # ori_img_height = 480
     # ori_img_width = 640

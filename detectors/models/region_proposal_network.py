@@ -28,8 +28,6 @@ class RegionProposalNetwork(nn.Module):
         self.score = nn.Conv2d(mid_channels, self.n_anchor * 2, 1, 1, 0)
         self.loc = nn.Conv2d(mid_channels, self.n_anchor * 4, 1, 1, 0)
 
-        # torchvision
-
         normal_init(self.conv1, 0, 0.01)
         normal_init(self.score, 0, 0.01)
         normal_init(self.loc, 0, 0.01)
@@ -57,36 +55,33 @@ class RegionProposalNetwork(nn.Module):
             self.feat_stride, hh, ww)
 
         n_anchor = anchor.shape[0] // (hh * ww)
-        # print("n_anchor", n_anchor)
-        a = np.zeros((img_size[0], img_size[1]))
-        img = np.uint8(a)
-        img = cv2.cvtColor(img, cv2.COLOR_GRAY2BGR)
+        # a = np.zeros((img_size[0], img_size[1]))
+        # img = np.uint8(a)
+        # img = cv2.cvtColor(img, cv2.COLOR_GRAY2BGR)
+        # a = np.zeros((img_size[0], img_size[1]))
+        # img = np.uint8(a)
+        # img = cv2.cvtColor(img, cv2.COLOR_GRAY2BGR)
 
-        for anchors in anchor:
-            y1, x1, y2, x2 = anchors
-            cv2.rectangle(img, (int(x2), int(y2)),(int(x1), int(y1)), color=(255, 255, 0))
+        # for anchors in anchor:
+        #     y1, x1, y2, x2 = anchors
+        #     cv2.rectangle(img, (int(x2), int(y2)),(int(x1), int(y1)), color=(255, 255, 0))
             
-        cv2.imwrite("/root/deep_learning/dzc/mvRPN-det/anchor.jpg", img)
+        # cv2.imwrite("/root/deep_learning/dzc/mvRPN-det/anchor.jpg", img)
 
         h = F.relu(self.conv1(x))
         rpn_locs = self.loc(h)
-        # print("dzcc", rpn_locs.shape)
         rpn_locs = rpn_locs.permute(0, 2, 3, 1).contiguous().view(n, -1, 4)
-        # print(rpn_locs.shape)
         rpn_scores = self.score(h)
         rpn_scores = rpn_scores.permute(0, 2, 3, 1).contiguous()
-        # rpn_softmax_scores = F.softmax(rpn_scores.view(n, hh, ww, n_anchor, 2), dim=4)
         rpn_softmax_scores = F.softmax(rpn_scores.view(n, hh, ww, n_anchor, 2), dim=4)
         rpn_fg_scores = rpn_softmax_scores[:, :, :, :, 1].contiguous()
         rpn_fg_scores = rpn_fg_scores.view(n, -1)
         rpn_scores = rpn_scores.view(n, -1, 2)
 
-        # s = time.time()
         rois = list()
         roi_indices = list()
 
         for i in range(n):
-            # print("dzcddzzcc", rpn_locs.shape, i,rpn_locs[i].shape )
             roi, roi_origin, order = self.proposal_layer(
                 rpn_locs[i].cpu().data.numpy(),
                 rpn_fg_scores[i].cpu().data.numpy(),
@@ -96,42 +91,9 @@ class RegionProposalNetwork(nn.Module):
             rois.append(roi)
             roi_indices.append(batch_index)
 
-        # e = time.time()
-        # print(e - s)
         rois = np.concatenate(rois, axis=0)
         roi_indices = np.concatenate(roi_indices, axis=0)
 
-        # 第二个rpn
-        #
-        # new_rpn_locs = nn.Conv2d(1026, n_anchor * 4, 1, 1, 0).to("cuda:1")(h)
-        # # print("dzcccccc", new_rpn_locs.shape)
-        # new_rpn_locs = new_rpn_locs.permute(0, 2, 3, 1).contiguous().view(n, -1, 4)
-        # new_rpn_scores = nn.Conv2d(1026, n_anchor * 2, 1, 1, 0).to("cuda:1")(h)
-        # new_rpn_scores = new_rpn_scores.permute(0, 2, 3, 1).contiguous()
-        # new_rpn_softmax_scores = F.softmax(new_rpn_scores.view(n, hh, ww, n_anchor, 2), dim=4)
-        # new_rpn_fg_scores = new_rpn_softmax_scores[:, :, :, :, 1].contiguous()
-        # new_rpn_fg_scores = new_rpn_fg_scores.view(n, -1)
-        # new_rpn_scores = new_rpn_scores.view(n, -1, 2)
-        #
-        # new_rois = list()
-        # new_roi_indices = list()
-        #
-        # for k in range(n):
-        #     # print("dzc", new_rpn_locs.shape, roi_origin.shape)
-        #     new_roi, _, _ = self.proposal_layer(
-        #         new_rpn_locs[k][order].cpu().data.numpy(),
-        #         new_rpn_fg_scores[k][order].cpu().data.numpy(),
-        #         roi_origin, img_size,
-        #         scale=scale
-        #     )
-        #     new_batch_index = k * np.ones((len(new_roi),), dtype=np.int32)
-        #     new_rois.append(new_roi)
-        #     new_roi_indices.append(new_batch_index)
-        #
-        # new_rois = np.concatenate(new_rois, axis=0)
-        # new_roi_indices = np.concatenate(new_roi_indices, axis=0)
-
-        # print(len(rpn_locs[roi_indices]), len(new_roi_indices), len(new_rois))
         return rpn_locs, rpn_scores, anchor, rois, roi_indices
 
 

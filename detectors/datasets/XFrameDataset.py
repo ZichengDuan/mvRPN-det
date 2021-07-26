@@ -140,12 +140,12 @@ class XFrameDataset(VisionDataset):
                     all_pedestrians = json.load(json_file)
                 for single_pedestrian in all_pedestrians:
                     x, y = self.base.get_worldgrid_from_pos(single_pedestrian['positionID'])
-                    frame_wxy.append([x / self.grid_reduce, y / self.grid_reduce])
+                    frame_wxy.append([y / self.grid_reduce, x / self.grid_reduce])
 
-                    ymin_od, xmin_od, ymax_od, xmax_od = max(min(int(y - 20), self.img_shape[0] - 1), 0),\
-                                                         max(min(int(x - 20), self.img_shape[1] - 1), 0),\
-                                                         max(min(int(y + 20), self.img_shape[0] - 1), 0),\
-                                                         max(min(int(x + 20), self.img_shape[1] - 1), 0)
+                    ymin_od, xmin_od, ymax_od, xmax_od = max(min(int(x - 15), self.img_shape[0] - 1), 0),\
+                                                         max(min(int(y - 15), self.img_shape[1] - 1), 0),\
+                                                         max(min(int(x + 15), self.img_shape[0] - 1), 0),\
+                                                         max(min(int(y + 15), self.img_shape[1] - 1), 0)
                     frame_bbox_od.append([ymin_od, xmin_od, ymax_od, xmax_od])
 
                     frame_cls.append([0])
@@ -177,7 +177,7 @@ class XFrameDataset(VisionDataset):
         bboxes_od = torch.tensor(self.bboxes_od[frame])
         world_xy = torch.tensor(self.world_xy[frame])
         cls = torch.tensor(self.cls[frame])
-        return imgs, bboxes, bboxes_od, world_xy, cls, frame, self.extrinsic_matrix, self.intrinsic_matrix
+        return imgs, bboxes, bboxes_od, world_xy, cls, frame, self.extrinsic_matrix, self.intrinsic_matrix, self.img_fpaths
 
     def __len__(self):
         return len(self.world_xy.keys())
