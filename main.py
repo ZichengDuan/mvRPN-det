@@ -46,7 +46,7 @@ def main(args):
     denormalize = img_color_denormalize((0.485, 0.456, 0.406), (0.229, 0.224, 0.225))
     # resize = T.Resize([384, 512]) # h, w
     # resize = T.Resize([240, 320]) # h, w
-    train_trans = T.Compose([T.ToTensor(), bright, normalize])
+    train_trans = T.Compose([T.ToTensor(), saturation, normalize])
     test_trans = T.Compose([T.ToTensor(), normalize])
     data_path = os.path.expanduser('/home/dzc/Data/%s' % Const.dataset)
     # data_path2 = os.path.expanduser('/home/dzc/Data/%s' % Const.dataset)
@@ -88,8 +88,8 @@ def main(args):
             # trainer.test(epoch, test_loader, writer)
         else:
             print('Testing...')
-            model.load_state_dict(torch.load("%s/mvdet_rpn_%d.pth" % (Const.modelsavedir, 30)))
-            roi_head.load_state_dict(torch.load("%s/roi_rpn_head_%d.pth" % (Const.modelsavedir, 30)))
+            model.load_state_dict(torch.load("%s/mvdet_rpn_%d.pth" % (Const.modelsavedir, 25)))
+            roi_head.load_state_dict(torch.load("%s/roi_rpn_head_%d.pth" % (Const.modelsavedir, 25)))
             trainer.test(epoch, test_loader, writer)
             break
     writer.close()
