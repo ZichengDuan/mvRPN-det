@@ -144,40 +144,40 @@ class OFTtrainer(BaseTrainer):
                 # print(bbox_2d.shape, sample_roi.shape, gt_loc.shape, gt_label.shape) # (256, 4) (256, 4) (256, 4) (256, 1)
 
                 colorset = [(255, 255, 0), (205, 90, 106), (255, 0, 0), (127, 255, 0), (0,255, 255)] # 青色，紫色，深蓝色
-                if cam != 8:
-                    # print(bbox_2d.shape)
-                    cam0_img = cv2.imread(img_fpaths[cam][frame.item()][0])
-                    for f in range(len(tmp_2ds)):
-                        tmp_2d = tmp_2ds[f]
-                        for j in range(len(tmp_2d)):
-                            ymin, xmin, ymax, xmax = tmp_2d[j]
-                            cv2.rectangle(cam0_img, (int(xmin), int(ymin)), (int(xmax), int(ymax)), color = colorset[f], thickness = 2)
-                            # cv2.circle(cam0_img, (int((xmin + xmax) / 2), int(ymin)), radius=4, color=(255, 255, 0))
-                    for i in range(len(bbox_2d)):
-                        ymin, xmin, ymax, xmax = bbox_2d[i]
-                        cv2.rectangle(cam0_img, (int(xmin), int(ymin)), (int(xmax), int(ymax)), color = (255, 255, 0))
+                # if cam != 8:
+                #     # print(bbox_2d.shape)
+                #     cam0_img = cv2.imread(img_fpaths[cam][frame.item()][0])
+                #     for f in range(len(tmp_2ds)):
+                #         tmp_2d = tmp_2ds[f]
+                #         for j in range(len(tmp_2d)):
+                #             ymin, xmin, ymax, xmax = tmp_2d[j]
+                #             cv2.rectangle(cam0_img, (int(xmin), int(ymin)), (int(xmax), int(ymax)), color = colorset[f], thickness = 2)
+                #             # cv2.circle(cam0_img, (int((xmin + xmax) / 2), int(ymin)), radius=4, color=(255, 255, 0))
+                #     for i in range(len(bbox_2d)):
+                #         ymin, xmin, ymax, xmax = bbox_2d[i]
+                #         cv2.rectangle(cam0_img, (int(xmin), int(ymin)), (int(xmax), int(ymax)), color = (255, 255, 0))
                             
-                    for i in range(len(gt_percam_bbox[cam])):
-                        ymin, xmin, ymax, xmax = gt_percam_bbox[cam][i]
-                        cv2.rectangle(cam0_img, (int(xmin), int(ymin)), (int(xmax), int(ymax)), color = (100, 100, 200))
+                #     for i in range(len(gt_percam_bbox[cam])):
+                #         ymin, xmin, ymax, xmax = gt_percam_bbox[cam][i]
+                #         cv2.rectangle(cam0_img, (int(xmin), int(ymin)), (int(xmax), int(ymax)), color = (100, 100, 200))
 
-                        # cv2.circle(cam0_img, int((xmin + xmax) / 2, y), radius=2, color=))
-                    cv2.imwrite("percam_roi%d.jpg" % cam, cam0_img)
+                #         # cv2.circle(cam0_img, int((xmin + xmax) / 2, y), radius=2, color=))
+                #     cv2.imwrite("percam_roi%d.jpg" % cam, cam0_img)
 
-                    a = np.zeros((Const.grid_height, Const.grid_width))
-                    bevimg = np.uint8(a)
-                    bevimg = cv2.cvtColor(bevimg, cv2.COLOR_GRAY2BGR)
+                #     a = np.zeros((Const.grid_height, Const.grid_width))
+                #     bevimg = np.uint8(a)
+                #     bevimg = cv2.cvtColor(bevimg, cv2.COLOR_GRAY2BGR)
 
-                    for i in range(len(sample_roi)):
-                        ymin, xmin, ymax, xmax = sample_roi[i]
-                        cv2.rectangle(bevimg, (int(xmin), int(ymin)), (int(xmax), int(ymax)), color = (255, 255, 0))
-                    for i in range(len(gt_bev_bbox)):
-                        ymin, xmin, ymax, xmax = gt_bev_bbox[i]
-                        cv2.rectangle(bevimg, (int(xmin), int(ymin)), (int(xmax), int(ymax)), color = (100, 100, 200))
-                    for i in range(len(tmp_array2)):
-                        ymin, xmin, ymax, xmax = tmp_array2[i][0]
-                        cv2.rectangle(bevimg, (int(xmin), int(ymin)), (int(xmax), int(ymax)), color = colorset[i])
-                    cv2.imwrite("bev_roi%d.jpg" % cam, bevimg)
+                #     for i in range(len(sample_roi)):
+                #         ymin, xmin, ymax, xmax = sample_roi[i]
+                #         cv2.rectangle(bevimg, (int(xmin), int(ymin)), (int(xmax), int(ymax)), color = (255, 255, 0))
+                #     for i in range(len(gt_bev_bbox)):
+                #         ymin, xmin, ymax, xmax = gt_bev_bbox[i]
+                #         cv2.rectangle(bevimg, (int(xmin), int(ymin)), (int(xmax), int(ymax)), color = (100, 100, 200))
+                #     for i in range(len(tmp_array2)):
+                #         ymin, xmin, ymax, xmax = tmp_array2[i][0]
+                #         cv2.rectangle(bevimg, (int(xmin), int(ymin)), (int(xmax), int(ymax)), color = colorset[i])
+                #     cv2.imwrite("bev_roi%d.jpg" % cam, bevimg)
                     
                     # print(extrin[0], extrin[0])
 
@@ -258,8 +258,10 @@ class OFTtrainer(BaseTrainer):
 
             # roi_cls_loss = nn.CrossEntropyLoss()(roi_score, gt_roi_label.to(roi_score.device))
             # ----------------------Loss-----------------------------
-            loss = rpn_loc_loss * 3 + rpn_cls_loss * 3 + \
-                    (all_roi_loc_loss + all_roi_cls_loss)
+            # loss = rpn_loc_loss * 3 + rpn_cls_loss * 3 + \
+            #         (all_roi_loc_loss + all_roi_cls_loss)
+
+            loss = rpn_loc_loss * 3 + rpn_cls_loss * 3
 
             # loss = (rpn_loc_loss + rpn_cls_loss) * 0 +  all_roi_loc_loss + all_roi_cls_loss + all_sincos_loss
             Loss += loss.item()

@@ -53,7 +53,7 @@ class PerspTransDetector(nn.Module):
                               for cam in range(self.num_cam)]
 
         self.backbone = nn.Sequential(*list(resnet18(pretrained=False, replace_stride_with_dilation=[False, False, False]).children())[:-2]).cuda()
-        self.rpn = RegionProposalNetwork(in_channels=3586, mid_channels=3586, ratios=[1], anchor_scales=[2* (4 / (Const.reduce))]).cuda()
+        self.rpn = RegionProposalNetwork(in_channels=3586, mid_channels=3586, ratios=[1], anchor_scales=[1* (4 / (Const.reduce))]).cuda()
 
 
     def forward(self, imgs, frame, gt_boxes = None, epoch = None, visualize=False, train = True, mark = None):

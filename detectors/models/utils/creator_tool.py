@@ -250,6 +250,7 @@ class ProposalTargetCreator_percam(object):
             y = (bbox[0] + bbox[2]) / 2
             x = (bbox[1] + bbox[3]) / 2
             z = 0
+            # x, y = get_worldcoord_from_worldgrid([x, y])
             pt2d = getimage_pt(np.array([x, Const.grid_height - y, z]).reshape(3,1), extrin[0], intrin[0])
             if 0 < int(pt2d[0]) < Const.ori_img_width and 0 < int(pt2d[1]) < Const.ori_img_height:
                 roi_remain_idx.append(id)
@@ -767,10 +768,7 @@ class ProposalCreator:
                 :math:`(R, 4)`.
             img_size (tuple of ints): A tuple :obj:`height, width`,
                 which contains image size after scaling.
-            scale (float): The scaling factor used to scale an image after
-                reading it from a file.
-
-        Returns:
+            scale (float): The scaling factor used to scale an image aftergrid_size
             array:
             An array of coordinates of proposal boxes.
             Its shape is :math:`(S, 4)`. :math:`S` is less than
@@ -794,7 +792,6 @@ class ProposalCreator:
         roi = loc2bbox(anchor, loc)
 
         # Clip predicted boxes to image.
-        # print(img_size)
         roi[:, slice(0, 4, 2)] = np.clip(
             roi[:, slice(0, 4, 2)], 0, img_size[0])
         roi[:, slice(1, 4, 2)] = np.clip(
@@ -904,8 +901,6 @@ def get_outter2(projected_3dboxes):
 
     return res
 
-
-
 def generate_3d_bbox(pred_bboxs):
     # 输出以左下角为原点的3d坐标
     n_bbox = pred_bboxs.shape[0]
@@ -924,6 +919,9 @@ def generate_3d_bbox(pred_bboxs):
         pt_h_1 = [xmin, Const.grid_height - ymin, Const.car_height]
         pt_h_2 = [xmin, Const.grid_height - ymax, Const.car_height]
         pt_h_3 = [xmax, Const.grid_height - ymax, Const.car_height]
+        if Const.grid_height - ymax < 0:
+            print("y", Const.grid_height - ymax, Const.grid_height, ymax, ymin)
+            print("x", xmax, xmin)
         boxes_3d.append([pt0, pt1, pt2, pt3, pt_h_0, pt_h_1, pt_h_2, pt_h_3])
     return np.array(boxes_3d).reshape((n_bbox, 8, 3))
 
@@ -933,6 +931,7 @@ def getimage_pt(points3d, extrin, intrin):
     Zc = np.dot(extrin, newpoints3d)[-1]
     imagepoints = (np.dot(intrin, np.dot(extrin, newpoints3d)) / Zc).astype(np.int)
     return [imagepoints[0, 0], imagepoints[1, 0]]
+    # return [imagepoints[0, 0], imagepoints[1, 0]]
 
 def getprojected_3dbox(points3ds, extrin, intrin):
     bboxes = []
