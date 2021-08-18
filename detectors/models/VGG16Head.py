@@ -63,9 +63,32 @@ class VGG16RoIHead(nn.Module):
                                            nn.Dropout(),
                                            nn.Linear(512, 2)).to("cuda:1")
 
+        self.orientation = nn.Sequential(
+            nn.Linear(25088, 256),
+            nn.ReLU(True),
+            nn.Dropout(),
+            nn.Linear(256, 256),
+            nn.ReLU(True),
+            nn.Dropout(),
+            nn.Linear(256, 2 * 2)  # to get sin and cos
+        ).to("cuda:1")
+        self.confidence = nn.Sequential(
+            nn.Linear(25088, 256),
+            nn.ReLU(True),
+            nn.Dropout(),
+            nn.Linear(256, 256),
+            nn.ReLU(True),
+            nn.Dropout(),
+            nn.Linear(256, 2),
+            # nn.Softmax()
+            # nn.Sigmoid()
+        ).to("cuda:1")
+
         normal_init(self.cls_loc, 0, 0.001)
         normal_init(self.score, 0, 0.01)
         normal_init(self.ang_regressor, 0, 0.01)
+        normal_init(self.orientation, 0, 0.01)
+        normal_init(self.confidence, 0, 0.01)
 
         self.n_class = n_class
         self.roi_size = roi_size
@@ -106,8 +129,11 @@ class VGG16RoIHead(nn.Module):
         fc7 = self.classifier(pool)
         roi_cls_locs = self.cls_loc(fc7)
         roi_scores = self.score(fc7)
-        sin_cos = self.ang_regressor(fc7)
-        return roi_cls_locs, roi_scores, sin_cos
+        orientation = self.orientation(pool)
+        orientation = orientation.view(-1, 2, 2)
+        orientation = F.normalize(orientation, dim=2)
+        confidence = self.confidence(pool)
+        return roi_cls_locs, roi_scores, orientation, confidence
 
 
 def normal_init(m, mean, stddev, truncated=False):

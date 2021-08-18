@@ -17,6 +17,7 @@ from detectors.utils.draw_curve import draw_curve
 from detectors.utils.image_utils import img_color_denormalize
 from detectors.OFTTrainer import OFTtrainer
 from detectors.RPNTrainer import RPNtrainer
+from detectors.ORITrainer import ORITrainer
 import warnings
 import itertools
 from detectors.models.VGG16Head import VGG16RoIHead
@@ -46,7 +47,7 @@ def main(args):
     denormalize = img_color_denormalize((0.485, 0.456, 0.406), (0.229, 0.224, 0.225))
     # resize = T.Resize([384, 512]) # h, w
     # resize = T.Resize([240, 320]) # h, w
-    train_trans = T.Compose([T.ToTensor(), saturation, normalize])
+    train_trans = T.Compose([T.ToTensor(), bright, saturation, normalize])
     test_trans = T.Compose([T.ToTensor(), normalize])
     data_path = os.path.expanduser('/home/dzc/Data/%s' % Const.dataset)
     # data_path2 = os.path.expanduser('/home/dzc/Data/%s' % Const.dataset)
@@ -69,7 +70,7 @@ def main(args):
     print('Settings:')
     print(vars(args))
 
-    trainer = OFTtrainer(model, roi_head, denormalize)
+    trainer = ORITrainer(model, roi_head, denormalize)
     # trainer = RPNtrainer(model, roi_head, denormalize)
 
     # learn0.
@@ -110,7 +111,7 @@ if __name__ == '__main__':
     parser.add_argument('--momentum', type=float, default=0.5, metavar='M', help='SGD momentum (default: 0.5)')
     parser.add_argument('--seed', type=int, default=71, help='random seed (default: None)')
 
-    parser.add_argument('--resume', type=bool, default = True)
+    parser.add_argument('--resume', type=bool, default = False)
     args = parser.parse_args()
 
     main(args)
