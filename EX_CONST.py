@@ -41,7 +41,7 @@ class Const:
 
     roi_classes = 1
 
-    modelsavedir = "/home/dzc/Desktop/CASIA/proj/mvRPN-det/results/trained/3timesrpnloss_2"
+    modelsavedir = "/root/deep_learning/dzc/mvRPN-det/results/trained/3timesrpnloss_2"
 
-    imgsavedir = "/home/dzc/Desktop/CASIA/proj/mvRPN-det/results/images/testing_set"
+    imgsavedir = "/root/deep_learning/dzc/mvRPN-det/results/images/testing_set"
 

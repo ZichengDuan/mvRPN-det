@@ -1,3 +1,5 @@
+import sys
+sys.path.append("..")
 from detectors.models.roi_module import RoIPooling2D
 from ..utils import array_tool as at
 import torch.nn as nn
@@ -35,7 +37,7 @@ class VGG16RoIHead(nn.Module):
                                    nn.Linear(1024, 1024, bias=True),
                                    nn.ReLU(inplace=True),
                                    nn.Dropout(p=0.5, inplace=False),
-                                   ).to("cuda:1")
+                                   ).cuda()
 
         # self.classifier_ang = nn.Sequential(nn.Linear(25088, 1024, bias=True),
         #                            nn.ReLU(inplace=True),
@@ -48,12 +50,12 @@ class VGG16RoIHead(nn.Module):
         self.cls_loc = nn.Sequential(nn.Linear(1024, 512),
                                      nn.ReLU(True),
                                      nn.Dropout(),
-                                     nn.Linear(512, n_class * 4)).to("cuda:1")
+                                     nn.Linear(512, n_class * 4)).cuda()
 
         self.score = nn.Sequential(nn.Linear(1024, 512),
                                    nn.ReLU(True),
                                    nn.Dropout(),
-                                   nn.Linear(512, n_class)).to("cuda:1")
+                                   nn.Linear(512, n_class)).cuda()
 
         self.ang_regressor = nn.Sequential(nn.Linear(1024, 512),
                                            nn.ReLU(True),
@@ -61,7 +63,7 @@ class VGG16RoIHead(nn.Module):
                                            nn.Linear(512, 512),
                                            nn.ReLU(True),
                                            nn.Dropout(),
-                                           nn.Linear(512, 2)).to("cuda:1")
+                                           nn.Linear(512, 2)).cuda()
 
         self.orientation = nn.Sequential(
             nn.Linear(25088, 256),
@@ -71,7 +73,7 @@ class VGG16RoIHead(nn.Module):
             nn.ReLU(True),
             nn.Dropout(),
             nn.Linear(256, 2 * 2)  # to get sin and cos
-        ).to("cuda:1")
+        ).cuda()
         self.confidence = nn.Sequential(
             nn.Linear(25088, 256),
             nn.ReLU(True),
@@ -82,7 +84,7 @@ class VGG16RoIHead(nn.Module):
             nn.Linear(256, 2),
             # nn.Softmax()
             # nn.Sigmoid()
-        ).to("cuda:1")
+        ).cuda()
 
         normal_init(self.cls_loc, 0, 0.001)
         normal_init(self.score, 0, 0.01)
@@ -122,7 +124,7 @@ class VGG16RoIHead(nn.Module):
         # print(x.shape, x.device, indices_and_rois.shape, indices_and_rois.device)
         # x = self.trans_layer(x)
         plt.imsave("imgfeature.jpg", torch.norm(x[0].detach(), dim=0).cpu().numpy())
-        pool = self.roi(x, indices_and_rois).to("cuda:1")
+        pool = self.roi(x, indices_and_rois).cuda()
         pool = pool.view(pool.size(0), -1)
         # print(self.classifier)
         # print(pool.shape)

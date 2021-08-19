@@ -27,7 +27,7 @@ warnings.filterwarnings("ignore")
 
 def main(args):
     # seed
-    writer = SummaryWriter('/home/dzc/Desktop/CASIA/proj/mvRPN-det/results/tensorboard/log')
+    writer = SummaryWriter('/root/deep_learning/dzc/mvRPN-det/results/tensorboard/log')
 
     if args.seed is not None:
         np.random.seed(args.seed)
@@ -49,7 +49,7 @@ def main(args):
     # resize = T.Resize([240, 320]) # h, w
     train_trans = T.Compose([T.ToTensor(), bright, saturation, normalize])
     test_trans = T.Compose([T.ToTensor(), normalize])
-    data_path = os.path.expanduser('/home/dzc/Data/%s' % Const.dataset)
+    data_path = os.path.expanduser('/root/deep_learning/dzc/data/%s' % Const.dataset)
     # data_path2 = os.path.expanduser('/home/dzc/Data/%s' % Const.dataset)
     base = Robomaster_1_dataset(data_path, args, worldgrid_shape=Const.grid_size)
     train_set = oftFrameDataset(base, train=True, transform=train_trans, grid_reduce=Const.reduce)
