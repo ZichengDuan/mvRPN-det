@@ -37,7 +37,7 @@ class oftFrameDataset(VisionDataset):
         #     frame_range = list(range(2500, 3021))
 
         if train:
-            frame_range = list(range(0, 1400)) + list(range(2000, 6989))
+            frame_range = list(range(0, 1400)) + list(range(2000, 6900))
         else:
             frame_range = list(range(1400, 2000))
 
