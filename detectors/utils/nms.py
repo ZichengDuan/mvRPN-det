@@ -15,15 +15,15 @@ def nms(points, scores, dist_thres=10, top_k=4):
     Return:
         The indices of the kept boxes with respect to num_priors.
     """
-
     keep = torch.zeros_like(scores).long()
+    # print(keep)
     if points.numel() == 0:
         return keep
     v, indices = scores.sort(0)  # sort in ascending order
     # I = I[v >= 0.01]
     top_k = min(top_k, len(indices))
-    print("top_k, len(indices)", top_k, len(indices))
     indices = indices[-top_k:]  # indices of the top-k largest vals
+
     # keep = torch.Tensor()
     count = 0
     while indices.numel() > 0:
@@ -31,7 +31,6 @@ def nms(points, scores, dist_thres=10, top_k=4):
         # keep.append(i)
         keep[count] = idx
         count += 1
-        # print("indices.numel()", indices.numel())
         if indices.numel() == 1:
             break
         indices = indices[:-1]  # remove kept element from view
@@ -41,4 +40,7 @@ def nms(points, scores, dist_thres=10, top_k=4):
         dists = torch.norm(target_point - remaining_points, dim=1)  # store result in distances
         # keep only elements with an dists > dist_thres
         indices = indices[dists > dist_thres]
+    print(keep)
+
     return keep, count
+

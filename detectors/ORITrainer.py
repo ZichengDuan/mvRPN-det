@@ -701,8 +701,8 @@ def visualize_3dbox(pred_ori, pred_angle, position_mark, gt_bbox, bev_angle, all
         x1_ori, x2_ori, x3_ori, x4_ori, x_mid = xmin, xmin, xmax, xmax, (xmin + xmax) / 2 - 40
         y1_ori, y2_ori, y3_ori, y4_ori, y_mid = Const.grid_height - ymin, Const.grid_height - ymax, Const.grid_height - ymax, Const.grid_height - ymin, (Const.grid_height -ymax + Const.grid_height -ymin) / 2
         center_x, center_y = int((xmin + xmax) // 2), int((ymin + ymax) // 2)
-        w = 50
-        h = 60
+        w = xmax-xmin
+        h = ymax - ymin
         all_gt_res.append([idx.item(), center_x, center_y, w, h, np.rad2deg(theta.item())])
 
 
@@ -1034,8 +1034,8 @@ def visualize_3dbox(pred_ori, pred_angle, position_mark, gt_bbox, bev_angle, all
             angle += np.pi
         theta_l = angle
         theta = theta_l + ray
-        w = 50
-        h = 60
+        w = xmax-xmin
+        h = ymax-ymin
         all_pred_res.append([idx.item(), center_x, center_y, w, h,  np.rad2deg(theta.item()), score])
         # if idx == 1796 and position_mark[i] == 0 and i == 1:
         #     print(theta_l, ray)

@@ -1,4 +1,3 @@
-### python version of matlab evaluation toolkit
 import numpy as np
 from detectors.evaluation.pyeval.CLEAR_MOD_HUN import CLEAR_MOD_HUN
 
@@ -7,10 +6,8 @@ def evaluateDetection_py(res_fpath, gt_fpath, dataset_name):
     """
     This is simply the python translation of a MATLAB　Evaluation tool used to evaluate detection result created by P. Dollar.
     Translated by Zicheng Duan
-
     The purpose of this API:
     1. To allow the project to run purely in Python without using MATLAB Engine.
-
     Some critical information to notice before you use this API:
     1. This API is only tested and deployed in this project: MVDet https://github.com/hou-yz/MVDet, might not be compatible with other projects.
     2. The detection result using this API is a little bit lower (approximately 0~2% decrease in MODA, MODP) than that using MATLAB evaluation tool,
@@ -18,7 +15,6 @@ def evaluateDetection_py(res_fpath, gt_fpath, dataset_name):
         one implemented by P. Dollar, hence leading to different results.
         Therefore, please use the official MATLAB API if you want to obtain the same result shown in the paper. This Python API is only used for convenience.
     3. The training process would not be affected by this API.
-
     @param res_fpath: detection result file path
     @param gt_fpath: ground truth result file path
     @param dataset: dataset name, should be "WildTrack" or "MultiviewX"
@@ -92,13 +88,16 @@ def evaluateDetection_py(res_fpath, gt_fpath, dataset_name):
         else:
             detAllMatrix = np.concatenate((detAllMatrix, tmp_arr), axis=0)
         frame_ctr += 1
+
+    # print(gtAllMatrix.shape, detAllMatrix.shape)
+    # print(gtAllMatrix[:10])
     recall, precision, MODA, MODP = CLEAR_MOD_HUN(gtAllMatrix, detAllMatrix)
     return recall, precision, MODA, MODP
 
 
 if __name__ == "__main__":
-    res_fpath = "../test-demo.txt"
-    gt_fpath = "../gt-demo.txt"
+    res_fpath = "/home/dzc/Desktop/CASIA/proj/mvRPN-det/detectors/evaluation/pyeval/all_res.txt"
+    gt_fpath = "/home/dzc/Desktop/CASIA/proj/mvRPN-det/detectors/evaluation/pyeval/all_test_gt.txt"
     dataset_name = "Wildtrack"
     recall, precision, moda, modp = evaluateDetection_py(res_fpath, gt_fpath, dataset_name)
     print(f'python eval: MODA {moda:.1f}, MODP {modp:.1f}, prec {precision:.1f}, rcll {recall:.1f}')
