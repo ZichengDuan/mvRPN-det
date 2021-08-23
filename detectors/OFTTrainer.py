@@ -243,7 +243,7 @@ class OFTtrainer(BaseTrainer):
             # roi_cls_loss = nn.CrossEntropyLoss()(roi_score, gt_roi_label.to(roi_score.device))
             # ----------------------Loss-----------------------------
             loss = rpn_loc_loss * 3 + rpn_cls_loss * 3 + \
-                    (all_roi_loc_loss + all_roi_cls_loss + all_sincos_loss)
+                    (all_roi_loc_loss * 0 + all_roi_cls_loss + all_sincos_loss)
 
             # loss = (rpn_loc_loss + rpn_cls_loss) * 0 +  all_roi_loc_loss + all_roi_cls_loss + all_sincos_loss
             Loss += loss.item()
@@ -511,7 +511,7 @@ class OFTtrainer(BaseTrainer):
             # all_bev_boxes, _, all_sincos_remain, position_mark_keep = nms_new(all_roi_remain, all_front_prob, all_pred_sincos, position_mark)
             # s = time.time()
             v, indices = torch.tensor(all_front_prob).sort(0)
-            indices_remain = indices[v > 0.93]
+            indices_remain = indices[v > 0.7]
             print(frame)
             all_roi_remain = all_roi_remain[indices_remain].reshape(len(indices_remain), 4)
             all_pred_sincos = all_pred_sincos[indices_remain].reshape(len(indices_remain), 2)
