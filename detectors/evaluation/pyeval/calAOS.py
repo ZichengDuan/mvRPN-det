@@ -43,7 +43,7 @@ def CLEAR_MOD_HUN2(gt, det):
         det_results = det[det[:, 0] == t - 1]
         # final_prec, final_aos = cal_AOS(39, gt_results, det_results)
         # frame_infolist = cal_frame_TPFP(30, gt_results, det_results)
-        frame_infolist = cal_frame_TPFP_iou(0.5, gt_results, det_results)
+        frame_infolist = cal_frame_TPFP_iou(0.25, gt_results, det_results)
         if all_infolist is None:
             all_infolist = frame_infolist
         else:
@@ -222,12 +222,12 @@ def cal_frame_TPFP_iou(dist_threshold, gt_res, pred_res):
         max_idx = -1
         cur_gt_ori = -1
         _, _, x_pred, y_pred, w_pred, h_pred, score, ori_pred = pred
-        w_pred, h_pred = 60, 60
+        w_pred, h_pred = 50, 60
         xmin_pred, ymin_pred, xmax_pred, ymax_pred = wh2bottomleft([x_pred, y_pred, w_pred, h_pred])
         for j, gt in enumerate(gt_res):
             _, _, x_gt, y_gt, w_gt, h_gt, ori_gt = gt
             # dist = math.sqrt(pow(x_pred - x_gt, 2)+ pow(y_pred - y_gt, 2))
-            w_gt, h_gt = 60, 60
+            w_gt, h_gt = 50, 60
             xmin_gt, ymin_gt, xmax_gt, ymax_gt = wh2bottomleft([x_gt, y_gt, w_gt, h_gt])
 
             iou = bbox_iou([xmin_gt, ymin_gt, xmax_gt, ymax_gt], [xmin_pred, ymin_pred, xmax_pred, ymax_pred])
