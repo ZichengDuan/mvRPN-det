@@ -48,20 +48,30 @@ class VGG16RoIHead(nn.Module):
         self.cls_loc = nn.Sequential(nn.Linear(1024, 512),
                                      nn.ReLU(True),
                                      nn.Dropout(),
-                                     nn.Linear(512, n_class * 4)).to("cuda:1")
+                                     nn.Linear(512, 128),
+                                     nn.ReLU(True),
+                                     nn.Dropout(),
+                                     nn.Linear(128, n_class * 4)).to("cuda:1")
 
-        self.score = nn.Sequential(nn.Linear(1024, 512),
-                                   nn.ReLU(True),
-                                   nn.Dropout(),
-                                   nn.Linear(512, n_class)).to("cuda:1")
+        self.score = nn.Sequential( nn.Linear(1024, 512),
+                                     nn.ReLU(True),
+                                     nn.Dropout(),
+                                    nn.Linear(512, n_class)).to("cuda:1")
 
-        self.ang_regressor = nn.Sequential(nn.Linear(1024, 1024),
+        # self.ang_regressor = nn.Sequential(nn.Linear(1024, 1024),
+        #                                    nn.ReLU(True),
+        #                                    nn.Dropout(),
+        #                                    nn.Linear(1024, 512),
+        #                                    nn.ReLU(True),
+        #                                    nn.Dropout(),
+        #                                    nn.Linear(512, 2)).to("cuda:1")
+        self.ang_regressor = nn.Sequential(nn.Linear(1024, 512),
                                            nn.ReLU(True),
                                            nn.Dropout(),
-                                           nn.Linear(1024, 512),
+                                           nn.Linear(512, 128),
                                            nn.ReLU(True),
                                            nn.Dropout(),
-                                           nn.Linear(512, 2)).to("cuda:1")
+                                           nn.Linear(128, 2)).to("cuda:1")
 
         # self.orientation = nn.Sequential(
         #     nn.Linear(25088, 256),
