@@ -55,7 +55,7 @@ class VGG16RoIHead(nn.Module):
                                    nn.Dropout(),
                                    nn.Linear(512, n_class)).to("cuda:1")
 
-        self.ang_regressor = nn.Sequential(nn.Linear(25088, 1024),
+        self.ang_regressor = nn.Sequential(nn.Linear(1024, 1024),
                                            nn.ReLU(True),
                                            nn.Dropout(),
                                            nn.Linear(1024, 512),
@@ -129,7 +129,7 @@ class VGG16RoIHead(nn.Module):
         fc7 = self.classifier(pool)
         roi_cls_locs = self.cls_loc(fc7)
         roi_scores = self.score(fc7)
-        roi_sincos = self.ang_regressor(pool)
+        roi_sincos = self.ang_regressor(fc7)
         # orientation = self.orientation(pool)
         # orientation = orientation.view(-1, 2, 2)
         # orientation = F.normalize(orientation, dim=2)
