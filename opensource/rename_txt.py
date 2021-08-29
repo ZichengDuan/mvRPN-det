@@ -2,7 +2,7 @@ import os
 import shutil
 
 target_path = "/home/dzc/Data/opensource/annotations/"
-root_path = "/home/dzc/Data/opensource/light/annotations/"
+root_path = "/home/dzc/Data/opensource/raws/light/annotations/"
 
 target_file_num = len(os.listdir(target_path))
 root_file_num = len(os.listdir(root_path))
