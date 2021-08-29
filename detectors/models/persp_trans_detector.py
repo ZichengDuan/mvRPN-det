@@ -54,7 +54,8 @@ class PerspTransDetector(nn.Module):
 
             self.proj_mats2 = [torch.from_numpy(map_zoom_mat @ imgcoord2worldgrid_matrices2[cam] @ img_zoom_mat)
                               for cam in range(self.num_cam)]
-
+            print("dzc1", self.proj_mats)
+            print("dzc2", self.proj_mats2)
         self.backbone = nn.Sequential(*list(resnet18(pretrained=True, replace_stride_with_dilation=[False, True, True]).children())[:-2]).to('cuda:0')
         self.rpn = RegionProposalNetwork(in_channels=1026, mid_channels=1026, ratios=[1], anchor_scales=[4]).to('cuda:1')
         # my_cls = nn.Sequential(nn.Linear(25088, 2048, bias=True),

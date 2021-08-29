@@ -291,6 +291,7 @@ class ProposalTargetCreator_conf(object):
         gt_roi_conf_left = left_conf.reshape(-1, 2)[left_gt_assignment]
 
         # Select foreground RoIs as those with >= pos_iou_thresh IoU.
+        # 这里要再加上被遮挡的情况，如果被遮挡了，也算做负样本
         left_pos_index = np.where(left_max_iou >= self.pos_iou_thresh)[0]
         left_pos_roi_per_this_image = int(min(left_pos_roi_per_image, left_pos_index.size))
         if left_pos_index.size > 0:

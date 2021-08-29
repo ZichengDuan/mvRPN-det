@@ -511,7 +511,7 @@ class OFTtrainer(BaseTrainer):
             # all_bev_boxes, _, all_sincos_remain, position_mark_keep = nms_new(all_roi_remain, all_front_prob, all_pred_sincos, position_mark)
             # s = time.time()
             v, indices = torch.tensor(all_front_prob).sort(0)
-            indices_remain = indices[v > 0.8]
+            indices_remain = indices[v > 0.6]
             print(frame)
             all_roi_remain = all_roi_remain[indices_remain].reshape(len(indices_remain), 4)
             all_pred_sincos = all_pred_sincos[indices_remain].reshape(len(indices_remain), 2)
@@ -783,337 +783,173 @@ def visualize_3dbox(pred_ori, pred_angle, position_mark, gt_bbox, bev_angle, all
     right_img = cv2.imread("/home/dzc/Data/mix/img/right2/%d.jpg" % (idx))
     boxes_3d = []
     #============================= MVDET =============================
-    for j, bbox in enumerate(gt_bbox):
-        ymin, xmin, ymax, xmax = bbox
-        theta = torch.tensor(0)
-        rand_x = np.random.randint(-10, 10)
-        rand_y = np.random.randint(-10, 10)
-        center_x, center_y = int((bbox[1] + bbox[3]) // 2) + rand_x, int((bbox[0] + bbox[2]) // 2) + rand_y
-        w, h = 60 / 2, 50 / 2
-        xmin = center_x - w
-        xmax = center_x + w
-        ymin = center_y - h
-        ymax = center_y + h
-
-        x1_ori =  (xmin + xmax) / 2 - 25
-        y1_ori = Const.grid_height - ymin
-
-
-        # bev_img = cv2.imread()
-
-        # pt0 = [x1_rot, y1_rot, 0]
-        # pt1 = [x2_rot, y2_rot, 0]
-        # pt2 = [x3_rot, y3_rot, 0]
-        # pt3 = [x4_rot, y4_rot, 0]
-        # pt_h_0 = [x1_rot, y1_rot, Const.car_height]
-        # pt_h_1 = [x2_rot, y2_rot, Const.car_height]
-        # pt_h_2 = [x3_rot, y3_rot, Const.car_height]
-        # pt_h_3 = [x4_rot, y4_rot, Const.car_height]
-        # pt_extra = [xmid_rot, ymid_rot, 0]
-
-
-        x1_rot, x2_rot, x3_rot, x4_rot, x5_rot, x6_rot, x7_rot, x8_rot, x9_rot, x10_rot, x11_rot = \
-            int(math.cos(np.pi / 6) * (x1_ori - center_x) - math.sin(np.pi / 6) * (
-                    y1_ori - (Const.grid_height - center_y)) + center_x), \
-            int(math.cos(2*np.pi / 6) * (x1_ori - center_x) - math.sin(2*np.pi / 6) * (
-                    y1_ori - (Const.grid_height - center_y)) + center_x), \
-            int(math.cos(3*np.pi / 6) * (x1_ori - center_x) - math.sin(3*np.pi / 6) * (
-                    y1_ori - (Const.grid_height - center_y)) + center_x), \
-            int(math.cos(4*np.pi / 6) * (x1_ori - center_x) - math.sin(4*np.pi / 6) * (
-                    y1_ori - (Const.grid_height - center_y)) + center_x), \
-            int(math.cos(5*np.pi / 6) * (x1_ori - center_x) - math.sin(5*np.pi / 6) * (
-                    y1_ori - (Const.grid_height - center_y)) + center_x), \
-            int(math.cos(6*np.pi / 6) * (x1_ori - center_x) - math.sin(6*np.pi / 6) * (
-                    y1_ori - (Const.grid_height - center_y)) + center_x), \
-            int(math.cos(7*np.pi / 6) * (x1_ori - center_x) - math.sin(7*np.pi / 6) * (
-                    y1_ori - (Const.grid_height - center_y)) + center_x), \
-            int(math.cos(8*np.pi / 6) * (x1_ori - center_x) - math.sin(8*np.pi / 6) * (
-                    y1_ori - (Const.grid_height - center_y)) + center_x), \
-            int(math.cos(9*np.pi / 6) * (x1_ori - center_x) - math.sin(9*np.pi / 6) * (
-                    y1_ori - (Const.grid_height - center_y)) + center_x), \
-            int(math.cos(10*np.pi / 6) * (x1_ori - center_x) - math.sin(10*np.pi / 6) * (
-                    y1_ori - (Const.grid_height - center_y)) + center_x), \
-            int(math.cos(11*np.pi / 6) * (x1_ori - center_x) - math.sin(11*np.pi / 6) * (
-                    y1_ori - (Const.grid_height - center_y)) + center_x)
-        #
-        y1_rot, y2_rot, y3_rot, y4_rot,  y5_rot, y6_rot, y7_rot, y8_rot, y9_rot, y10_rot,y11_rot = \
-            int(math.sin(np.pi / 6) * (x1_ori - center_x) + math.cos(np.pi / 6) * (y1_ori - (Const.grid_height - center_y)) + (
-                    Const.grid_height - center_y)), \
-            int(math.sin(2*np.pi / 6) * (x1_ori - center_x) + math.cos(2*np.pi / 6) * (y1_ori - (Const.grid_height - center_y)) + (
-                    Const.grid_height - center_y)), \
-            int(math.sin(3*np.pi / 6) * (x1_ori - center_x) + math.cos(3*np.pi / 6) * (y1_ori - (Const.grid_height - center_y)) + (
-                    Const.grid_height - center_y)), \
-            int(math.sin(4*np.pi / 6) * (x1_ori - center_x) + math.cos(4*np.pi / 6) * (y1_ori - (Const.grid_height - center_y)) + (
-                    Const.grid_height - center_y)), \
-            int(math.sin(5*np.pi / 6) * (x1_ori - center_x) + math.cos(5*np.pi / 6) * (y1_ori - (Const.grid_height - center_y)) + (
-                    Const.grid_height - center_y)), \
-            int(math.sin(6*np.pi / 6) * (x1_ori - center_x) + math.cos(6*np.pi / 6) * (y1_ori - (Const.grid_height - center_y)) + (
-                    Const.grid_height - center_y)), \
-            int(math.sin(7*np.pi / 6) * (x1_ori - center_x) + math.cos(7*np.pi / 6) * (y1_ori - (Const.grid_height - center_y)) + (
-                    Const.grid_height - center_y)), \
-            int(math.sin(8*np.pi / 6) * (x1_ori - center_x) + math.cos(8*np.pi / 6) * (y1_ori - (Const.grid_height - center_y)) + (
-                    Const.grid_height - center_y)), \
-            int(math.sin(9*np.pi / 6) * (x1_ori - center_x) + math.cos(9*np.pi / 6) * (y1_ori - (Const.grid_height - center_y)) + (
-                    Const.grid_height - center_y)), \
-            int(math.sin(10*np.pi / 6) * (x1_ori - center_x) + math.cos(10*np.pi / 6) * (y1_ori - (Const.grid_height - center_y)) + (
-                    Const.grid_height - center_y)), \
-            int(math.sin(11*np.pi / 6) * (x1_ori - center_x) + math.cos(11*np.pi / 6) * (y1_ori - (Const.grid_height - center_y)) + (
-                    Const.grid_height - center_y))
-
-        cy0 = [x1_ori, y1_ori, 0]
-        cy1 = [x1_ori, y1_ori, Const.car_height]
-        cy2 = [x1_rot, y1_rot, 0]
-        cy3 = [x1_rot, y1_rot, Const.car_height]
-        cy4 = [x2_rot, y2_rot, 0]
-        cy5 = [x2_rot, y2_rot, Const.car_height]
-        cy6 = [x3_rot, y3_rot, 0]
-        cy7 = [x3_rot, y3_rot, Const.car_height]
-        cy8 = [x4_rot, y4_rot, 0]
-        cy9 = [x4_rot, y4_rot, Const.car_height]
-        cy10 = [x5_rot, y5_rot, 0]
-        cy11 = [x5_rot, y5_rot, Const.car_height]
-        cy12 = [x6_rot, y6_rot, 0]
-        cy13 = [x6_rot, y6_rot, Const.car_height]
-        cy14 = [x7_rot, y7_rot, 0]
-        cy15 = [x7_rot, y7_rot, Const.car_height]
-        cy16 = [x8_rot, y8_rot, 0]
-        cy17 = [x8_rot, y8_rot, Const.car_height]
-        cy18 = [x9_rot, y9_rot, 0]
-        cy19 = [x9_rot, y9_rot, Const.car_height]
-        cy20 = [x10_rot, y10_rot, 0]
-        cy21 = [x10_rot, y10_rot, Const.car_height]
-        cy22 = [x11_rot, y11_rot, 0]
-        cy23 = [x11_rot, y11_rot, Const.car_height]
-
-
-        boxes_3d.append([cy0, cy1, cy2, cy3, cy4, cy5, cy6, cy7, cy8, cy9, cy10, cy11, cy12,cy13, cy14,cy15,cy16,cy17,cy18,cy19,cy20,cy21, cy22, cy23])
-    gt_ori = np.array(boxes_3d).reshape((gt_n_bbox, 24, 3))
-    gt_projected_2d = getprojected_3dbox(gt_ori, extrin, intrin, isleft=True)
-    gt_projected_2d = getprojected_3dbox(gt_ori, extrin, intrin, isleft=False)
-    for k in range(gt_n_bbox):
-        color = (0, 255, 255)
-        cv2.line(right_img, (gt_projected_2d[k][0][0], gt_projected_2d[k][0][1]),
-                 (gt_projected_2d[k][2][0], gt_projected_2d[k][2][1]), color=color, thickness=1)
-        cv2.line(right_img, (gt_projected_2d[k][2][0], gt_projected_2d[k][2][1]),
-                 (gt_projected_2d[k][4][0], gt_projected_2d[k][4][1]), color=color, thickness=1)
-        cv2.line(right_img, (gt_projected_2d[k][4][0], gt_projected_2d[k][4][1]),
-                 (gt_projected_2d[k][6][0], gt_projected_2d[k][6][1]), color=color, thickness=1)
-        cv2.line(right_img, (gt_projected_2d[k][6][0], gt_projected_2d[k][6][1]),
-                 (gt_projected_2d[k][8][0], gt_projected_2d[k][8][1]), color=color, thickness=1)
-        cv2.line(right_img, (gt_projected_2d[k][8][0], gt_projected_2d[k][8][1]),
-                 (gt_projected_2d[k][10][0], gt_projected_2d[k][10][1]), color=color, thickness=1)
-        cv2.line(right_img, (gt_projected_2d[k][10][0], gt_projected_2d[k][10][1]),
-                 (gt_projected_2d[k][12][0], gt_projected_2d[k][12][1]), color=color, thickness=1)
-        cv2.line(right_img, (gt_projected_2d[k][12][0], gt_projected_2d[k][12][1]),
-                 (gt_projected_2d[k][14][0], gt_projected_2d[k][14][1]), color=color, thickness=1)
-        cv2.line(right_img, (gt_projected_2d[k][14][0], gt_projected_2d[k][14][1]),
-                 (gt_projected_2d[k][16][0], gt_projected_2d[k][16][1]), color=color, thickness=1)
-        cv2.line(right_img, (gt_projected_2d[k][16][0], gt_projected_2d[k][16][1]),
-                 (gt_projected_2d[k][18][0], gt_projected_2d[k][18][1]), color=color, thickness=1)
-        cv2.line(right_img, (gt_projected_2d[k][18][0], gt_projected_2d[k][18][1]),
-                 (gt_projected_2d[k][20][0], gt_projected_2d[k][20][1]), color=color, thickness=1)
-        cv2.line(right_img, (gt_projected_2d[k][20][0], gt_projected_2d[k][20][1]),
-                 (gt_projected_2d[k][22][0], gt_projected_2d[k][22][1]), color=color, thickness=1)
-        cv2.line(right_img, (gt_projected_2d[k][22][0], gt_projected_2d[k][22][1]),
-                 (gt_projected_2d[k][0][0], gt_projected_2d[k][0][1]), color=color, thickness=1)
-
-        cv2.line(right_img, (gt_projected_2d[k][0+1][0], gt_projected_2d[k][0+1][1]),
-                 (gt_projected_2d[k][2+1][0], gt_projected_2d[k][2+1][1]), color=color, thickness=1)
-        cv2.line(right_img, (gt_projected_2d[k][2+1][0], gt_projected_2d[k][2+1][1]),
-                 (gt_projected_2d[k][4+1][0], gt_projected_2d[k][4+1][1]), color=color, thickness=1)
-        cv2.line(right_img, (gt_projected_2d[k][4+1][0], gt_projected_2d[k][4+1][1]),
-                 (gt_projected_2d[k][6+1][0], gt_projected_2d[k][6+1][1]), color=color, thickness=1)
-        cv2.line(right_img, (gt_projected_2d[k][6+1][0], gt_projected_2d[k][6+1][1]),
-                 (gt_projected_2d[k][8+1][0], gt_projected_2d[k][8+1][1]), color=color, thickness=1)
-        cv2.line(right_img, (gt_projected_2d[k][8+1][0], gt_projected_2d[k][8+1][1]),
-                 (gt_projected_2d[k][10+1][0], gt_projected_2d[k][10+1][1]), color=color, thickness=1)
-        cv2.line(right_img, (gt_projected_2d[k][10][0], gt_projected_2d[k][10+1][1]),
-                 (gt_projected_2d[k][12+1][0], gt_projected_2d[k][12+1][1]), color=color, thickness=1)
-        cv2.line(right_img, (gt_projected_2d[k][12+1][0], gt_projected_2d[k][12+1][1]),
-                 (gt_projected_2d[k][14+1][0], gt_projected_2d[k][14+1][1]), color=color, thickness=1)
-        cv2.line(right_img, (gt_projected_2d[k][14+1][0], gt_projected_2d[k][14+1][1]),
-                 (gt_projected_2d[k][16+1][0], gt_projected_2d[k][16+1][1]), color=color, thickness=1)
-        cv2.line(right_img, (gt_projected_2d[k][16+1][0], gt_projected_2d[k][16+1][1]),
-                 (gt_projected_2d[k][18+1][0], gt_projected_2d[k][18+1][1]), color=color, thickness=1)
-        cv2.line(right_img, (gt_projected_2d[k][18+1][0], gt_projected_2d[k][18+1][1]),
-                 (gt_projected_2d[k][20+1][0], gt_projected_2d[k][20+1][1]), color=color, thickness=1)
-        cv2.line(right_img, (gt_projected_2d[k][20+1][0], gt_projected_2d[k][20+1][1]),
-                 (gt_projected_2d[k][22+1][0], gt_projected_2d[k][22+1][1]), color=color, thickness=1)
-        cv2.line(right_img, (gt_projected_2d[k][22+1][0], gt_projected_2d[k][22+1][1]),
-                 (gt_projected_2d[k][0+1][0], gt_projected_2d[k][0+1][1]), color=color, thickness=1)
-
-        cv2.line(right_img, (gt_projected_2d[k][0][0], gt_projected_2d[k][0][1]),
-                 (gt_projected_2d[k][1][0], gt_projected_2d[k][1][1]), color=color, thickness=1)
-        cv2.line(right_img, (gt_projected_2d[k][6][0], gt_projected_2d[k][6][1]),
-                 (gt_projected_2d[k][7][0], gt_projected_2d[k][7][1]), color=color, thickness=1)
-        cv2.line(right_img, (gt_projected_2d[k][12][0], gt_projected_2d[k][12][1]),
-                 (gt_projected_2d[k][13][0], gt_projected_2d[k][13][1]), color=color, thickness=1)
-        cv2.line(right_img, (gt_projected_2d[k][18][0], gt_projected_2d[k][18][1]),
-                 (gt_projected_2d[k][19][0], gt_projected_2d[k][19][1]), color=color, thickness=1)
-        # cv2.line(left_img, (projected_2d[k][0+ 9][0], projected_2d[k][0+ 9][1]), (projected_2d[k][1+ 9][0], projected_2d[k][1+ 9][1]), color = (255, 255, 0))
-        # cv2.line(left_img, (projected_2d[k][0+ 9][0], projected_2d[k][0+ 9][1]), (projected_2d[k][3+ 9][0], projected_2d[k][3+ 9][1]), color = (255, 255, 0))
-        # cv2.line(left_img, (projected_2d[k][0+ 9][0], projected_2d[k][0+ 9][1]), (projected_2d[k][4+ 9][0], projected_2d[k][4+ 9][1]), color = (255, 255, 0))
-        # cv2.line(left_img, (projected_2d[k][1+ 9][0], projected_2d[k][1+ 9][1]), (projected_2d[k][5+ 9][0], projected_2d[k][5+ 9][1]), color = (255, 255, 0))
-        # cv2.line(left_img, (projected_2d[k][1+ 9][0], projected_2d[k][1+ 9][1]), (projected_2d[k][2+ 9][0], projected_2d[k][2+ 9][1]), color = (255, 255, 0))
-        # cv2.line(left_img, (projected_2d[k][2+ 9][0], projected_2d[k][2+ 9][1]), (projected_2d[k][3+ 9][0], projected_2d[k][3+ 9][1]), color = (255, 255, 0))
-        # cv2.line(left_img, (projected_2d[k][2+ 9][0], projected_2d[k][2+ 9][1]), (projected_2d[k][6+ 9][0], projected_2d[k][6+ 9][1]), color = (255, 255, 0))
-        # cv2.line(left_img, (projected_2d[k][3+ 9][0], projected_2d[k][3+ 9][1]), (projected_2d[k][7+ 9][0], projected_2d[k][7+ 9][1]), color = (255, 255, 0))
-        # cv2.line(left_img, (projected_2d[k][4+ 9][0], projected_2d[k][4+ 9][1]), (projected_2d[k][5+ 9][0], projected_2d[k][5+ 9][1]), color = (255, 255, 0))
-        # cv2.line(left_img, (projected_2d[k][5+ 9][0], projected_2d[k][5+ 9][1]), (projected_2d[k][6+ 9][0], projected_2d[k][6+ 9][1]), color = (255, 255, 0))
-        # cv2.line(left_img, (projected_2d[k][6+ 9][0], projected_2d[k][6+ 9][1]), (projected_2d[k][7+ 9][0], projected_2d[k][7+ 9][1]), color = (255, 255, 0))
-        # cv2.line(left_img, (projected_2d[k][7+ 9][0], projected_2d[k][7+ 9][1]), (projected_2d[k][4+ 9][0], projected_2d[k][4+ 9][1]), color = (255, 255, 0))
-        # cv2.line(left_img, (projected_2d[k][7+ 9][0], projected_2d[k][7+ 9][1]), (projected_2d[k][4+ 9][0], projected_2d[k][4+ 9][1]), color = (255, 255, 0))
-        #
-        # cv2.arrowedLine(right_img, (int((gt_projected_2d[k][0][0] + gt_projected_2d[k][2][0]) / 2),
-        #                             int((gt_projected_2d[k][0][1] + gt_projected_2d[k][2][1]) / 2)),
-        #                 (gt_projected_2d[k][8][0], gt_projected_2d[k][8][1]), color=(255, 60, 199), thickness=2)
-        # cv2.line(left_img, (int((projected_2d[k][0+ 9][0] + projected_2d[k][2+ 9][0]) / 2), int((projected_2d[k][0+ 9][1] + projected_2d[k][2+ 9][1]) / 2)), (projected_2d[k][8+ 9][0], projected_2d[k][8+ 9][1]), color = (255, 60, 199), thickness=2)
-    cv2.imwrite("/home/dzc/Desktop/CASIA/proj/mvRPN-det/results/images/3d_box_blend/%d_mvdet.jpg" % idx, right_img)
-    # right_img = cv2.imread("/home/dzc/Data/mix/img/right2/%d.jpg" % (idx))
-
-
-    # boxes_3d = []
-    # print(all_front_prob.shape, pred_angle.shape, pred_ori.shape)
-    # for i, bbox in enumerate(pred_ori):
+    # for j, bbox in enumerate(gt_bbox):
     #     ymin, xmin, ymax, xmax = bbox
-    #     sincos = pred_angle[i]
-    #     if pred_angle.shape[0] == 1:
-    #         score = 1.0
-    #     else:
-    #         score = all_front_prob[i]
-    #     if position_mark[i] == 0:
-    #         center_x, center_y = int((bbox[1] + bbox[3]) // 2), int((bbox[0] + bbox[2]) // 2)
-    #         w, h = 60/2, 50/2
-    #         xmin = center_x - w
-    #         xmax = center_x + w
-    #         ymin = center_y - h
-    #         ymax = center_y + h
-    #         x1_ori, x2_ori, x3_ori, x4_ori, x_mid = xmin, xmin, xmax, xmax, (xmin + xmax) / 2 + 40
-    #         y1_ori, y2_ori, y3_ori, y4_ori, y_mid = Const.grid_height -ymin, Const.grid_height -ymax, Const.grid_height -ymax, Const.grid_height -ymin, (Const.grid_height -ymax + Const.grid_height -ymin) / 2
-    #         # if i == 1 and idx == 1796:
-    #         #     tmp = cv2.imread("/home/dzc/Data/4carreal_0318blend/bevimgs/%d.jpg" % idx)
-    #         #     cv2.circle(tmp, (int(x_mid), int(y_mid)), radius=1, color=(255, 244, 0))
-    #         #     cv2.circle(tmp, (int(x1_ori), int(y1_ori)), radius=1, color=(255, 0, 0))
-    #         #     cv2.circle(tmp, (int(x2_ori), int(y2_ori)), radius=1, color=(255, 244, 0))
-    #         #     cv2.circle(tmp, (int(x3_ori), int(y3_ori)), radius=1, color=(255, 244, 0))
-    #         #     cv2.circle(tmp, (int(x4_ori), int(y4_ori)), radius=1, color=(255, 244, 0))
-    #         #     cv2.imwrite("/home/dzc/Desktop/CASIA/proj/mvRPN-det/results/images/dddd.jpg", tmp)
+    #     theta = torch.tensor(0)
+    #     rand_x = np.random.randint(-10, 10)
+    #     rand_y = np.random.randint(-10, 10)
+    #     center_x, center_y = int((bbox[1] + bbox[3]) // 2) + rand_x, int((bbox[0] + bbox[2]) // 2) + rand_y
+    #     w, h = 60 / 2, 50 / 2
+    #     xmin = center_x - w
+    #     xmax = center_x + w
+    #     ymin = center_y - h
+    #     ymax = center_y + h
     #
-    #         ray = np.arctan((Const.grid_height - center_y) / center_x)
-    #         angle = np.arctan(sincos[0] / sincos[1])
-    #         if sincos[0] > 0 and \
-    #                 sincos[1] < 0:
-    #             angle += np.pi
-    #         elif sincos[0] < 0 and \
-    #                 sincos[1] < 0:
-    #             angle += np.pi
-    #         elif sincos[0] < 0 and \
-    #                 sincos[1] > 0:
-    #             angle += 2 * np.pi
-    #         # angle += np.pi
-    #     else:
-    #         center_x, center_y = int((xmin + xmax) // 2), int((ymin + ymax) // 2)
-    #         w, h = 60/2, 50/2
-    #         xmin = center_x - w
-    #         xmax = center_x + w
-    #         ymin = center_y - h
-    #         ymax = center_y + h
-    #         x1_ori, x2_ori, x3_ori, x4_ori, x_mid = xmin, xmin, xmax, xmax, (xmin + xmax) / 2 - 40
-    #         y1_ori, y2_ori, y3_ori, y4_ori, y_mid = Const.grid_height -ymin, Const.grid_height -ymax, Const.grid_height -ymax, Const.grid_height -ymin, (Const.grid_height -ymax + Const.grid_height -ymin) / 2
+    #     x1_ori =  (xmin + xmax) / 2 - 25
+    #     y1_ori = Const.grid_height - ymin
     #
-    #         ray = np.arctan(center_y / (Const.grid_width - center_x))
-    #         angle = np.arctan(sincos[0] / sincos[1])
-    #         if sincos[0] > 0 and \
-    #                 sincos[1] < 0:
-    #             angle += np.pi
-    #         elif sincos[0] < 0 and \
-    #                 sincos[1] < 0:
-    #             angle += np.pi
-    #         elif sincos[0] < 0 and \
-    #                 sincos[1] > 0:
-    #             angle += 2 * np.pi
-    #         # angle += np.pi
-    #     theta_l = angle
-    #     theta = theta_l + ray
-    #     w = xmax-xmin
-    #     h = ymax-ymin
-    #     if position_mark[i] == 0:
-    #         theta_left = theta + np.pi
-    #         all_pred_res.append([idx.item(), center_x, center_y, w, h,  np.rad2deg(theta_left.item()), score])
-    #     else:
-    #         all_pred_res.append([idx.item(), center_x, center_y, w, h, np.rad2deg(theta.item()), score])
-    #     # if idx == 1796 and position_mark[i] == 0 and i == 1:
-    #     #     print(theta_l, ray)
-    #     # if idx < 1900:
-    #     #     print("dzc", theta)
     #
-    #     x1_rot, x2_rot, x3_rot, x4_rot, xmid_rot = \
-    #         int(math.cos(theta) * (x1_ori - center_x) - math.sin(theta) * (y1_ori - (Const.grid_height - center_y)) + center_x), \
-    #         int(math.cos(theta) * (x2_ori - center_x) - math.sin(theta) * (y2_ori - (Const.grid_height - center_y)) + center_x), \
-    #         int(math.cos(theta) * (x3_ori - center_x) - math.sin(theta) * (y3_ori - (Const.grid_height - center_y)) + center_x), \
-    #         int(math.cos(theta) * (x4_ori - center_x) - math.sin(theta) * (y4_ori - (Const.grid_height - center_y)) + center_x), \
-    #         int(math.cos(theta) * (x_mid - center_x) - math.sin(theta) * (y_mid - (Const.grid_height - center_y)) + center_x)
+    #     # bev_img = cv2.imread()
     #
-    #     y1_rot, y2_rot, y3_rot, y4_rot, ymid_rot = \
-    #         int(math.sin(theta) * (x1_ori - center_x) + math.cos(theta) * (y1_ori - (Const.grid_height - center_y)) + (Const.grid_height - center_y)), \
-    #         int(math.sin(theta) * (x2_ori - center_x) + math.cos(theta) * (y2_ori - (Const.grid_height - center_y)) + (Const.grid_height - center_y)), \
-    #         int(math.sin(theta) * (x3_ori - center_x) + math.cos(theta) * (y3_ori - (Const.grid_height - center_y)) + (Const.grid_height - center_y)), \
-    #         int(math.sin(theta) * (x4_ori - center_x) + math.cos(theta) * (y4_ori - (Const.grid_height - center_y)) + (Const.grid_height - center_y)), \
-    #         int(math.sin(theta) * (x_mid - center_x) + math.cos(theta) * (y_mid - (Const.grid_height - center_y)) + (Const.grid_height - center_y))
+    #     # pt0 = [x1_rot, y1_rot, 0]
+    #     # pt1 = [x2_rot, y2_rot, 0]
+    #     # pt2 = [x3_rot, y3_rot, 0]
+    #     # pt3 = [x4_rot, y4_rot, 0]
+    #     # pt_h_0 = [x1_rot, y1_rot, Const.car_height]
+    #     # pt_h_1 = [x2_rot, y2_rot, Const.car_height]
+    #     # pt_h_2 = [x3_rot, y3_rot, Const.car_height]
+    #     # pt_h_3 = [x4_rot, y4_rot, Const.car_height]
+    #     # pt_extra = [xmid_rot, ymid_rot, 0]
     #
-    #     # if i == 1 and position_mark[i] == 0 and idx == 1796:
-    #     #     tmp = cv2.imread("/home/dzc/Data/4carreal_0318blend/bevimgs/%d.jpg" % idx)
-    #     #     # cv2.rectangle(tmp, (x1_rot, y1_rot), (x3_ori, y3_ori), color=(255, 244, 0))
-    #     #     cv2.circle(tmp, (int(xmid_rot), int(Const.grid_height -ymid_rot)), radius=1, color=(255, 244, 0))
-    #     #     cv2.circle(tmp, (int(x1_rot), int(Const.grid_height -y1_rot)), radius=2, color=(255, 0, 0))
-    #     #     cv2.circle(tmp, (int(x2_rot), int(Const.grid_height -y2_rot)), radius=1, color=(255, 244, 0))
-    #     #     cv2.circle(tmp, (int(x3_rot), int(Const.grid_height -y3_rot)), radius=1, color=(255, 244, 0))
-    #     #     cv2.circle(tmp, (int(x4_rot), int(Const.grid_height -y4_rot)), radius=1, color=(255, 244, 0))
-    #     #     cv2.imwrite("/home/dzc/Desktop/CASIA/proj/mvRPN-det/results/images/dddd2.jpg", tmp)
     #
-    #     pt0 = [x1_rot, y1_rot, 0]
-    #     pt1 = [x2_rot, y2_rot, 0]
-    #     pt2 = [x3_rot, y3_rot, 0]
-    #     pt3 = [x4_rot, y4_rot, 0]
-    #     pt_h_0 = [x1_rot, y1_rot, Const.car_height]
-    #     pt_h_1 = [x2_rot, y2_rot, Const.car_height]
-    #     pt_h_2 = [x3_rot, y3_rot, Const.car_height]
-    #     pt_h_3 = [x4_rot, y4_rot, Const.car_height]
-    #     pt_extra = [xmid_rot, ymid_rot, 0]
-    #     # pt01 = [x1_ori, Const.grid_height - y1_ori, 0]
-    #     # pt11 = [x2_ori, Const.grid_height - y2_ori, 0]
-    #     # pt21 = [x3_ori, Const.grid_height - y3_ori, 0]
-    #     # pt31 = [x4_ori, Const.grid_height - y4_ori, 0]
-    #     # pt_h_01 = [x1_ori, Const.grid_height - y1_ori, Const.car_height]
-    #     # pt_h_11 = [x2_ori, Const.grid_height - y2_ori, Const.car_height]
-    #     # pt_h_21 = [x3_ori, Const.grid_height - y3_ori, Const.car_height]
-    #     # pt_h_31 = [x4_ori, Const.grid_height - y4_ori, Const.car_height]
-    #     # pt_extra2 = [x_mid,  Const.grid_height - y_mid, 0]
+    #     x1_rot, x2_rot, x3_rot, x4_rot, x5_rot, x6_rot, x7_rot, x8_rot, x9_rot, x10_rot, x11_rot = \
+    #         int(math.cos(np.pi / 6) * (x1_ori - center_x) - math.sin(np.pi / 6) * (
+    #                 y1_ori - (Const.grid_height - center_y)) + center_x), \
+    #         int(math.cos(2*np.pi / 6) * (x1_ori - center_x) - math.sin(2*np.pi / 6) * (
+    #                 y1_ori - (Const.grid_height - center_y)) + center_x), \
+    #         int(math.cos(3*np.pi / 6) * (x1_ori - center_x) - math.sin(3*np.pi / 6) * (
+    #                 y1_ori - (Const.grid_height - center_y)) + center_x), \
+    #         int(math.cos(4*np.pi / 6) * (x1_ori - center_x) - math.sin(4*np.pi / 6) * (
+    #                 y1_ori - (Const.grid_height - center_y)) + center_x), \
+    #         int(math.cos(5*np.pi / 6) * (x1_ori - center_x) - math.sin(5*np.pi / 6) * (
+    #                 y1_ori - (Const.grid_height - center_y)) + center_x), \
+    #         int(math.cos(6*np.pi / 6) * (x1_ori - center_x) - math.sin(6*np.pi / 6) * (
+    #                 y1_ori - (Const.grid_height - center_y)) + center_x), \
+    #         int(math.cos(7*np.pi / 6) * (x1_ori - center_x) - math.sin(7*np.pi / 6) * (
+    #                 y1_ori - (Const.grid_height - center_y)) + center_x), \
+    #         int(math.cos(8*np.pi / 6) * (x1_ori - center_x) - math.sin(8*np.pi / 6) * (
+    #                 y1_ori - (Const.grid_height - center_y)) + center_x), \
+    #         int(math.cos(9*np.pi / 6) * (x1_ori - center_x) - math.sin(9*np.pi / 6) * (
+    #                 y1_ori - (Const.grid_height - center_y)) + center_x), \
+    #         int(math.cos(10*np.pi / 6) * (x1_ori - center_x) - math.sin(10*np.pi / 6) * (
+    #                 y1_ori - (Const.grid_height - center_y)) + center_x), \
+    #         int(math.cos(11*np.pi / 6) * (x1_ori - center_x) - math.sin(11*np.pi / 6) * (
+    #                 y1_ori - (Const.grid_height - center_y)) + center_x)
+    #     #
+    #     y1_rot, y2_rot, y3_rot, y4_rot,  y5_rot, y6_rot, y7_rot, y8_rot, y9_rot, y10_rot,y11_rot = \
+    #         int(math.sin(np.pi / 6) * (x1_ori - center_x) + math.cos(np.pi / 6) * (y1_ori - (Const.grid_height - center_y)) + (
+    #                 Const.grid_height - center_y)), \
+    #         int(math.sin(2*np.pi / 6) * (x1_ori - center_x) + math.cos(2*np.pi / 6) * (y1_ori - (Const.grid_height - center_y)) + (
+    #                 Const.grid_height - center_y)), \
+    #         int(math.sin(3*np.pi / 6) * (x1_ori - center_x) + math.cos(3*np.pi / 6) * (y1_ori - (Const.grid_height - center_y)) + (
+    #                 Const.grid_height - center_y)), \
+    #         int(math.sin(4*np.pi / 6) * (x1_ori - center_x) + math.cos(4*np.pi / 6) * (y1_ori - (Const.grid_height - center_y)) + (
+    #                 Const.grid_height - center_y)), \
+    #         int(math.sin(5*np.pi / 6) * (x1_ori - center_x) + math.cos(5*np.pi / 6) * (y1_ori - (Const.grid_height - center_y)) + (
+    #                 Const.grid_height - center_y)), \
+    #         int(math.sin(6*np.pi / 6) * (x1_ori - center_x) + math.cos(6*np.pi / 6) * (y1_ori - (Const.grid_height - center_y)) + (
+    #                 Const.grid_height - center_y)), \
+    #         int(math.sin(7*np.pi / 6) * (x1_ori - center_x) + math.cos(7*np.pi / 6) * (y1_ori - (Const.grid_height - center_y)) + (
+    #                 Const.grid_height - center_y)), \
+    #         int(math.sin(8*np.pi / 6) * (x1_ori - center_x) + math.cos(8*np.pi / 6) * (y1_ori - (Const.grid_height - center_y)) + (
+    #                 Const.grid_height - center_y)), \
+    #         int(math.sin(9*np.pi / 6) * (x1_ori - center_x) + math.cos(9*np.pi / 6) * (y1_ori - (Const.grid_height - center_y)) + (
+    #                 Const.grid_height - center_y)), \
+    #         int(math.sin(10*np.pi / 6) * (x1_ori - center_x) + math.cos(10*np.pi / 6) * (y1_ori - (Const.grid_height - center_y)) + (
+    #                 Const.grid_height - center_y)), \
+    #         int(math.sin(11*np.pi / 6) * (x1_ori - center_x) + math.cos(11*np.pi / 6) * (y1_ori - (Const.grid_height - center_y)) + (
+    #                 Const.grid_height - center_y))
     #
-    #     boxes_3d.append([pt0, pt1, pt2, pt3, pt_h_0, pt_h_1, pt_h_2, pt_h_3, pt_extra])
-    # pred_ori = np.array(boxes_3d).reshape((n_bbox, 9, 3))
-    # projected_2d = getprojected_3dbox(pred_ori, extrin, intrin, isleft=True)
-    # projected_2d = getprojected_3dbox(pred_ori, extrin, intrin, isleft=False)
-    # for k in range(n_bbox):
-    #     if position_mark[k] == 0:
-    #         color = (255, 255, 0)
-    #     else:
-    #         # color = (100, 100, 200)
-    #         color = (255, 255, 0)
-    #     cv2.line(right_img, (projected_2d[k][0][0], projected_2d[k][0][1]), (projected_2d[k][1][0], projected_2d[k][1][1]), color = color, thickness=1)
-    #     cv2.line(right_img, (projected_2d[k][0][0], projected_2d[k][0][1]), (projected_2d[k][3][0], projected_2d[k][3][1]), color = color, thickness=1 )
-    #     cv2.line(right_img, (projected_2d[k][0][0], projected_2d[k][0][1]), (projected_2d[k][4][0], projected_2d[k][4][1]), color = color, thickness=1)
-    #     cv2.line(right_img, (projected_2d[k][1][0], projected_2d[k][1][1]), (projected_2d[k][5][0], projected_2d[k][5][1]), color = color, thickness=1)
-    #     cv2.line(right_img, (projected_2d[k][1][0], projected_2d[k][1][1]), (projected_2d[k][2][0], projected_2d[k][2][1]), color = color, thickness=1)
-    #     cv2.line(right_img, (projected_2d[k][2][0], projected_2d[k][2][1]), (projected_2d[k][3][0], projected_2d[k][3][1]), color = color, thickness=1)
-    #     cv2.line(right_img, (projected_2d[k][2][0], projected_2d[k][2][1]), (projected_2d[k][6][0], projected_2d[k][6][1]), color = color, thickness=1)
-    #     cv2.line(right_img, (projected_2d[k][3][0], projected_2d[k][3][1]), (projected_2d[k][7][0], projected_2d[k][7][1]), color = color, thickness=1)
-    #     cv2.line(right_img, (projected_2d[k][4][0], projected_2d[k][4][1]), (projected_2d[k][5][0], projected_2d[k][5][1]), color = color, thickness=1)
-    #     cv2.line(right_img, (projected_2d[k][5][0], projected_2d[k][5][1]), (projected_2d[k][6][0], projected_2d[k][6][1]), color = color, thickness=1)
-    #     cv2.line(right_img, (projected_2d[k][6][0], projected_2d[k][6][1]), (projected_2d[k][7][0], projected_2d[k][7][1]), color = color, thickness=1)
-    #     cv2.line(right_img, (projected_2d[k][7][0], projected_2d[k][7][1]), (projected_2d[k][4][0], projected_2d[k][4][1]), color = color, thickness=1)
-    #     cv2.line(right_img, (projected_2d[k][7][0], projected_2d[k][7][1]), (projected_2d[k][4][0], projected_2d[k][4][1]), color = color, thickness=1)
+    #     cy0 = [x1_ori, y1_ori, 0]
+    #     cy1 = [x1_ori, y1_ori, Const.car_height]
+    #     cy2 = [x1_rot, y1_rot, 0]
+    #     cy3 = [x1_rot, y1_rot, Const.car_height]
+    #     cy4 = [x2_rot, y2_rot, 0]
+    #     cy5 = [x2_rot, y2_rot, Const.car_height]
+    #     cy6 = [x3_rot, y3_rot, 0]
+    #     cy7 = [x3_rot, y3_rot, Const.car_height]
+    #     cy8 = [x4_rot, y4_rot, 0]
+    #     cy9 = [x4_rot, y4_rot, Const.car_height]
+    #     cy10 = [x5_rot, y5_rot, 0]
+    #     cy11 = [x5_rot, y5_rot, Const.car_height]
+    #     cy12 = [x6_rot, y6_rot, 0]
+    #     cy13 = [x6_rot, y6_rot, Const.car_height]
+    #     cy14 = [x7_rot, y7_rot, 0]
+    #     cy15 = [x7_rot, y7_rot, Const.car_height]
+    #     cy16 = [x8_rot, y8_rot, 0]
+    #     cy17 = [x8_rot, y8_rot, Const.car_height]
+    #     cy18 = [x9_rot, y9_rot, 0]
+    #     cy19 = [x9_rot, y9_rot, Const.car_height]
+    #     cy20 = [x10_rot, y10_rot, 0]
+    #     cy21 = [x10_rot, y10_rot, Const.car_height]
+    #     cy22 = [x11_rot, y11_rot, 0]
+    #     cy23 = [x11_rot, y11_rot, Const.car_height]
     #
+    #
+    #     boxes_3d.append([cy0, cy1, cy2, cy3, cy4, cy5, cy6, cy7, cy8, cy9, cy10, cy11, cy12,cy13, cy14,cy15,cy16,cy17,cy18,cy19,cy20,cy21, cy22, cy23])
+    # gt_ori = np.array(boxes_3d).reshape((gt_n_bbox, 24, 3))
+    # gt_projected_2d = getprojected_3dbox(gt_ori, extrin, intrin, isleft=True)
+    # gt_projected_2d = getprojected_3dbox(gt_ori, extrin, intrin, isleft=False)
+    # for k in range(gt_n_bbox):
+    #     color = (0, 255, 255)
+    #     cv2.line(right_img, (gt_projected_2d[k][0][0], gt_projected_2d[k][0][1]),
+    #              (gt_projected_2d[k][2][0], gt_projected_2d[k][2][1]), color=color, thickness=1)
+    #     cv2.line(right_img, (gt_projected_2d[k][2][0], gt_projected_2d[k][2][1]),
+    #              (gt_projected_2d[k][4][0], gt_projected_2d[k][4][1]), color=color, thickness=1)
+    #     cv2.line(right_img, (gt_projected_2d[k][4][0], gt_projected_2d[k][4][1]),
+    #              (gt_projected_2d[k][6][0], gt_projected_2d[k][6][1]), color=color, thickness=1)
+    #     cv2.line(right_img, (gt_projected_2d[k][6][0], gt_projected_2d[k][6][1]),
+    #              (gt_projected_2d[k][8][0], gt_projected_2d[k][8][1]), color=color, thickness=1)
+    #     cv2.line(right_img, (gt_projected_2d[k][8][0], gt_projected_2d[k][8][1]),
+    #              (gt_projected_2d[k][10][0], gt_projected_2d[k][10][1]), color=color, thickness=1)
+    #     cv2.line(right_img, (gt_projected_2d[k][10][0], gt_projected_2d[k][10][1]),
+    #              (gt_projected_2d[k][12][0], gt_projected_2d[k][12][1]), color=color, thickness=1)
+    #     cv2.line(right_img, (gt_projected_2d[k][12][0], gt_projected_2d[k][12][1]),
+    #              (gt_projected_2d[k][14][0], gt_projected_2d[k][14][1]), color=color, thickness=1)
+    #     cv2.line(right_img, (gt_projected_2d[k][14][0], gt_projected_2d[k][14][1]),
+    #              (gt_projected_2d[k][16][0], gt_projected_2d[k][16][1]), color=color, thickness=1)
+    #     cv2.line(right_img, (gt_projected_2d[k][16][0], gt_projected_2d[k][16][1]),
+    #              (gt_projected_2d[k][18][0], gt_projected_2d[k][18][1]), color=color, thickness=1)
+    #     cv2.line(right_img, (gt_projected_2d[k][18][0], gt_projected_2d[k][18][1]),
+    #              (gt_projected_2d[k][20][0], gt_projected_2d[k][20][1]), color=color, thickness=1)
+    #     cv2.line(right_img, (gt_projected_2d[k][20][0], gt_projected_2d[k][20][1]),
+    #              (gt_projected_2d[k][22][0], gt_projected_2d[k][22][1]), color=color, thickness=1)
+    #     cv2.line(right_img, (gt_projected_2d[k][22][0], gt_projected_2d[k][22][1]),
+    #              (gt_projected_2d[k][0][0], gt_projected_2d[k][0][1]), color=color, thickness=1)
+    #
+    #     cv2.line(right_img, (gt_projected_2d[k][0+1][0], gt_projected_2d[k][0+1][1]),
+    #              (gt_projected_2d[k][2+1][0], gt_projected_2d[k][2+1][1]), color=color, thickness=1)
+    #     cv2.line(right_img, (gt_projected_2d[k][2+1][0], gt_projected_2d[k][2+1][1]),
+    #              (gt_projected_2d[k][4+1][0], gt_projected_2d[k][4+1][1]), color=color, thickness=1)
+    #     cv2.line(right_img, (gt_projected_2d[k][4+1][0], gt_projected_2d[k][4+1][1]),
+    #              (gt_projected_2d[k][6+1][0], gt_projected_2d[k][6+1][1]), color=color, thickness=1)
+    #     cv2.line(right_img, (gt_projected_2d[k][6+1][0], gt_projected_2d[k][6+1][1]),
+    #              (gt_projected_2d[k][8+1][0], gt_projected_2d[k][8+1][1]), color=color, thickness=1)
+    #     cv2.line(right_img, (gt_projected_2d[k][8+1][0], gt_projected_2d[k][8+1][1]),
+    #              (gt_projected_2d[k][10+1][0], gt_projected_2d[k][10+1][1]), color=color, thickness=1)
+    #     cv2.line(right_img, (gt_projected_2d[k][10][0], gt_projected_2d[k][10+1][1]),
+    #              (gt_projected_2d[k][12+1][0], gt_projected_2d[k][12+1][1]), color=color, thickness=1)
+    #     cv2.line(right_img, (gt_projected_2d[k][12+1][0], gt_projected_2d[k][12+1][1]),
+    #              (gt_projected_2d[k][14+1][0], gt_projected_2d[k][14+1][1]), color=color, thickness=1)
+    #     cv2.line(right_img, (gt_projected_2d[k][14+1][0], gt_projected_2d[k][14+1][1]),
+    #              (gt_projected_2d[k][16+1][0], gt_projected_2d[k][16+1][1]), color=color, thickness=1)
+    #     cv2.line(right_img, (gt_projected_2d[k][16+1][0], gt_projected_2d[k][16+1][1]),
+    #              (gt_projected_2d[k][18+1][0], gt_projected_2d[k][18+1][1]), color=color, thickness=1)
+    #     cv2.line(right_img, (gt_projected_2d[k][18+1][0], gt_projected_2d[k][18+1][1]),
+    #              (gt_projected_2d[k][20+1][0], gt_projected_2d[k][20+1][1]), color=color, thickness=1)
+    #     cv2.line(right_img, (gt_projected_2d[k][20+1][0], gt_projected_2d[k][20+1][1]),
+    #              (gt_projected_2d[k][22+1][0], gt_projected_2d[k][22+1][1]), color=color, thickness=1)
+    #     cv2.line(right_img, (gt_projected_2d[k][22+1][0], gt_projected_2d[k][22+1][1]),
+    #              (gt_projected_2d[k][0+1][0], gt_projected_2d[k][0+1][1]), color=color, thickness=1)
+    #
+    #     cv2.line(right_img, (gt_projected_2d[k][0][0], gt_projected_2d[k][0][1]),
+    #              (gt_projected_2d[k][1][0], gt_projected_2d[k][1][1]), color=color, thickness=1)
+    #     cv2.line(right_img, (gt_projected_2d[k][6][0], gt_projected_2d[k][6][1]),
+    #              (gt_projected_2d[k][7][0], gt_projected_2d[k][7][1]), color=color, thickness=1)
+    #     cv2.line(right_img, (gt_projected_2d[k][12][0], gt_projected_2d[k][12][1]),
+    #              (gt_projected_2d[k][13][0], gt_projected_2d[k][13][1]), color=color, thickness=1)
+    #     cv2.line(right_img, (gt_projected_2d[k][18][0], gt_projected_2d[k][18][1]),
+    #              (gt_projected_2d[k][19][0], gt_projected_2d[k][19][1]), color=color, thickness=1)
     #     # cv2.line(left_img, (projected_2d[k][0+ 9][0], projected_2d[k][0+ 9][1]), (projected_2d[k][1+ 9][0], projected_2d[k][1+ 9][1]), color = (255, 255, 0))
     #     # cv2.line(left_img, (projected_2d[k][0+ 9][0], projected_2d[k][0+ 9][1]), (projected_2d[k][3+ 9][0], projected_2d[k][3+ 9][1]), color = (255, 255, 0))
     #     # cv2.line(left_img, (projected_2d[k][0+ 9][0], projected_2d[k][0+ 9][1]), (projected_2d[k][4+ 9][0], projected_2d[k][4+ 9][1]), color = (255, 255, 0))
@@ -1128,10 +964,174 @@ def visualize_3dbox(pred_ori, pred_angle, position_mark, gt_bbox, bev_angle, all
     #     # cv2.line(left_img, (projected_2d[k][7+ 9][0], projected_2d[k][7+ 9][1]), (projected_2d[k][4+ 9][0], projected_2d[k][4+ 9][1]), color = (255, 255, 0))
     #     # cv2.line(left_img, (projected_2d[k][7+ 9][0], projected_2d[k][7+ 9][1]), (projected_2d[k][4+ 9][0], projected_2d[k][4+ 9][1]), color = (255, 255, 0))
     #     #
-    #     # cv2.arrowedLine(right_img, (int((projected_2d[k][0][0] + projected_2d[k][2][0]) / 2), int((projected_2d[k][0][1] + projected_2d[k][2][1]) / 2)), (projected_2d[k][8][0], projected_2d[k][8][1]), color = (255, 60, 199), thickness=2)
+    #     # cv2.arrowedLine(right_img, (int((gt_projected_2d[k][0][0] + gt_projected_2d[k][2][0]) / 2),
+    #     #                             int((gt_projected_2d[k][0][1] + gt_projected_2d[k][2][1]) / 2)),
+    #     #                 (gt_projected_2d[k][8][0], gt_projected_2d[k][8][1]), color=(255, 60, 199), thickness=2)
     #     # cv2.line(left_img, (int((projected_2d[k][0+ 9][0] + projected_2d[k][2+ 9][0]) / 2), int((projected_2d[k][0+ 9][1] + projected_2d[k][2+ 9][1]) / 2)), (projected_2d[k][8+ 9][0], projected_2d[k][8+ 9][1]), color = (255, 60, 199), thickness=2)
-    #
-    # cv2.imwrite("/home/dzc/Desktop/CASIA/proj/mvRPN-det/results/images/3d_box_blend/%d.jpg" % idx, right_img)
+    # cv2.imwrite("/home/dzc/Desktop/CASIA/proj/mvRPN-det/results/images/3d_box_blend/%d_mvdet.jpg" % idx, right_img)
+    # right_img = cv2.imread("/home/dzc/Data/mix/img/right2/%d.jpg" % (idx))
+
+
+    boxes_3d = []
+    print(all_front_prob.shape, pred_angle.shape, pred_ori.shape)
+    for i, bbox in enumerate(pred_ori):
+        ymin, xmin, ymax, xmax = bbox
+        sincos = pred_angle[i]
+        if pred_angle.shape[0] == 1:
+            score = 1.0
+        else:
+            score = all_front_prob[i]
+        if position_mark[i] == 0:
+            center_x, center_y = int((bbox[1] + bbox[3]) // 2), int((bbox[0] + bbox[2]) // 2)
+            w, h = 60/2, 50/2
+            xmin = center_x - w
+            xmax = center_x + w
+            ymin = center_y - h
+            ymax = center_y + h
+            x1_ori, x2_ori, x3_ori, x4_ori, x_mid = xmin, xmin, xmax, xmax, (xmin + xmax) / 2 + 40
+            y1_ori, y2_ori, y3_ori, y4_ori, y_mid = Const.grid_height -ymin, Const.grid_height -ymax, Const.grid_height -ymax, Const.grid_height -ymin, (Const.grid_height -ymax + Const.grid_height -ymin) / 2
+            # if i == 1 and idx == 1796:
+            #     tmp = cv2.imread("/home/dzc/Data/4carreal_0318blend/bevimgs/%d.jpg" % idx)
+            #     cv2.circle(tmp, (int(x_mid), int(y_mid)), radius=1, color=(255, 244, 0))
+            #     cv2.circle(tmp, (int(x1_ori), int(y1_ori)), radius=1, color=(255, 0, 0))
+            #     cv2.circle(tmp, (int(x2_ori), int(y2_ori)), radius=1, color=(255, 244, 0))
+            #     cv2.circle(tmp, (int(x3_ori), int(y3_ori)), radius=1, color=(255, 244, 0))
+            #     cv2.circle(tmp, (int(x4_ori), int(y4_ori)), radius=1, color=(255, 244, 0))
+            #     cv2.imwrite("/home/dzc/Desktop/CASIA/proj/mvRPN-det/results/images/dddd.jpg", tmp)
+
+            ray = np.arctan((Const.grid_height - center_y) / center_x)
+            angle = np.arctan(sincos[0] / sincos[1])
+            if sincos[0] > 0 and \
+                    sincos[1] < 0:
+                angle += np.pi
+            elif sincos[0] < 0 and \
+                    sincos[1] < 0:
+                angle += np.pi
+            elif sincos[0] < 0 and \
+                    sincos[1] > 0:
+                angle += 2 * np.pi
+            # angle += np.pi
+        else:
+            center_x, center_y = int((xmin + xmax) // 2), int((ymin + ymax) // 2)
+            w, h = 60/2, 50/2
+            xmin = center_x - w
+            xmax = center_x + w
+            ymin = center_y - h
+            ymax = center_y + h
+            x1_ori, x2_ori, x3_ori, x4_ori, x_mid = xmin, xmin, xmax, xmax, (xmin + xmax) / 2 - 40
+            y1_ori, y2_ori, y3_ori, y4_ori, y_mid = Const.grid_height -ymin, Const.grid_height -ymax, Const.grid_height -ymax, Const.grid_height -ymin, (Const.grid_height -ymax + Const.grid_height -ymin) / 2
+
+            ray = np.arctan(center_y / (Const.grid_width - center_x))
+            angle = np.arctan(sincos[0] / sincos[1])
+            if sincos[0] > 0 and \
+                    sincos[1] < 0:
+                angle += np.pi
+            elif sincos[0] < 0 and \
+                    sincos[1] < 0:
+                angle += np.pi
+            elif sincos[0] < 0 and \
+                    sincos[1] > 0:
+                angle += 2 * np.pi
+            # angle += np.pi
+        theta_l = angle
+        theta = theta_l + ray
+        w = xmax-xmin
+        h = ymax-ymin
+        if position_mark[i] == 0:
+            theta_left = theta + np.pi
+            all_pred_res.append([idx.item(), center_x, center_y, w, h,  np.rad2deg(theta_left.item()), score])
+        else:
+            all_pred_res.append([idx.item(), center_x, center_y, w, h, np.rad2deg(theta.item()), score])
+        # if idx == 1796 and position_mark[i] == 0 and i == 1:
+        #     print(theta_l, ray)
+        # if idx < 1900:
+        #     print("dzc", theta)
+
+        x1_rot, x2_rot, x3_rot, x4_rot, xmid_rot = \
+            int(math.cos(theta) * (x1_ori - center_x) - math.sin(theta) * (y1_ori - (Const.grid_height - center_y)) + center_x), \
+            int(math.cos(theta) * (x2_ori - center_x) - math.sin(theta) * (y2_ori - (Const.grid_height - center_y)) + center_x), \
+            int(math.cos(theta) * (x3_ori - center_x) - math.sin(theta) * (y3_ori - (Const.grid_height - center_y)) + center_x), \
+            int(math.cos(theta) * (x4_ori - center_x) - math.sin(theta) * (y4_ori - (Const.grid_height - center_y)) + center_x), \
+            int(math.cos(theta) * (x_mid - center_x) - math.sin(theta) * (y_mid - (Const.grid_height - center_y)) + center_x)
+
+        y1_rot, y2_rot, y3_rot, y4_rot, ymid_rot = \
+            int(math.sin(theta) * (x1_ori - center_x) + math.cos(theta) * (y1_ori - (Const.grid_height - center_y)) + (Const.grid_height - center_y)), \
+            int(math.sin(theta) * (x2_ori - center_x) + math.cos(theta) * (y2_ori - (Const.grid_height - center_y)) + (Const.grid_height - center_y)), \
+            int(math.sin(theta) * (x3_ori - center_x) + math.cos(theta) * (y3_ori - (Const.grid_height - center_y)) + (Const.grid_height - center_y)), \
+            int(math.sin(theta) * (x4_ori - center_x) + math.cos(theta) * (y4_ori - (Const.grid_height - center_y)) + (Const.grid_height - center_y)), \
+            int(math.sin(theta) * (x_mid - center_x) + math.cos(theta) * (y_mid - (Const.grid_height - center_y)) + (Const.grid_height - center_y))
+
+        # if i == 1 and position_mark[i] == 0 and idx == 1796:
+        #     tmp = cv2.imread("/home/dzc/Data/4carreal_0318blend/bevimgs/%d.jpg" % idx)
+        #     # cv2.rectangle(tmp, (x1_rot, y1_rot), (x3_ori, y3_ori), color=(255, 244, 0))
+        #     cv2.circle(tmp, (int(xmid_rot), int(Const.grid_height -ymid_rot)), radius=1, color=(255, 244, 0))
+        #     cv2.circle(tmp, (int(x1_rot), int(Const.grid_height -y1_rot)), radius=2, color=(255, 0, 0))
+        #     cv2.circle(tmp, (int(x2_rot), int(Const.grid_height -y2_rot)), radius=1, color=(255, 244, 0))
+        #     cv2.circle(tmp, (int(x3_rot), int(Const.grid_height -y3_rot)), radius=1, color=(255, 244, 0))
+        #     cv2.circle(tmp, (int(x4_rot), int(Const.grid_height -y4_rot)), radius=1, color=(255, 244, 0))
+        #     cv2.imwrite("/home/dzc/Desktop/CASIA/proj/mvRPN-det/results/images/dddd2.jpg", tmp)
+
+        pt0 = [x1_rot, y1_rot, 0]
+        pt1 = [x2_rot, y2_rot, 0]
+        pt2 = [x3_rot, y3_rot, 0]
+        pt3 = [x4_rot, y4_rot, 0]
+        pt_h_0 = [x1_rot, y1_rot, Const.car_height]
+        pt_h_1 = [x2_rot, y2_rot, Const.car_height]
+        pt_h_2 = [x3_rot, y3_rot, Const.car_height]
+        pt_h_3 = [x4_rot, y4_rot, Const.car_height]
+        pt_extra = [xmid_rot, ymid_rot, 0]
+        # pt01 = [x1_ori, Const.grid_height - y1_ori, 0]
+        # pt11 = [x2_ori, Const.grid_height - y2_ori, 0]
+        # pt21 = [x3_ori, Const.grid_height - y3_ori, 0]
+        # pt31 = [x4_ori, Const.grid_height - y4_ori, 0]
+        # pt_h_01 = [x1_ori, Const.grid_height - y1_ori, Const.car_height]
+        # pt_h_11 = [x2_ori, Const.grid_height - y2_ori, Const.car_height]
+        # pt_h_21 = [x3_ori, Const.grid_height - y3_ori, Const.car_height]
+        # pt_h_31 = [x4_ori, Const.grid_height - y4_ori, Const.car_height]
+        # pt_extra2 = [x_mid,  Const.grid_height - y_mid, 0]
+
+        boxes_3d.append([pt0, pt1, pt2, pt3, pt_h_0, pt_h_1, pt_h_2, pt_h_3, pt_extra])
+    pred_ori = np.array(boxes_3d).reshape((n_bbox, 9, 3))
+    projected_2d = getprojected_3dbox(pred_ori, extrin, intrin, isleft=True)
+    projected_2d = getprojected_3dbox(pred_ori, extrin, intrin, isleft=False)
+    for k in range(n_bbox):
+        if position_mark[k] == 0:
+            color = (255, 255, 0)
+        else:
+            # color = (100, 100, 200)
+            color = (255, 255, 0)
+        cv2.line(right_img, (projected_2d[k][0][0], projected_2d[k][0][1]), (projected_2d[k][1][0], projected_2d[k][1][1]), color = color, thickness=1)
+        cv2.line(right_img, (projected_2d[k][0][0], projected_2d[k][0][1]), (projected_2d[k][3][0], projected_2d[k][3][1]), color = color, thickness=1 )
+        cv2.line(right_img, (projected_2d[k][0][0], projected_2d[k][0][1]), (projected_2d[k][4][0], projected_2d[k][4][1]), color = color, thickness=1)
+        cv2.line(right_img, (projected_2d[k][1][0], projected_2d[k][1][1]), (projected_2d[k][5][0], projected_2d[k][5][1]), color = color, thickness=1)
+        cv2.line(right_img, (projected_2d[k][1][0], projected_2d[k][1][1]), (projected_2d[k][2][0], projected_2d[k][2][1]), color = color, thickness=1)
+        cv2.line(right_img, (projected_2d[k][2][0], projected_2d[k][2][1]), (projected_2d[k][3][0], projected_2d[k][3][1]), color = color, thickness=1)
+        cv2.line(right_img, (projected_2d[k][2][0], projected_2d[k][2][1]), (projected_2d[k][6][0], projected_2d[k][6][1]), color = color, thickness=1)
+        cv2.line(right_img, (projected_2d[k][3][0], projected_2d[k][3][1]), (projected_2d[k][7][0], projected_2d[k][7][1]), color = color, thickness=1)
+        cv2.line(right_img, (projected_2d[k][4][0], projected_2d[k][4][1]), (projected_2d[k][5][0], projected_2d[k][5][1]), color = color, thickness=1)
+        cv2.line(right_img, (projected_2d[k][5][0], projected_2d[k][5][1]), (projected_2d[k][6][0], projected_2d[k][6][1]), color = color, thickness=1)
+        cv2.line(right_img, (projected_2d[k][6][0], projected_2d[k][6][1]), (projected_2d[k][7][0], projected_2d[k][7][1]), color = color, thickness=1)
+        cv2.line(right_img, (projected_2d[k][7][0], projected_2d[k][7][1]), (projected_2d[k][4][0], projected_2d[k][4][1]), color = color, thickness=1)
+        cv2.line(right_img, (projected_2d[k][7][0], projected_2d[k][7][1]), (projected_2d[k][4][0], projected_2d[k][4][1]), color = color, thickness=1)
+
+        # cv2.line(left_img, (projected_2d[k][0+ 9][0], projected_2d[k][0+ 9][1]), (projected_2d[k][1+ 9][0], projected_2d[k][1+ 9][1]), color = (255, 255, 0))
+        # cv2.line(left_img, (projected_2d[k][0+ 9][0], projected_2d[k][0+ 9][1]), (projected_2d[k][3+ 9][0], projected_2d[k][3+ 9][1]), color = (255, 255, 0))
+        # cv2.line(left_img, (projected_2d[k][0+ 9][0], projected_2d[k][0+ 9][1]), (projected_2d[k][4+ 9][0], projected_2d[k][4+ 9][1]), color = (255, 255, 0))
+        # cv2.line(left_img, (projected_2d[k][1+ 9][0], projected_2d[k][1+ 9][1]), (projected_2d[k][5+ 9][0], projected_2d[k][5+ 9][1]), color = (255, 255, 0))
+        # cv2.line(left_img, (projected_2d[k][1+ 9][0], projected_2d[k][1+ 9][1]), (projected_2d[k][2+ 9][0], projected_2d[k][2+ 9][1]), color = (255, 255, 0))
+        # cv2.line(left_img, (projected_2d[k][2+ 9][0], projected_2d[k][2+ 9][1]), (projected_2d[k][3+ 9][0], projected_2d[k][3+ 9][1]), color = (255, 255, 0))
+        # cv2.line(left_img, (projected_2d[k][2+ 9][0], projected_2d[k][2+ 9][1]), (projected_2d[k][6+ 9][0], projected_2d[k][6+ 9][1]), color = (255, 255, 0))
+        # cv2.line(left_img, (projected_2d[k][3+ 9][0], projected_2d[k][3+ 9][1]), (projected_2d[k][7+ 9][0], projected_2d[k][7+ 9][1]), color = (255, 255, 0))
+        # cv2.line(left_img, (projected_2d[k][4+ 9][0], projected_2d[k][4+ 9][1]), (projected_2d[k][5+ 9][0], projected_2d[k][5+ 9][1]), color = (255, 255, 0))
+        # cv2.line(left_img, (projected_2d[k][5+ 9][0], projected_2d[k][5+ 9][1]), (projected_2d[k][6+ 9][0], projected_2d[k][6+ 9][1]), color = (255, 255, 0))
+        # cv2.line(left_img, (projected_2d[k][6+ 9][0], projected_2d[k][6+ 9][1]), (projected_2d[k][7+ 9][0], projected_2d[k][7+ 9][1]), color = (255, 255, 0))
+        # cv2.line(left_img, (projected_2d[k][7+ 9][0], projected_2d[k][7+ 9][1]), (projected_2d[k][4+ 9][0], projected_2d[k][4+ 9][1]), color = (255, 255, 0))
+        # cv2.line(left_img, (projected_2d[k][7+ 9][0], projected_2d[k][7+ 9][1]), (projected_2d[k][4+ 9][0], projected_2d[k][4+ 9][1]), color = (255, 255, 0))
+        #
+        # cv2.arrowedLine(right_img, (int((projected_2d[k][0][0] + projected_2d[k][2][0]) / 2), int((projected_2d[k][0][1] + projected_2d[k][2][1]) / 2)), (projected_2d[k][8][0], projected_2d[k][8][1]), color = (255, 60, 199), thickness=2)
+        # cv2.line(left_img, (int((projected_2d[k][0+ 9][0] + projected_2d[k][2+ 9][0]) / 2), int((projected_2d[k][0+ 9][1] + projected_2d[k][2+ 9][1]) / 2)), (projected_2d[k][8+ 9][0], projected_2d[k][8+ 9][1]), color = (255, 60, 199), thickness=2)
+
+    cv2.imwrite("/home/dzc/Desktop/CASIA/proj/mvRPN-det/results/images/3d_box_blend/%d.jpg" % idx, right_img)
 
     return all_gt_res, all_pred_res
 

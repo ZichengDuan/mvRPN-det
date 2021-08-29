@@ -36,8 +36,8 @@ def evaluate(res_fpath, gt_fpath, dataset='wildtrack'):
 if __name__ == "__main__":
     import os
 
-    res_fpath = os.path.abspath('test-demo.txt')
-    gt_fpath = os.path.abspath('gt-demo.txt')
+    res_fpath = os.path.abspath('all_res.txt')
+    gt_fpath = os.path.abspath('all_test_gt.txt')
     os.chdir('../..')
     print(os.path.abspath('.'))
 
