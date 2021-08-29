@@ -39,9 +39,6 @@ class PerspTransDetector(nn.Module):
                                                                                dataset.base.extrinsic_matrices,
                                                                                dataset.base.worldgrid2worldcoord_mat)
 
-            imgcoord2worldgrid_matrices2 = self.get_imgcoord2worldgrid_matrices(dataset.base.intrinsic_matrices2,
-                                                                               dataset.base.extrinsic_matrices2,
-                                                                               dataset.base.worldgrid2worldcoord_mat)
             self.coord_map = self.create_coord_map(self.reducedgrid_shape + [1])
             # img
             self.upsample_shape = list(map(lambda x: int(x / Const.reduce), self.img_shape))
@@ -52,10 +49,6 @@ class PerspTransDetector(nn.Module):
             self.proj_mats = [torch.from_numpy(map_zoom_mat @ imgcoord2worldgrid_matrices[cam] @ img_zoom_mat)
                               for cam in range(self.num_cam)]
 
-            self.proj_mats2 = [torch.from_numpy(map_zoom_mat @ imgcoord2worldgrid_matrices2[cam] @ img_zoom_mat)
-                              for cam in range(self.num_cam)]
-            print("dzc1", self.proj_mats)
-            print("dzc2", self.proj_mats2)
         self.backbone = nn.Sequential(*list(resnet18(pretrained=True, replace_stride_with_dilation=[False, True, True]).children())[:-2]).to('cuda:0')
         self.rpn = RegionProposalNetwork(in_channels=1026, mid_channels=1026, ratios=[1], anchor_scales=[4]).to('cuda:1')
         # my_cls = nn.Sequential(nn.Linear(25088, 2048, bias=True),
@@ -94,13 +87,13 @@ class PerspTransDetector(nn.Module):
 
             img_featuremap.append(img_feature)
 
-            if mark == 0:
-                proj_mat = self.proj_mats[cam].repeat([B, 1, 1]).float().to('cuda:1')
-            else:
-                proj_mat = self.proj_mats2[cam].repeat([B, 1, 1]).float().to('cuda:1')
+            # if mark == 0:
+            #     proj_mat = self.proj_mats[cam].repeat([B, 1, 1]).float().to('cuda:1')
+            # else:
+            #     proj_mat = self.proj_mats2[cam].repeat([B, 1, 1]).float().to('cuda:1')
 
+            proj_mat = self.proj_mats[cam].repeat([B, 1, 1]).float().to('cuda:1')
             world_feature = kornia.warp_perspective(img_feature.to('cuda:1'), proj_mat, self.reducedgrid_shape) # 0.0142 * 2 = 0.028
-            # print("reducedgrid_shape", self.reducedgrid_shape)
 
             world_feature = kornia.vflip(world_feature)
             world_features.append(world_feature.to('cuda:1'))

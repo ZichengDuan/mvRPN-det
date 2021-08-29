@@ -82,8 +82,8 @@ def trans_coef_to_xml(lpath, rpath, dataset):
 
 
 if __name__ == "__main__":
-    dataset_name = "4cardiag"
-    trans_intri_to_xml("/home/dzc/Data/%s/left-in.txt" % dataset_name, "/home/dzc/Data/%s/right-in.txt" % dataset_name, dataset_name)
-    trans_extri_to_xml("/home/dzc/Data/%s/left-ex.txt" % dataset_name, "/home/dzc/Data/%s/right-ex.txt" % dataset_name, dataset_name)
-    trans_coef_to_xml("/home/dzc/Data/%s/left-in.txt" % dataset_name, "/home/dzc/Data/%s/right-in.txt" % dataset_name,
-                      dataset_name)
+    dataset_name = "opensource"
+    trans_intri_to_xml("/home/dzc/Data/%s/calibration/left_In.txt" % dataset_name, "/home/dzc/Data/%s/calibration/right_In.txt" % dataset_name, dataset_name)
+    trans_extri_to_xml("/home/dzc/Data/%s/calibration/left_Ex.txt" % dataset_name, "/home/dzc/Data/%s/calibration/right_Ex.txt" % dataset_name, dataset_name)
+    # trans_coef_to_xml("/home/dzc/Data/%s/left-in.txt" % dataset_name, "/home/dzc/Data/%s/right-in.txt" % dataset_name,
+    #                   dataset_name)

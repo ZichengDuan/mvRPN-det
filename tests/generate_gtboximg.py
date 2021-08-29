@@ -32,6 +32,6 @@ def gene(root, frame_range):
             cv2.imwrite("/home/dzc/Desktop/CASIA/proj/mvRPN-det/results/images/left_gt_box/%s.jpg" % fname[:-5], left)
 
 if __name__ == "__main__":
-    root = "/home/dzc/Data/mix"
-    frame_range = list(range(0,7000))
+    root = "/home/dzc/Data/opensource"
+    frame_range = list(range(0,1000))
     gene(root, frame_range)

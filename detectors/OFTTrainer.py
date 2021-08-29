@@ -71,7 +71,7 @@ class OFTtrainer(BaseTrainer):
 
         for batch_idx, data in enumerate(data_loader):
             optimizer.zero_grad()
-            imgs, bev_xy,bev_angle, gt_bbox, gt_left_bbox, gt_right_bbox, left_dirs, right_dirs, left_sincos, right_sincos, left_orientation, right_orientation, left_conf, right_conf, frame, extrin, intrin, extrin2, intrin2, mark = data
+            imgs, bev_xy,bev_angle, gt_bbox, gt_left_bbox, gt_right_bbox, left_dirs, right_dirs, left_sincos, right_sincos, left_orientation, right_orientation, left_conf, right_conf, frame, extrin, intrin, mark = data
             img_size = (Const.grid_height, Const.grid_width)
             rpn_locs, rpn_scores, anchor, rois, roi_indices, img_featuremaps, bev_featuremaps = self.model(imgs, frame, gt_bbox, mark=mark)
 
@@ -149,14 +149,7 @@ class OFTtrainer(BaseTrainer):
             left_roi_loc = left_roi_cls_loc[torch.arange(0, left_n_sample).long().cuda(), at.totensor(left_gt_label).long()]
             left_gt_label = at.totensor(left_gt_label).long()
             left_gt_loc = at.totensor(left_gt_loc)
-            # left_roi_loc_loss = _fast_rcnn_loc_loss(
-            #     left_roi_loc.contiguous(),
-            #     left_gt_loc,
-            #     left_gt_label.data,
-            #     1)
-            # left_roi_cls_loss = nn.CrossEntropyLoss()(left_roi_score, left_gt_label.to(left_roi_score.device))
             left_pred_sincos = left_pred_sincos[:left_pos_num]
-            # left_sincos_loss = self.MSELoss(left_pred_sincos.float(), torch.tensor(left_gt_sincos).to(left_pred_sincos.device).float())
             # ---------------------------right_roi_pooling---------------------------------
             right_roi_cls_loc, right_roi_score, right_pred_sincos = self.roi_head(
                 img_featuremaps[1],
@@ -170,16 +163,8 @@ class OFTtrainer(BaseTrainer):
             right_gt_label = at.totensor(right_gt_label).long()
             right_gt_loc = at.totensor(right_gt_loc)
 
-            # right_roi_loc_loss = _fast_rcnn_loc_loss(
-            #     right_roi_loc.contiguous(),
-            #     right_gt_loc,
-            #     right_gt_label.data,
-            #     1)
 
-            # right_roi_cls_loss = nn.CrossEntropyLoss()(right_roi_score, right_gt_label.to(right_roi_score.device))
             right_pred_sincos = right_pred_sincos[:right_pos_num]
-            # right_sincos_loss = self.MSELoss(right_pred_sincos.float(),
-            #                                  torch.tensor(right_gt_sincos).to(right_pred_sincos.device).float())
 
             all_roi_loc = torch.cat((left_roi_loc, right_roi_loc))
             all_roi_gt_loc = torch.cat((left_gt_loc, right_gt_loc))
@@ -197,65 +182,12 @@ class OFTtrainer(BaseTrainer):
                 1)
             all_roi_cls_loss = nn.CrossEntropyLoss()(all_roi_score, all_gt_label.to(all_roi_score.device))
             all_sincos_loss = self.MSELoss(all_pred_sincos.float(), torch.tensor(all_gt_sincos).to(all_pred_sincos.device).float())
-            # print(all_sincos_loss)
-            # print(all_pred_sincos, all_gt_sincos)
-            # --------------------测试roi pooling------------------------
-            # sample_roi, gt_roi_loc, gt_roi_label = self.proposal_target_creator_ori(
-            #     roi,
-            #     at.tonumpy(gt_bbox),
-            #     at.tonumpy(left_dir),
-            #     self.loc_normalize_mean,
-            #     self.loc_normalize_std)
-
-            # bev_img = cv2.imread("/home/dzc/Data/4carreal_0318blend/bevimgs/%d.jpg" % frame)
-            # for idx, bbxx in enumerate(sample_roi):
-            #     # cv2.rectangle(bev_img, (int(bbxx[1]), int(bbxx[0])), (int(bbxx[3]), int(bbxx[2])), color=(255, 0, 0), thickness=1)
-            #     cv2.circle(bev_img, (int((bbxx[3] + bbxx[1]) / 2), (int((bbxx[2] + bbxx[0]) / 2))), color=(255, 0, 0), thickness=2, radius=1)
-            #     if str(gt_roi_label[idx]) == "0":
-            #         cv2.putText(bev_img, str(gt_roi_label[idx]), (int((bbxx[3] + bbxx[1]) / 2), (int((bbxx[2] + bbxx[0]) / 2))),fontFace=cv2.FONT_HERSHEY_SIMPLEX, fontScale = 1, color=(255, 0, 0))
-            #     else:
-            #         cv2.putText(bev_img, str(gt_roi_label[idx]),
-            #                     (int((bbxx[3] + bbxx[1]) / 2), (int((bbxx[2] + bbxx[0]) / 2))),
-            #                     fontFace=cv2.FONT_HERSHEY_SIMPLEX, fontScale=1, color=(255, 0, 255))
-            # for idx, bbxx in enumerate(gt_bbox):
-            #     cv2.rectangle(bev_img, (int(bbxx[1]), int(bbxx[0])), (int(bbxx[3]), int(bbxx[2])), color=(255, 0, 255), thickness=3)
-            # cv2.imwrite("/home/dzc/Desktop/CASIA/proj/mvRPN-det/images/roi_img.jpg", bev_img)
-
-            # sample_roi_index = torch.zeros(len(sample_roi))
-            # roi_cls_loc, roi_score = self.roi_head(
-            #     bev_featuremaps,
-            #     sample_roi,
-            #     sample_roi_index)
-            #
-            # n_sample = roi_cls_loc.shape[0]
-            # roi_cls_loc = roi_cls_loc.view(n_sample, -1, 4)
-            # roi_loc = roi_cls_loc[torch.arange(0, n_sample).long().cuda(), \
-            #                       at.totensor(gt_roi_label).long()]
-            # gt_roi_label = at.totensor(gt_roi_label).long()
-            # gt_roi_loc = at.totensor(gt_roi_loc)
-            #
-            # roi_loc_loss = _fast_rcnn_loc_loss(
-            #     roi_loc.contiguous(),
-            #     gt_roi_loc,
-            #     gt_roi_label.data,
-            #     1)
-
-            # roi_cls_loss = nn.CrossEntropyLoss()(roi_score, gt_roi_label.to(roi_score.device))
             # ----------------------Loss-----------------------------
             loss = rpn_loc_loss * 3 + rpn_cls_loss * 3 + \
                     (all_roi_loc_loss  + all_roi_cls_loss + all_sincos_loss)
 
-            # loss = (rpn_loc_loss + rpn_cls_loss) * 0 +  all_roi_loc_loss + all_roi_cls_loss + all_sincos_loss
             Loss += loss.item()
 
-            # RPN_CLS_LOSS += rpn_cls_loss
-            # RPN_LOC_LOSS += rpn_loc_loss
-            # LEFT_ROI_LOC_LOSS += left_roi_loc_loss
-            # LEFT_ROI_CLS_LOSS += left_roi_cls_loss / 2
-            # LEFT_ANGLE_REG_LOSS += left_sincos_loss / 4
-            # RIGHT_ROI_LOC_LOSS += right_roi_loc_loss
-            # RIGHT_ROI_CLS_LOSS += right_roi_cls_loss / 2
-            # RIGHT_ANGLE_REG_LOSS += right_sincos_loss / 4
 
             RPN_CLS_LOSS += rpn_cls_loss.item()
             RPN_LOC_LOSS += rpn_loc_loss.item()
@@ -271,12 +203,6 @@ class OFTtrainer(BaseTrainer):
             writer.add_scalar("Total Loss", Loss / (batch_idx + 1), niter)
             writer.add_scalar("rpn_loc_loss", RPN_LOC_LOSS / (batch_idx + 1), niter)
             writer.add_scalar("rpn_cls_loss", RPN_CLS_LOSS / (batch_idx + 1), niter)
-            # writer.add_scalar("LEFT ROI_Loc LOSS", LEFT_ROI_LOC_LOSS / (batch_idx + 1), niter)
-            # writer.add_scalar("LEFT ROI_Cls LOSS", LEFT_ROI_CLS_LOSS / (batch_idx + 1), niter)
-            # writer.add_scalar("LEFT_ANGLE_REG_LOSS", LEFT_ROI_CLS_LOSS / (batch_idx + 1), niter)
-            # writer.add_scalar("RIGHT ROI_Loc LOSS", RIGHT_ROI_LOC_LOSS / (batch_idx + 1), niter)
-            # writer.add_scalar("RIGHT ROI_Cls LOSS", RIGHT_ROI_CLS_LOSS / (batch_idx + 1), niter)
-            # writer.add_scalar("RIGHT_ANGLE_REG_LOSS", RIGHT_ROI_CLS_LOSS / (batch_idx + 1), niter)
             writer.add_scalar("ALL ROI_Loc LOSS", ALL_ROI_LOC_LOSS / (batch_idx + 1), niter)
             writer.add_scalar("ALL ROI_Cls LOSS", ALL_ROI_CLS_LOSS / (batch_idx + 1), niter)
             writer.add_scalar("ALL ANGLE_REG LOSS", ALL_ANGLE_REG_LOSS / (batch_idx + 1), niter)
@@ -286,12 +212,6 @@ class OFTtrainer(BaseTrainer):
                       "Total: %4f\n" % (Loss / (batch_idx + 1)),
                       "Rpn Loc : %4f    || " % (RPN_LOC_LOSS / (batch_idx + 1)),
                       "Rpn Cls : %4f    ||" % (RPN_CLS_LOSS / (batch_idx + 1)),
-                      # "LEFT ROI_Loc: %4f    || " % ((LEFT_ROI_LOC_LOSS.detach().cpu().item()) / (batch_idx + 1)),
-                      # "LEFT ROI_Cls : %4f   ||" % ((LEFT_ROI_CLS_LOSS.detach().cpu().item()) / (batch_idx + 1)),
-                      # "Left SinCos : %4f" % ((LEFT_ANGLE_REG_LOSS.detach().cpu().item()) / (batch_idx + 1)),
-                      # "RIGHT ROI_Loc : %4f  || " % ((RIGHT_ROI_LOC_LOSS.detach().cpu().item()) / (batch_idx + 1)),
-                      # "RIGHT ROI_Cls : %4f" % ((RIGHT_ROI_CLS_LOSS.detach().cpu().item()) / (batch_idx + 1)),
-                      # "RIGHT SinCos : %4f" % ((RIGHT_ANGLE_REG_LOSS.detach().cpu().item()) / (batch_idx + 1))
                       "ALL ROI_Loc : %4f  || " % ((ALL_ROI_LOC_LOSS) / (batch_idx + 1)),
                       "ALL ROI_Cls : %4f" % ((ALL_ROI_CLS_LOSS) / (batch_idx + 1)),
                       "ALL SinCos : %4f" % ((ALL_ANGLE_REG_LOSS) / (batch_idx + 1))
@@ -371,13 +291,10 @@ class OFTtrainer(BaseTrainer):
         all_gt_res = []
 
         for batch_idx, data in enumerate(data_loader):
-            imgs, gt_bev_xy,bev_angle, gt_bbox, gt_left_bbox, gt_right_bbox, gt_left_dirs, gt_right_dirs, gt_left_sincos, gt_right_sincos,left_orientation, right_orientation, left_conf, right_conf, frame, extrin, intrin, extrin2, intrin2, mark = data
+            imgs, gt_bev_xy,bev_angle, gt_bbox, gt_left_bbox, gt_right_bbox, gt_left_dirs, gt_right_dirs, gt_left_sincos, gt_right_sincos,left_orientation, right_orientation, left_conf, right_conf, frame, extrin, intrin, mark = data
             total_start = time.time()
             rpn_start = time.time()
 
-            if mark == 1:
-                extrin = extrin2
-                intrin = intrin2
 
             with torch.no_grad():
                 rpn_locs, rpn_scores, anchor, rois, roi_indices, img_featuremaps, bev_featuremaps = self.model(imgs, frame, mark=mark)
@@ -408,18 +325,18 @@ class OFTtrainer(BaseTrainer):
             roi_3d = generate_3d_bbox(roi)
             gene3d_end = time.time()
 
-            bev_img = cv2.imread("/home/dzc/Data/mix_simp/bevimgs/%d.jpg" % frame)
-            for car in roi:
-                # xmax = max(car[:, 0])
-                # xmin = min(car[:, 0])
-                # ymax = max(car[:, 1])
-                # ymin = min(car[:, 1])
-                xmax = car[3]
-                xmin = car[1]
-                ymax = car[2]
-                ymin = car[0]
-                cv2.rectangle(bev_img, (int(xmin), int(ymin)), (int(xmax), int(ymax)), color=(255, 255, 0), thickness=1)
-            cv2.imwrite("/home/dzc/Desktop/CASIA/proj/mvRPN-det/results/images/bev_img.jpg", bev_img)
+            # bev_img = cv2.imread("/home/dzc/Data/opensource/bevimgs/%d.jpg" % frame)
+            # for car in roi:
+            #     # xmax = max(car[:, 0])
+            #     # xmin = min(car[:, 0])
+            #     # ymax = max(car[:, 1])
+            #     # ymin = min(car[:, 1])
+            #     xmax = car[3]
+            #     xmin = car[1]
+            #     ymax = car[2]
+            #     ymin = car[0]
+            #     cv2.rectangle(bev_img, (int(xmin), int(ymin)), (int(xmax), int(ymax)), color=(255, 255, 0), thickness=1)
+            # cv2.imwrite("/home/dzc/Desktop/CASIA/proj/mvRPN-det/results/images/bev_img.jpg", bev_img)
 
 
             proj3d_start = time.time()
@@ -454,30 +371,30 @@ class OFTtrainer(BaseTrainer):
             right_rois_indices = roi_indices[right_index_inside]
             getoutter_end = time.time()
 
-            left_img = cv2.imread("/home/dzc/Data/mix_simp/img/left1/%d.jpg" % frame)
-            right_img = cv2.imread("/home/dzc/Data/mix_simp/img/right2/%d.jpg" % frame)
+            # left_img = cv2.imread("/home/dzc/Data/opensource/img/left1/%d.jpg" % frame)
+            # right_img = cv2.imread("/home/dzc/Data/opensource/img/right2/%d.jpg" % frame)
 
 
-            for car in left_2d_bbox:
-                # print(car)
-                xmax = car[3]
-                xmin = car[1]
-                ymax = car[2]
-                ymin = car[0]
-                cv2.rectangle(left_img, (xmin, ymin), (xmax, ymax), color=(255, 255, 0), thickness=1)
-            cv2.imwrite("/home/dzc/Desktop/CASIA/proj/mvRPN-det/results/images/left_img.jpg", left_img)
+            # for car in left_2d_bbox:
+            #     # print(car)
+            #     xmax = car[3]
+            #     xmin = car[1]
+            #     ymax = car[2]
+            #     ymin = car[0]
+            #     cv2.rectangle(left_img, (xmin, ymin), (xmax, ymax), color=(255, 255, 0), thickness=1)
+            # cv2.imwrite("/home/dzc/Desktop/CASIA/proj/mvRPN-det/results/images/left_img.jpg", left_img)
 
-            for car in right_2d_bbox:
-                # xmax = max(car[:, 0])
-                # xmin = min(car[:, 0])
-                # ymax = max(car[:, 1])
-                # ymin = min(car[:, 1])
-                xmax = car[3]
-                xmin = car[1]
-                ymax = car[2]
-                ymin = car[0]
-                cv2.rectangle(right_img, (xmin, ymin), (xmax, ymax), color=(255, 255, 0), thickness=1)
-            cv2.imwrite("/home/dzc/Desktop/CASIA/proj/mvRPN-det/results/images/right_img.jpg", right_img)
+            # for car in right_2d_bbox:
+            #     # xmax = max(car[:, 0])
+            #     # xmin = min(car[:, 0])
+            #     # ymax = max(car[:, 1])
+            #     # ymin = min(car[:, 1])
+            #     xmax = car[3]
+            #     xmin = car[1]
+            #     ymax = car[2]
+            #     ymin = car[0]
+            #     cv2.rectangle(right_img, (xmin, ymin), (xmax, ymax), color=(255, 255, 0), thickness=1)
+            # cv2.imwrite("/home/dzc/Desktop/CASIA/proj/mvRPN-det/results/images/right_img.jpg", right_img)
 
 
             left_2d_bbox = torch.tensor(left_2d_bbox)
@@ -511,7 +428,7 @@ class OFTtrainer(BaseTrainer):
             # all_bev_boxes, _, all_sincos_remain, position_mark_keep = nms_new(all_roi_remain, all_front_prob, all_pred_sincos, position_mark)
             # s = time.time()
             v, indices = torch.tensor(all_front_prob).sort(0)
-            indices_remain = indices[v > 0.6]
+            indices_remain = indices[v > 0.3]
             print(frame)
             all_roi_remain = all_roi_remain[indices_remain].reshape(len(indices_remain), 4)
             all_pred_sincos = all_pred_sincos[indices_remain].reshape(len(indices_remain), 2)
@@ -536,19 +453,9 @@ class OFTtrainer(BaseTrainer):
                                                                        all_pred_sincos[keep].reshape(len(keep), 2), \
                                                                        position_mark[keep].reshape(len(keep))
             # all_bev_boxes, all_sincos_remain, position_mark_keep = all_roi_remain2[keep].reshape(len(keep), 4), all_pred_sincos2[keep].reshape(len(keep), 2), position_mark2[keep].reshape(len(keep))
-            nms_end = time.time()
-            total_end = time.time()
-            rpn_time += (rpn_end - rpn_start)
-            trans_time += (trans3d_end - trans3d_start)
-            roi_time += (roi_end - roi_start)
-            nms_time += (nms_end - nms_start)
-            total_time += (total_end - total_start)
-            gene3d_time += (gene3d_end - gene3d_start)
-            proj3d_time += (proj3d_end - proj3d_start)
-            getoutter_time += (getoutter_end - getoutter_start)
 
             # -----------------------可视化---------------------------
-            bev_img = cv2.imread("/home/dzc/Data/mix/bevimgs/%d.jpg" % frame)
+            # bev_img = cv2.imread("/home/dzc/Data/opensource/bevimgs/%d.jpg" % frame)
 
             # position_mark_keep2 = [0,0,0,0]
             # all_sincos_remain2 = gt_left_sincos[0]
@@ -668,8 +575,8 @@ class OFTtrainer(BaseTrainer):
         return self.roi_head.n_class
 
 def visualize_3dbox(pred_ori, pred_angle, position_mark, gt_bbox, bev_angle, all_front_prob, extrin, intrin, idx):
-    left_img = cv2.imread("/home/dzc/Data/mix/img/left1/%d.jpg" % (idx))
-    right_img = cv2.imread("/home/dzc/Data/mix/img/right2/%d.jpg" % (idx))
+    left_img = cv2.imread("/home/dzc/Data/opensource/img/left1/%d.jpg" % (idx))
+    right_img = cv2.imread("/home/dzc/Data/opensource/img/right2/%d.jpg" % (idx))
 
     all_pred_res = []
     all_gt_res = []
@@ -780,7 +687,7 @@ def visualize_3dbox(pred_ori, pred_angle, position_mark, gt_bbox, bev_angle, all
     #                     (gt_projected_2d[k][8][0], gt_projected_2d[k][8][1]), color=(255, 60, 199), thickness=2)
     #     # cv2.line(left_img, (int((projected_2d[k][0+ 9][0] + projected_2d[k][2+ 9][0]) / 2), int((projected_2d[k][0+ 9][1] + projected_2d[k][2+ 9][1]) / 2)), (projected_2d[k][8+ 9][0], projected_2d[k][8+ 9][1]), color = (255, 60, 199), thickness=2)
     # # cv2.imwrite("/home/dzc/Desktop/CASIA/proj/mvRPN-det/results/images/3d_box_blend/%d_gt.jpg" % idx, right_img)
-    right_img = cv2.imread("/home/dzc/Data/mix/img/right2/%d.jpg" % (idx))
+    right_img = cv2.imread("/home/dzc/Data/opensource/img/right2/%d.jpg" % (idx))
     boxes_3d = []
     #============================= MVDET =============================
     # for j, bbox in enumerate(gt_bbox):
@@ -969,7 +876,7 @@ def visualize_3dbox(pred_ori, pred_angle, position_mark, gt_bbox, bev_angle, all
     #     #                 (gt_projected_2d[k][8][0], gt_projected_2d[k][8][1]), color=(255, 60, 199), thickness=2)
     #     # cv2.line(left_img, (int((projected_2d[k][0+ 9][0] + projected_2d[k][2+ 9][0]) / 2), int((projected_2d[k][0+ 9][1] + projected_2d[k][2+ 9][1]) / 2)), (projected_2d[k][8+ 9][0], projected_2d[k][8+ 9][1]), color = (255, 60, 199), thickness=2)
     # cv2.imwrite("/home/dzc/Desktop/CASIA/proj/mvRPN-det/results/images/3d_box_blend/%d_mvdet.jpg" % idx, right_img)
-    # right_img = cv2.imread("/home/dzc/Data/mix/img/right2/%d.jpg" % (idx))
+    # right_img = cv2.imread("/home/dzc/Data/opensource/img/right2/%d.jpg" % (idx))
 
 
     boxes_3d = []

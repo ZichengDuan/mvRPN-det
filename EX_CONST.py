@@ -22,7 +22,7 @@ class Const:
 
     reduce =4
 
-    dataset = "mix_simp"
+    dataset = "opensource"
 
     car_dist = math.sqrt(50/2 * 50/2 + 60/2 * 60/2)
 
@@ -41,7 +41,7 @@ class Const:
 
     roi_classes = 1
 
-    modelsavedir = "/home/dzc/Desktop/CASIA/proj/mvRPN-det/results/trained/dir_pool"
+    modelsavedir = "/home/dzc/Desktop/CASIA/proj/mvRPN-det/results/trained/opensource"
 
     imgsavedir = "/home/dzc/Desktop/CASIA/proj/mvRPN-det/results/images/testing_set"
 
