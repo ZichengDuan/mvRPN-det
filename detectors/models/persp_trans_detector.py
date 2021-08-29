@@ -49,23 +49,11 @@ class PerspTransDetector(nn.Module):
             self.proj_mats = [torch.from_numpy(map_zoom_mat @ imgcoord2worldgrid_matrices[cam] @ img_zoom_mat)
                               for cam in range(self.num_cam)]
 
+            print(dataset.base.intrinsic_matrices)
+            print(dataset.base.extrinsic_matrices)
+
         self.backbone = nn.Sequential(*list(resnet18(pretrained=True, replace_stride_with_dilation=[False, True, True]).children())[:-2]).to('cuda:0')
         self.rpn = RegionProposalNetwork(in_channels=1026, mid_channels=1026, ratios=[1], anchor_scales=[4]).to('cuda:1')
-        # my_cls = nn.Sequential(nn.Linear(25088, 2048, bias=True),
-        #                        nn.ReLU(inplace=True),
-        #                        nn.Dropout(p=0.5, inplace=False),
-        #                        nn.Linear(2048, 2048, bias=True),
-        #                        nn.ReLU(inplace=True),
-        #                        nn.Dropout(p=0.5, inplace=False),
-        #                        ).to("cuda:1")
-        # self.classifier = my_cls
-        #
-        # anchor_generator = torchvision_rpn.AnchorGenerator(sizes=[64], aspect_ratios=[1]).to("cuda:1")
-        # rpn_head = torchvision_rpn.RPNHead(in_channels=1026, num_anchors=anchor_generator.num_anchors_per_location()[0]).to("cuda:1")
-        # self.torchvis_rpn = torchvision_rpn.RegionProposalNetwork(anchor_generator, head=rpn_head, fg_iou_thresh=0.8,
-        #                                                  bg_iou_thresh=0.3, batch_size_per_image=256,
-        #                                                  positive_fraction=0.8, pre_nms_top_n={'training': 12000, 'testing': 6000},
-        #                                                  post_nms_top_n={'training': 3000, 'testing':300}, nms_thresh=0.7).to("cuda:1")
 
 
     def forward(self, imgs,frame, gt_boxes = None, epoch = None, visualize=False, train = True, mark = None):
