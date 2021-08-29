@@ -31,6 +31,20 @@
             </Attribute>
           </value>
         </entry>
+        <entry key="/opensource/combine_txt.py">
+          <value>
+            <Attribute>
+              <option name="separator" value="," />
+            </Attribute>
+          </value>
+        </entry>
+        <entry key="/opensource/rename_txt.py">
+          <value>
+            <Attribute>
+              <option name="separator" value=":" />
+            </Attribute>
+          </value>
+        </entry>
       </map>
     </option>
   </component>
