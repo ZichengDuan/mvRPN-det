@@ -94,7 +94,7 @@ def read_txt(left_right_dir):
 
             pID = i
             # ## 将角度转换为0-360度
-            angle = float(cont_left[-1])  # 1carreal data此处是-2
+            angle = float(cont_left[-2])  # 1carreal data此处是-2
             if angle >= 2 * np.pi:
                 angle -= 2 * np.pi
 
