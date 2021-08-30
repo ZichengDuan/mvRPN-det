@@ -29,7 +29,7 @@ import os
 
 def read_txt(left_right_dir):
     l_lhs = None
-    for m in range(0, 1396):
+    for m in range(0, 2934): # 1396
         print(m)
         idx = str(m)
         if 6 - len(idx) > 0:
@@ -43,7 +43,7 @@ def read_txt(left_right_dir):
         left = open(left_right_dir + "/left/%s.txt" % idx)
         right = open(left_right_dir + "/right/%s.txt" % idx)
         datas = []
-        annotation = open("/home/dzc/Data/opensource/raws/light/annotations/%d.json" % (m), 'w')
+        annotation = open("/home/dzc/Data/opensource/raws/dark/annotations/%d.json" % (m), 'w')
 
         od_xmax = []
         od_xmin = []
@@ -120,8 +120,8 @@ def read_txt(left_right_dir):
             right_xmax, right_xmin, right_ymax, right_ymin = int(right_xmax), int(right_xmin), int(
                 right_ymax), int(right_ymin)
             # -----------------------------------------
-            x1_ori, x2_ori, x3_ori, x4_ori = world_x / 10 + 25, world_x / 10 + 25, world_x / 10 - 25, world_x / 10 - 25
-            y1_ori, y2_ori, y3_ori, y4_ori = world_y / 10 + 30, world_y / 10 - 30, world_y / 10 - 30, world_y / 10 + 30
+            x1_ori, x2_ori, x3_ori, x4_ori = world_x / 10 + 26, world_x / 10 + 26, world_x / 10 - 26, world_x / 10 - 26
+            y1_ori, y2_ori, y3_ori, y4_ori = world_y / 10 + 26, world_y / 10 - 26, world_y / 10 - 26, world_y / 10 + 26
 
             x1_rot, x2_rot, x3_rot, x4_rot = \
                 int(math.cos(angle) * (x1_ori - world_x / 10) - math.sin(angle) * (
@@ -187,6 +187,5 @@ def read_txt(left_right_dir):
         annotation.close()
         # break
 
-
 if __name__ == "__main__":
-    read_txt("/home/dzc/Data/opensource/raws/light/txt")
+    read_txt("/home/dzc/Data/opensource/raws/dark/txt")
