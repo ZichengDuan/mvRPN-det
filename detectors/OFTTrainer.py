@@ -75,6 +75,18 @@ class OFTtrainer(BaseTrainer):
             img_size = (Const.grid_height, Const.grid_width)
             rpn_locs, rpn_scores, anchor, rois, roi_indices, img_featuremaps, bev_featuremaps = self.model(imgs, frame, gt_bbox, mark=mark)
 
+            a = np.zeros((Const.grid_height, Const.grid_width))
+            bevimg = np.uint8(a)
+            tmp = cv2.cvtColor(bevimg, cv2.COLOR_GRAY2BGR)
+            for roiii in rois:
+                ymin, xmin, ymax, xmax = roiii
+                cv2.rectangle(tmp, (int(xmin), int(ymin)), (int(xmax), int(ymax)), color=(255, 255, 0), thickness=1)
+            for i in range(len(gt_bev_bbox)):
+                ymin, xmin, ymax, xmax = gt_bev_bbox[i]
+                cv2.rectangle(tmp, (int(xmin), int(ymin)), (int(xmax), int(ymax)), color=(100, 100, 200), thickness=3)
+            cv2.imwrite("/root/deep_learning/dzc/mvRPN-det/rois.jpg", tmp)
+            roi = torch.tensor(rois)
+
             # visualize angle
             # bev_img = cv2.imread("/home/dzc/Data/mix/bevimgs/%d.jpg" % frame)
             # for idx, pt in enumerate(bev_xy.squeeze()):
@@ -301,42 +313,25 @@ class OFTtrainer(BaseTrainer):
             rpn_end = time.time()
             roi = torch.tensor(rois)
 
+            # -----------------------------------------------------------
+            tmp = np.zeros((Const.grid_height, Const.grid_width), dtype=np.uint8())
+            import cv2
+            tmp = cv2.cvtColor(tmp, cv2.COLOR_GRAY2BGR)
+
+            for idx, anc in enumerate(roi):
+                cv2.rectangle(tmp, (int(anc[1]), int(anc[0])), (int(anc[3]), int(anc[2])), color=(255, 255, 0))
+
+            cv2.imwrite("/home/dzc/Desktop/CASIA/proj/mvRPN-det/roi_visualization.jpg", tmp)
+            # # -----------------------------------------------------------
+
             # -----------投影------------
             # 筛选出来能用的roi，在480、 640内
             # 保留相应的roi和index
             # box转换和保留
             trans3d_start = time.time()
-            # for id, bbox in enumerate(roi):
-            #     y = (bbox[0] + bbox[2]) / 2
-            #     x = (bbox[1] + bbox[3]) / 2
-            #     z = 0
-            #     left_pt2d = getimage_pt(np.array([x, Const.grid_height - y, z]).reshape(3, 1), extrin[0][0], intrin[0][0])
-            #     right_pt2d = getimage_pt(np.array([x, Const.grid_height - y, z]).reshape(3, 1), extrin[1][0], intrin[1][0])
-            #     if 0 < int(left_pt2d[0]) < Const.ori_img_width and 0 < int(left_pt2d[1]) < Const.ori_img_height:
-            #         left_roi_remain_idx.append(id)
-            #     if 0 < int(right_pt2d[0]) < Const.ori_img_width and 0 < int(right_pt2d[1]) < Const.ori_img_height:
-            #         right_roi_remain_idx.append(id)
-
-            # left_roi_remain = roi[left_roi_remain_idx]
-            # left_rois_indices = roi_indices[left_roi_remain_idx]
-            # right_roi_remain = roi[right_roi_remain_idx]
-            # right_rois_indices = roi_indices[right_roi_remain_idx]
             gene3d_start = time.time()
             roi_3d = generate_3d_bbox(roi)
             gene3d_end = time.time()
-
-            # bev_img = cv2.imread("/home/dzc/Data/opensource/bevimgs/%d.jpg" % frame)
-            # for car in roi:
-            #     # xmax = max(car[:, 0])
-            #     # xmin = min(car[:, 0])
-            #     # ymax = max(car[:, 1])
-            #     # ymin = min(car[:, 1])
-            #     xmax = car[3]
-            #     xmin = car[1]
-            #     ymax = car[2]
-            #     ymin = car[0]
-            #     cv2.rectangle(bev_img, (int(xmin), int(ymin)), (int(xmax), int(ymax)), color=(255, 255, 0), thickness=1)
-            # cv2.imwrite("/home/dzc/Desktop/CASIA/proj/mvRPN-det/results/images/bev_img.jpg", bev_img)
 
 
             proj3d_start = time.time()
@@ -428,7 +423,7 @@ class OFTtrainer(BaseTrainer):
             # all_bev_boxes, _, all_sincos_remain, position_mark_keep = nms_new(all_roi_remain, all_front_prob, all_pred_sincos, position_mark)
             # s = time.time()
             v, indices = torch.tensor(all_front_prob).sort(0)
-            indices_remain = indices[v > 0.3]
+            indices_remain = indices[v > 0.1]
             print(frame)
             all_roi_remain = all_roi_remain[indices_remain].reshape(len(indices_remain), 4)
             all_pred_sincos = all_pred_sincos[indices_remain].reshape(len(indices_remain), 2)

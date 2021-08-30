@@ -255,7 +255,6 @@ class oftFrameDataset(VisionDataset):
                         else:
                             frame_right_box.append([ymin, xmin, ymax, xmax])
 
-                        frame_left_box
 
                 self.bev_bboxes[frame] = frame_bev_box
                 self.left_bboxes[frame] = frame_left_box
