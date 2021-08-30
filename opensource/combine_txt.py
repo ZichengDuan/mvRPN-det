@@ -37,12 +37,13 @@ def read_txt(left_right_dir):
                 idx = "0" + idx
 
         if not os.path.exists(left_right_dir + "/left/%s.txt" % idx):
+            print("?")
             continue
 
         left = open(left_right_dir + "/left/%s.txt" % idx)
         right = open(left_right_dir + "/right/%s.txt" % idx)
         datas = []
-        annotation = open("/home/dzc/Data/opensource/light/annotations/%d.json" % (m), 'w')
+        annotation = open("/home/dzc/Data/opensource/raws/light/annotations/%d.json" % (m), 'w')
 
         od_xmax = []
         od_xmin = []
@@ -75,7 +76,7 @@ def read_txt(left_right_dir):
 
             pID = i
             # ## 将角度转换为0-360度
-            angle = float(cont_left[-1])  # 1carreal data此处是-2
+            angle = float(cont_left[-2])  # 1carreal data此处是-2
             if angle >= 2 * np.pi:
                 angle -= 2 * np.pi
 
@@ -188,4 +189,4 @@ def read_txt(left_right_dir):
 
 
 if __name__ == "__main__":
-    read_txt("/home/dzc/Data/opensource/light/txt")
+    read_txt("/home/dzc/Data/opensource/raws/light/txt")
