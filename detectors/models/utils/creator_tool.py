@@ -35,9 +35,9 @@ class ProposalTargetCreator(object):
     """
 
     def __init__(self,
-                 n_sample=128,
+                 n_sample=64,
                  pos_ratio=0.35, pos_iou_thresh=0.5,
-                 neg_iou_thresh_hi=0.5, neg_iou_thresh_lo=0.0
+                 neg_iou_thresh_hi=0.1, neg_iou_thresh_lo=0.0
                  ):
         self.n_sample = n_sample
         self.pos_ratio = pos_ratio
@@ -557,7 +557,7 @@ class AnchorTargetCreator(object):
     def __init__(self,
                  n_sample=256,
                  pos_iou_thresh=0.8, neg_iou_thresh=0.3,
-                 pos_ratio=0.8):
+                 pos_ratio=0.5):
         self.n_sample = n_sample
         self.pos_iou_thresh = pos_iou_thresh
         self.neg_iou_thresh = neg_iou_thresh
@@ -610,18 +610,18 @@ class AnchorTargetCreator(object):
         loc = _unmap(loc, n_anchor, inside_index, fill=0)
 
         # -----------------------------------------------------------
-        # tmp = np.zeros((Const.grid_height, Const.grid_width), dtype=np.uint8())
-        # import cv2
-        # tmp = cv2.cvtColor(tmp, cv2.COLOR_GRAY2BGR)
-        #
-        # for idx, anc in enumerate(anchor):
-        #     if label[inside_index][idx] == 1:
-        #         cv2.rectangle(tmp, (int(anc[1]), int(anc[0])), (int(anc[3]), int(anc[2])), color=(255, 255, 0))
-        #
-        # for idx, bbx in enumerate(bbox):
-        #     cv2.rectangle(tmp, (int(bbx[1]), int(bbx[0])), (int(bbx[3]), int(bbx[2])), color=(34, 34,178), thickness=2)
-        #
-        # cv2.imwrite("/home/dzc/Desktop/CASIA/proj/mvRPN-det/anchorBase.jpg", tmp)
+        tmp = np.zeros((Const.grid_height, Const.grid_width), dtype=np.uint8())
+        import cv2
+        tmp = cv2.cvtColor(tmp, cv2.COLOR_GRAY2BGR)
+
+        for idx, anc in enumerate(anchor):
+            if label[inside_index][idx] == 1:
+                cv2.rectangle(tmp, (int(anc[1]), int(anc[0])), (int(anc[3]), int(anc[2])), color=(255, 255, 0))
+
+        for idx, bbx in enumerate(bbox):
+            cv2.rectangle(tmp, (int(bbx[1]), int(bbx[0])), (int(bbx[3]), int(bbx[2])), color=(34, 34,178), thickness=2)
+
+        cv2.imwrite("/home/dzc/Desktop/CASIA/proj/mvRPN-det/anchorBase.jpg", tmp)
         # # -----------------------------------------------------------
         return loc, label
 
@@ -671,7 +671,6 @@ class AnchorTargetCreator(object):
 
         return argmax_ious, max_ious, gt_argmax_ious
 
-
 def _unmap(data, count, index, fill=0):
     # Unmap a subset of item (data) back to the original set of items (of
     # size count)
@@ -686,7 +685,6 @@ def _unmap(data, count, index, fill=0):
         ret[index, :] = data
     return ret
 
-
 def _get_inside_index(anchor, H, W):
     # Calc indicies of anchors which are located completely inside of the image
     # whose size is speficied.
@@ -697,7 +695,6 @@ def _get_inside_index(anchor, H, W):
         (anchor[:, 3] <= W)
     )[0]
     return index_inside
-
 
 class ProposalCreator:
     # unNOTE: I'll make it undifferential
@@ -915,7 +912,6 @@ def get_outter2(projected_3dboxes):
     res = np.array(res).squeeze()
 
     return res
-
 
 def generate_3d_bbox(pred_bboxs):
     # 输出以左下角为原点的3d坐标

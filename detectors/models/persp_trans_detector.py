@@ -51,7 +51,7 @@ class PerspTransDetector(nn.Module):
 
 
         self.backbone = nn.Sequential(*list(resnet18(pretrained=True, replace_stride_with_dilation=[False, True, True]).children())[:-2]).to('cuda:0')
-        self.rpn = RegionProposalNetwork(in_channels=1026, mid_channels=1026, ratios=[1], anchor_scales=[4]).to('cuda:1')
+        self.rpn = RegionProposalNetwork(in_channels=1026, mid_channels=1026, ratios=[0.9, 1.1], anchor_scales=[4]).to('cuda:1')
 
 
     def forward(self, imgs,frame, gt_boxes = None, epoch = None, visualize=False, train = True, mark = None):

@@ -15,8 +15,8 @@ from detectors.evaluation.evaluate import evaluate
 import torch.nn as nn
 import warnings
 from detectors.loss.gaussian_mse import GaussianMSE
-from .models.utils.creator_tool import AnchorTargetCreator, ProposalTargetCreator, ProposalTargetCreator_ori
-from .utils import array_tool as at
+from detectors.models.utils.creator_tool import AnchorTargetCreator, ProposalTargetCreator, ProposalTargetCreator_ori
+from detectors.utils import array_tool as at
 from EX_CONST import Const
 from tensorboardX import SummaryWriter
 from detectors.models.utils.bbox_tools import loc2bbox
@@ -59,15 +59,9 @@ class OFTtrainer(BaseTrainer):
         Loss = 0
         RPN_CLS_LOSS = 0
         RPN_LOC_LOSS = 0
-        LEFT_ROI_LOC_LOSS = 0
-        LEFT_ROI_CLS_LOSS = 0
-        LEFT_ANGLE_REG_LOSS = 0
         ALL_ROI_CLS_LOSS = 0
         ALL_ANGLE_REG_LOSS = 0
         ALL_ROI_LOC_LOSS = 0
-        RIGHT_ROI_LOC_LOSS = 0
-        RIGHT_ROI_CLS_LOSS = 0
-        RIGHT_ANGLE_REG_LOSS = 0
 
         for batch_idx, data in enumerate(data_loader):
             optimizer.zero_grad()
@@ -87,28 +81,28 @@ class OFTtrainer(BaseTrainer):
             for i in range(len(gt_bbox[0])):
                 ymin, xmin, ymax, xmax = gt_bbox[0][i]
                 cv2.rectangle(bevimg, (int(xmin), int(ymin)), (int(xmax), int(ymax)), color=(100, 100, 200), thickness=3)
-            cv2.imwrite("/home/dzc/Desktop/CASIA/proj/mvRPN-det/results/images/rpn_boxes/%d.jpg" % frame, bevimg)
+            cv2.imwrite("/home/dzc/Desktop/CASIA/proj/mvRPN-det/results/images/rpn_boxes/rois.jpg", bevimg)
             roi = torch.tensor(rois)
 
             # visualize angle
-            bevimg2 = cv2.imread("/home/dzc/Data/opensource/bevimgs/%d.jpg" % frame)
-            for idx, pt in enumerate(bev_xy.squeeze()):
-                x, y = int(pt[0]), int(pt[1])
-                cv2.circle(bevimg2, (x, y), radius=2, color=(255, 255, 0))
-                cv2.line(bevimg2, (0, Const.grid_height - 1), (x, y), color = (255, 255, 0))
-                ray = np.arctan(y / (Const.grid_width - x))
-                theta_l = bev_angle.squeeze()[idx]
-                theta = theta_l + ray
-
-                x1_rot = x - 30
-                y1_rot = Const.grid_height - y
-
-                nrx = (x1_rot - x) * np.cos(theta) - (y1_rot - (Const.grid_height - y)) * np.sin(theta) + x
-                nry = (x1_rot - x) * np.sin(theta) + (y1_rot - (Const.grid_height - y)) * np.cos(theta) + (Const.grid_height - y)
-
-                cv2.arrowedLine(bevimg2, (x, y), (int(nrx), int(Const.grid_height - nry)), color=(255, 255, 0))
-                # cv2.line(bevimg2, (Const.grid_width - 1, 0), (x, y), color = (155, 25, 0))
-            cv2.imwrite("/home/dzc/Desktop/CASIA/proj/mvRPN-det/results/images/bev_rot/%d.jpg" % frame, bevimg2)
+            # bevimg2 = cv2.imread("/home/dzc/Data/opensource/bevimgs/%d.jpg" % frame)
+            # for idx, pt in enumerate(bev_xy.squeeze()):
+            #     x, y = int(pt[0]), int(pt[1])
+            #     cv2.circle(bevimg2, (x, y), radius=2, color=(255, 255, 0))
+            #     cv2.line(bevimg2, (0, Const.grid_height - 1), (x, y), color = (255, 255, 0))
+            #     ray = np.arctan(y / (Const.grid_width - x))
+            #     theta_l = bev_angle.squeeze()[idx]
+            #     theta = theta_l + ray
+            #
+            #     x1_rot = x - 30
+            #     y1_rot = Const.grid_height - y
+            #
+            #     nrx = (x1_rot - x) * np.cos(theta) - (y1_rot - (Const.grid_height - y)) * np.sin(theta) + x
+            #     nry = (x1_rot - x) * np.sin(theta) + (y1_rot - (Const.grid_height - y)) * np.cos(theta) + (Const.grid_height - y)
+            #
+            #     cv2.arrowedLine(bevimg2, (x, y), (int(nrx), int(Const.grid_height - nry)), color=(255, 255, 0))
+            #     # cv2.line(bevimg2, (Const.grid_width - 1, 0), (x, y), color = (155, 25, 0))
+            # cv2.imwrite("/home/dzc/Desktop/CASIA/proj/mvRPN-det/results/images/bev_rot/%d.jpg" % frame, bevimg2)
 
             rpn_loc = rpn_locs[0]
             rpn_score = rpn_scores[0]
@@ -132,9 +126,13 @@ class OFTtrainer(BaseTrainer):
 
             gt_rpn_label = torch.tensor(gt_rpn_label).long()
             rpn_cls_loss = nn.CrossEntropyLoss(ignore_index=-1)(rpn_score, gt_rpn_label.to(rpn_score.device))
-
+            # print(rpn_loc[np.where(gt_rpn_label != -1)[0]][:5], gt_rpn_loc[np.where(gt_rpn_label != -1)[0]][:5])
             # ----------------ROI------------------------------
             # 还需要在双视角下的回归gt，以及筛选过后的分类gt，gt_left_loc, gt_left_label, gt_right_loc, gt_right_label
+
+            left = cv2.imread("/home/dzc/Data/opensource/img/left1/%d.jpg" % frame)
+            right = cv2.imread("/home/dzc/Data/opensource/img/right2/%d.jpg" % frame)
+
             left_2d_bbox, left_sample_roi, left_gt_loc, left_gt_label, left_gt_sincos, left_pos_num, right_2d_bbox,right_sample_roi, right_gt_loc, right_gt_label, right_gt_sincos, right_pos_num = self.proposal_target_creator(
                 roi,
                 at.tonumpy(gt_bbox),
@@ -147,9 +145,10 @@ class OFTtrainer(BaseTrainer):
                 extrin, intrin, frame,
                 self.loc_normalize_mean,
                 self.loc_normalize_std)
+
             left_sample_roi_index = torch.zeros(len(left_sample_roi))
             right_sample_roi_index = torch.zeros(len(right_sample_roi))
-
+            # print(left_sample_roi_index, right_sample_roi_index)
             # ---------------------------left_roi_pooling---------------------------------
             left_roi_cls_loc, left_roi_score, left_pred_sincos = self.roi_head(
                 img_featuremaps[0],
@@ -194,8 +193,9 @@ class OFTtrainer(BaseTrainer):
             all_roi_cls_loss = nn.CrossEntropyLoss()(all_roi_score, all_gt_label.to(all_roi_score.device))
             all_sincos_loss = self.MSELoss(all_pred_sincos.float(), torch.tensor(all_gt_sincos).to(all_pred_sincos.device).float())
             # ----------------------Loss-----------------------------
-            loss = rpn_loc_loss * 3 + rpn_cls_loss * 3 + \
-                    (all_roi_loc_loss  + all_roi_cls_loss + all_sincos_loss)
+            # loss = rpn_loc_loss * 3 + rpn_cls_loss * 3 + \
+            #         (all_roi_loc_loss  + all_roi_cls_loss + all_sincos_loss)
+            loss = rpn_loc_loss + rpn_cls_loss +  (all_roi_loc_loss  + all_roi_cls_loss + all_sincos_loss)
 
             Loss += loss.item()
 
@@ -228,63 +228,6 @@ class OFTtrainer(BaseTrainer):
                       "ALL SinCos : %4f" % ((ALL_ANGLE_REG_LOSS) / (batch_idx + 1))
                       )
                 print("----------------------------------------------------------------------------------------------------------------------------------------------------------------------")
-            # 给两个图上的框指定gt的loc，目前已经有gt_roi_label_left, gt_roi_label_right,
-
-            # for car in left_2d_bbox:
-            #     for n in range(len(car)):
-            #         for m in range(len(car)):
-            #             if abs(n - m) == 1 or abs(n - m) == 4:
-            #                 cv2.line(left_img, (car[n][0], car[n][1]), (car[m][0], car[m][1]), color=(255, 255, 0), thickness=1)
-
-            #
-            # left_img = cv2.imread("/home/dzc/Data/mix_simp/img/left1/%d.jpg" % frame)
-            # right_img = cv2.imread("/home/dzc/Data/mix_simp/img/right2/%d.jpg" % frame)
-            #
-            # for car in left_2d_bbox:
-            #     xmax = max(car[:, 0])
-            #     xmin = min(car[:, 0])
-            #     ymax = max(car[:, 1])
-            #     ymin = min(car[:, 1])
-            #     cv2.rectangle(left_img, (xmin, ymin), (xmax, ymax), color = (255, 255, 0), thickness = 1)
-            #
-            # for car in right_2d_bbox:
-            #     xmax = max(car[:, 0])
-            #     xmin = min(car[:, 0])
-            #     ymax = max(car[:, 1])
-            #     ymin = min(car[:, 1])
-            #     cv2.rectangle(right_img, (xmin, ymin), (xmax, ymax), color = (255, 255, 0), thickness = 2)
-            # cv2.imwrite("/home/dzc/Desktop/CASIA/proj/mvRPN-det/images/right_img.jpg", right_img)
-
-            # ------------loc -> bbox--------------
-
-            # rpn_score = nn.Softmax()(rpn_score)
-            # conf_scores = rpn_score[:, 1].view(1, -1).squeeze()
-            # # print("dzc", max(conf_scores.squeeze()))
-            # left_bbox, left_conf = nms_new(bbox, conf_scores.detach().cpu(), left=4, threshold=0.1)
-            #
-            # left_img = cv2.imread("/home/dzc/Data/4carreal_0318blend/img/left1/%d.jpg" % frame)
-            # # right_img = cv2.imread("/home/dzc/Data/4carreal_0318blend/img/right2/%d.jpg" % frame)
-            # bev_img = cv2.imread("/home/dzc/Data/4carreal_0318blend/bevimgs/%d.jpg" % frame)
-            #
-            # for idx, bbx in enumerate(left_bbox):
-            #     cv2.rectangle(bev_img, (int(bbx[1]), int(bbx[0])), (int(bbx[3]), int(bbx[2])), color=(255, 255, 0), thickness=1)
-
-            # for idx, bbxx in enumerate(gt_left_bbox):
-            #     for item in bbxx:
-            #         # print(np.dot(intrin[0][0], extrin[0][0]))
-            #         # print(np.dot(item, np.dot(intrin[0][0], extrin[0][0])))
-
-
-
-
-            # for idx, bbx in enumerate(left_2d_bbox):
-            #     cv2.rectangle(left_img, (int(bbx[1]), int(bbx[0])), (int(bbx[3]), int(bbx[2])), color=(255, 255, 0), thickness=1)
-            #     # cv2.circle(left_img, (int((bbx[3] + bbx[1]) / 2), (int((bbx[2] + bbx[0]) / 2))), 1, color=(255, 255, 0))
-            #
-            # cv2.imwrite("/home/dzc/Desktop/CASIA/proj/mvRPN-det/images/left_img.jpg", left_img)
-            # cv2.imwrite("/home/dzc/Desktop/CASIA/proj/mvRPN-det/images/bev_img.jpg", bev_img)
-
-            # ----------------生成3D外接框，并投影回原图，先拿左图为例子------------------
 
     def test(self,epoch, data_loader, writer):
         self.model.eval()
@@ -363,7 +306,6 @@ class OFTtrainer(BaseTrainer):
             right_2d_bbox = right_2d_bbox[right_index_inside]
             left_rois_indices = roi_indices[left_index_inside]
             right_rois_indices = roi_indices[right_index_inside]
-            getoutter_end = time.time()
 
             # left_img = cv2.imread("/home/dzc/Data/opensource/img/left1/%d.jpg" % frame)
             # right_img = cv2.imread("/home/dzc/Data/opensource/img/right2/%d.jpg" % frame)
@@ -393,23 +335,18 @@ class OFTtrainer(BaseTrainer):
 
             left_2d_bbox = torch.tensor(left_2d_bbox)
             right_2d_bbox = torch.tensor(right_2d_bbox)
-            trans3d_end = time.time()
 
-            roi_start = time.time()
             #------------左右ROI pooling-----------
             left_roi_cls_loc, left_roi_score, left_pred_sincos = self.roi_head(
                 img_featuremaps[0],
                 left_2d_bbox.to(img_featuremaps[0].device),
                 left_rois_indices)
-            # print(right_2d_bbox.shape, right_rois_indices.shape)
             right_roi_cls_loc, right_roi_score, right_pred_sincos = self.roi_head(
                 img_featuremaps[1],
                 right_2d_bbox.to(img_featuremaps[1].device),
                 right_rois_indices)
-            roi_end = time.time()
             # -----------------------NMS---------------------------
 
-            nms_start = time.time()
             left_prob = at.tonumpy(F.softmax(at.totensor(left_roi_score), dim=1))
             left_front_prob = left_prob[:, 1]
             right_prob = at.tonumpy(F.softmax(at.totensor(right_roi_score), dim=1))
@@ -419,10 +356,8 @@ class OFTtrainer(BaseTrainer):
             all_front_prob = np.concatenate((left_front_prob, right_front_prob))
             all_roi_remain = np.concatenate((roi[left_index_inside], roi[right_index_inside]))
             all_pred_sincos = np.concatenate((at.tonumpy(left_pred_sincos), at.tonumpy(right_pred_sincos)))
-            # all_bev_boxes, _, all_sincos_remain, position_mark_keep = nms_new(all_roi_remain, all_front_prob, all_pred_sincos, position_mark)
-            # s = time.time()
             v, indices = torch.tensor(all_front_prob).sort(0)
-            indices_remain = indices[v > 0.1]
+            indices_remain = indices[v > 0.15]
             print(frame)
             all_roi_remain = all_roi_remain[indices_remain].reshape(len(indices_remain), 4)
             all_pred_sincos = all_pred_sincos[indices_remain].reshape(len(indices_remain), 2)
@@ -431,29 +366,18 @@ class OFTtrainer(BaseTrainer):
 
             all_bev_boxes = []
             if indices_remain.shape[0] != 0:
-            #     keep = indices[np.argmax(v)].reshape(-1)
-            #     all_bev_boxes = all_roi_remain[keep]
-            # else:
                 if indices_remain.shape[0] == 1:
                     keep = [0]
                 else:
                     keep = box_ops.nms(torch.tensor(all_roi_remain), torch.tensor(all_front_prob), 0)
                     # y = (all_roi_remain[:, 0] + all_roi_remain[:, 2]) / 2
                     # x = (all_roi_remain[:, 1] + all_roi_remain[:, 3]) / 2
-                    # points = np.array([x, y]).reshape(-1, 2)
-                    # print(points.shape)
                     # keep, _ = nms(torch.tensor(points), torch.tensor(all_front_prob), dist_thres=78, top_k=50)
                 all_bev_boxes, all_sincos_remain, position_mark_keep = all_roi_remain[keep].reshape(len(keep), 4), \
                                                                        all_pred_sincos[keep].reshape(len(keep), 2), \
                                                                        position_mark[keep].reshape(len(keep))
-            # all_bev_boxes, all_sincos_remain, position_mark_keep = all_roi_remain2[keep].reshape(len(keep), 4), all_pred_sincos2[keep].reshape(len(keep), 2), position_mark2[keep].reshape(len(keep))
 
             # -----------------------可视化---------------------------
-            # bev_img = cv2.imread("/home/dzc/Data/opensource/bevimgs/%d.jpg" % frame)
-
-            # position_mark_keep2 = [0,0,0,0]
-            # all_sincos_remain2 = gt_left_sincos[0]
-
             if len(all_bev_boxes) != 0:
                 test_gt_res, test_pred_res = visualize_3dbox(all_bev_boxes, all_sincos_remain, position_mark_keep, gt_bbox, bev_angle, all_front_prob[keep], extrin, intrin, frame)
                 for k, bbox in enumerate(all_bev_boxes):
@@ -482,84 +406,6 @@ class OFTtrainer(BaseTrainer):
                                                         data_loader.dataset.base.__name__)
 
         print(recall, precision, moda, modp)
-        #     if len(all_bev_boxes) != 0:
-        #         for idx, bbxx in enumerate(all_bev_boxes[0]):
-        #             print(bbxx)
-        #             # print(position_mark_keep)
-        #             if position_mark_keep[idx] == 0:
-        #                 cv2.rectangle(bev_img, (int(bbxx[1]), int(bbxx[0])), (int(bbxx[3]), int(bbxx[2])), color=(255, 0, 0),
-        #                               thickness=2)
-        #                 center_x, center_y = int((bbxx[1] + bbxx[3]) // 2), int((bbxx[0] + bbxx[2]) // 2)
-        #                 ray = np.arctan((Const.grid_height - center_y) / center_x)
-        #                 angle = np.arctan(all_sincos_remain[idx][0] / all_sincos_remain[idx][1])
-        #                 if all_sincos_remain[idx][0] > 0 and \
-        #                         all_sincos_remain[idx][1] < 0:
-        #                     angle += np.pi
-        #                 elif all_sincos_remain[idx][0] < 0 and \
-        #                         all_sincos_remain[idx][1] < 0:
-        #                     angle += np.pi
-        #                 elif all_sincos_remain[idx][0] < 0 and \
-        #                         all_sincos_remain[idx][1] > 0:
-        #                     angle += 2 * np.pi
-        #                 theta_l = angle
-        #                 theta = theta_l + ray
-        #
-        #                 angle = bev_angle[0][idx]
-        #                 theta = angle + random.randint(-10, 10) / 70
-        #                 # if idx < 1900:
-        #                 # if frame == 1796:
-        #                 #     print(theta_l, ray)
-        #                 #     print("dzc1", theta)
-        #                 x_rot = center_x + 40
-        #                 y_rot = Const.grid_height - center_y
-        #
-        #                 nrx = (x_rot - center_x) * np.cos(theta) - (y_rot - (Const.grid_height - center_y)) * np.sin(theta) + center_x
-        #                 nry = (x_rot - center_x) * np.sin(theta) + (y_rot - (Const.grid_height - center_y)) * np.cos(theta) + (Const.grid_height - center_y)
-        #                 print(nrx)
-        #                 cv2.arrowedLine(bev_img, (center_x, center_y), (int(nrx), Const.grid_height - int(nry)), color=(255, 60, 199), thickness=2)
-        #
-        #             elif position_mark_keep[idx] == 1:
-        #
-        #                 cv2.rectangle(bev_img, (int(bbxx[1]), int(bbxx[0])), (int(bbxx[3]), int(bbxx[2])),
-        #                               color=(255, 255, 0),
-        #                               thickness=2)
-        #                 center_x, center_y = int((bbxx[1] + bbxx[3]) // 2), int((bbxx[0] + bbxx[2]) // 2)
-        #                 ray = np.arctan(center_y / (Const.grid_width - center_x))
-        #                 angle = np.arctan(all_sincos_remain[idx][0] /
-        #                                   all_sincos_remain[idx][1])
-        #                 if all_sincos_remain[idx][0] > 0 and all_sincos_remain[idx][1] < 0:
-        #                     angle += np.pi
-        #                 elif all_sincos_remain[idx][0] < 0 and all_sincos_remain[idx][1] < 0:
-        #                     angle += np.pi
-        #                 elif all_sincos_remain[idx][0] < 0 and all_sincos_remain[idx][1] > 0:
-        #                     angle += 2 * np.pi
-        #
-        #                 theta_l = angle
-        #                 theta = theta_l + ray
-        #
-        #                 # if idx < 1900:
-        #                 #     print("dzc2", theta)
-        #                 x1_rot = center_x - 30
-        #                 y1_rot = Const.grid_height - center_y
-        #
-        #                 nrx = (x1_rot - center_x) * np.cos(theta) - (y1_rot - (Const.grid_height - center_y)) * np.sin(theta) + center_x
-        #                 nry = (x1_rot - center_x) * np.sin(theta) + (y1_rot - (Const.grid_height - center_y)) * np.cos(theta) + (Const.grid_height - center_y)
-        #
-        #                 cv2.arrowedLine(bev_img, (center_x, center_y), (int(nrx), Const.grid_height - int(nry)), color=(255, 60, 199), thickness=2)
-        #
-        #         visualize_3dbox(all_bev_boxes, all_sincos_remain, position_mark_keep, extrin, intrin, frame)
-        #         cv2.imwrite("%s/%d.jpg" % (Const.imgsavedir, frame), bev_img)
-        #
-        #
-        #
-        # print("Avg total infer time: %4f" % (total_time / batch_idx))
-        # print("Avg rpn infer time: %4f" % (rpn_time / batch_idx))
-        # print("Avg trans infer time: %4f" % (trans_time / batch_idx))
-        # print("Avg gene infer time: %4f" % (gene3d_time / batch_idx))
-        # print("Avg proj infer time: %4f" % (proj3d_time / batch_idx))
-        # print("Avg get outter infer time: %4f" % (getoutter_time / batch_idx))
-        # print("Avg roi infer time: %4f" % (roi_time / batch_idx))
-        # print("Avg nms infer time: %4f" % (nms_time / batch_idx))
 
 
 

@@ -10,13 +10,11 @@ class VGG16RoIHead(nn.Module):
     This class is used as a head for Faster R-CNN.
     This outputs class-wise localizations and classification based on feature
     maps in the given RoIs.
-
     Args:
         n_class (int): The number of classes possibly including the background.
         roi_size (int): Height and width of the feature maps after RoI-pooling.
         spatial_scale (float): Scale of the roi is resized.
         classifier (nn.Module): Two layer Linear ported from vgg16
-
     """
 
     def __init__(self, n_class, roi_size, spatial_scale):
@@ -48,30 +46,20 @@ class VGG16RoIHead(nn.Module):
         self.cls_loc = nn.Sequential(nn.Linear(1024, 512),
                                      nn.ReLU(True),
                                      nn.Dropout(),
-                                     nn.Linear(512, 128),
-                                     nn.ReLU(True),
-                                     nn.Dropout(),
-                                     nn.Linear(128, n_class * 4)).to("cuda:1")
+                                     nn.Linear(512, n_class * 4)).to("cuda:1")
 
-        self.score = nn.Sequential( nn.Linear(1024, 512),
-                                     nn.ReLU(True),
-                                     nn.Dropout(),
-                                    nn.Linear(512, n_class)).to("cuda:1")
+        self.score = nn.Sequential(nn.Linear(1024, 512),
+                                   nn.ReLU(True),
+                                   nn.Dropout(),
+                                   nn.Linear(512, n_class)).to("cuda:1")
 
-        # self.ang_regressor = nn.Sequential(nn.Linear(1024, 1024),
-        #                                    nn.ReLU(True),
-        #                                    nn.Dropout(),
-        #                                    nn.Linear(1024, 512),
-        #                                    nn.ReLU(True),
-        #                                    nn.Dropout(),
-        #                                    nn.Linear(512, 2)).to("cuda:1")
-        self.ang_regressor = nn.Sequential(nn.Linear(1024, 512),
+        self.ang_regressor = nn.Sequential(nn.Linear(1024, 1024),
                                            nn.ReLU(True),
                                            nn.Dropout(),
-                                           nn.Linear(512, 128),
+                                           nn.Linear(1024, 512),
                                            nn.ReLU(True),
                                            nn.Dropout(),
-                                           nn.Linear(128, 2)).to("cuda:1")
+                                           nn.Linear(512, 2)).to("cuda:1")
 
         # self.orientation = nn.Sequential(
         #     nn.Linear(25088, 256),
@@ -107,9 +95,7 @@ class VGG16RoIHead(nn.Module):
 
     def forward(self, x, rois, roi_indices):
         """Forward the chain.
-
         We assume that there are :math:`N` batches.
-
         Args:
             x (Variable): 4D image variable.
             rois (Tensor): A bounding box array containing coordinates of
@@ -120,7 +106,6 @@ class VGG16RoIHead(nn.Module):
                 :math:`R' = \\sum _{i=1} ^ N R_i`.
             roi_indices (Tensor): An array containing indices of images to
                 which bounding boxes correspond to. Its shape is :math:`(R',)`.
-
         """
         # in case roi_indices is  ndarray
         roi_indices = at.totensor(roi_indices).float()
@@ -131,7 +116,7 @@ class VGG16RoIHead(nn.Module):
         indices_and_rois = xy_indices_and_rois.contiguous().to(x.device)
         # print(x.shape, x.device, indices_and_rois.shape, indices_and_rois.device)
         # x = self.trans_layer(x)
-        plt.imsave("imgfeature.jpg", torch.norm(x[0].detach(), dim=0).cpu().numpy())
+        # plt.imsave("imgfeature.jpg", torch.norm(x[0].detach(), dim=0).cpu().numpy())
         pool = self.roi(x, indices_and_rois).to("cuda:1")
         pool = pool.view(pool.size(0), -1)
         # print(self.classifier)
@@ -145,7 +130,6 @@ class VGG16RoIHead(nn.Module):
         # orientation = F.normalize(orientation, dim=2)
         # confidence = self.confidence(pool)
         return roi_cls_locs, roi_scores, roi_sincos
-
 
 def normal_init(m, mean, stddev, truncated=False):
     """

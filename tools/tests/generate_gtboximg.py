@@ -33,5 +33,5 @@ def gene(root, frame_range):
 
 if __name__ == "__main__":
     root = "/home/dzc/Data/opensource"
-    frame_range = list(range(0,1000))
+    frame_range = list(range(2936, 4300))
     gene(root, frame_range)

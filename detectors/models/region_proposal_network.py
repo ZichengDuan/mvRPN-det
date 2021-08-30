@@ -12,7 +12,7 @@ from .utils.creator_tool import ProposalCreator
 
 class RegionProposalNetwork(nn.Module):
     def __init__(
-            self, in_channels=1026, mid_channels=2048, ratios=[0.5, 1, 2],
+            self, in_channels=1026, mid_channels=1026, ratios=[0.5, 1, 2],
             anchor_scales=[8, 16, 32], feat_stride=Const.reduce,
             proposal_creator_params=dict(),
     ):
@@ -27,8 +27,6 @@ class RegionProposalNetwork(nn.Module):
         self.conv1 = nn.Conv2d(in_channels, mid_channels, 3, 1, 1)
         self.score = nn.Conv2d(mid_channels, self.n_anchor * 2, 1, 1, 0)
         self.loc = nn.Conv2d(mid_channels, self.n_anchor * 4, 1, 1, 0)
-
-        # torchvision
 
         normal_init(self.conv1, 0, 0.01)
         normal_init(self.score, 0, 0.01)
@@ -85,7 +83,6 @@ class RegionProposalNetwork(nn.Module):
         roi_indices = list()
 
         for i in range(n):
-            # print("dzcddzzcc", rpn_locs.shape, i,rpn_locs[i].shape )
             roi, roi_origin, order = self.proposal_layer(
                 rpn_locs[i].cpu().data.numpy(),
                 rpn_fg_scores[i].cpu().data.numpy(),
