@@ -1,0 +1,14 @@
+Traceback (most recent call last):
+  File "main.py", line 113, in <module>
+    main(args)
+  File "main.py", line 62, in main
+    roi_head = VGG16RoIHead(Const.roi_classes + 1, 7, 1/Const.reduce)
+  File "/root/deep_learning/dzc/mvRPN-det/detectors/models/VGG16Head.py", line 32, in __init__
+    self.classifier = nn.Sequential(nn.Linear(25088, 4096, bias=True),
+  File "/root/anaconda3/envs/dzc/lib/python3.7/site-packages/torch/nn/modules/linear.py", line 83, in __init__
+    self.reset_parameters()
+  File "/root/anaconda3/envs/dzc/lib/python3.7/site-packages/torch/nn/modules/linear.py", line 86, in reset_parameters
+    init.kaiming_uniform_(self.weight, a=math.sqrt(5))
+  File "/root/anaconda3/envs/dzc/lib/python3.7/site-packages/torch/nn/init.py", line 384, in kaiming_uniform_
+    return tensor.uniform_(-bound, bound)
+KeyboardInterrupt

@@ -210,17 +210,13 @@ class ProposalTargetCreator_percam(object):
         n_sample (int): The number of sampled regions.
         pos_ratio (float): Fraction of regions that is labeled as a
             foreground.
-        pos_iou_thresh (float): IoU threshold for a RoI to be considered as a
-            foreground.
-        neg_iou_thresh_hi (float): RoI is considered to be the background
-            if IoU is in
-            [:obj:`neg_iou_thresh_hi`, :obj:`neg_iou_thresh_hi`).
+        pos_iou_thresh (float)dataset.esh_hi`, :obj:`neg_iou_thresh_hi`).
         neg_iou_thresh_lo (float): See above.
 
     """
 
     def __init__(self,
-                 n_sample=256,
+                 n_sample=512,
                  pos_ratio=0.35, pos_iou_thresh=0.5,
                  neg_iou_thresh_hi=0.5, neg_iou_thresh_lo=0.0
                  ):
@@ -242,7 +238,8 @@ class ProposalTargetCreator_percam(object):
 
         gt_bev_bbox = np.delete(gt_bev_bbox, remove_idx, axis=0)
         gt_bbox = np.delete(gt_bbox, remove_idx, axis=0)
-
+        label = np.delete(label, remove_idx, axis=0)
+        # print(gt_bbox)
         # left
         # 限定用于左侧的roi
         roi_remain_idx = []
@@ -251,11 +248,14 @@ class ProposalTargetCreator_percam(object):
             x = (bbox[1] + bbox[3]) / 2
             z = 0
             # x, y = get_worldcoord_from_worldgrid([x, y])
-            pt2d = getimage_pt(np.array([x, Const.grid_height - y, z]).reshape(3,1), extrin[0], intrin[0])
-            if 0 < int(pt2d[0]) < Const.ori_img_width and 0 < int(pt2d[1]) < Const.ori_img_height:
-                roi_remain_idx.append(id)
-        rois = roi[roi_remain_idx]
+            coord = np.array([[y], [x]]).reshape([2, -1])
+            world_coord = get_worldcoord_from_worldgrid(coord)
+            img_coord = get_imagecoord_from_worldcoord(world_coord, intrin[0], extrin[0]) # x, y
 
+            if 0 < int(img_coord[0]) < Const.ori_img_width and 0 < int(img_coord[1]) < Const.ori_img_height:
+                roi_remain_idx.append(id)
+
+        rois = roi[roi_remain_idx]
         n_bbox, _ = gt_bev_bbox.shape
         roi = np.concatenate((rois, gt_bev_bbox), axis=0)
         pos_roi_per_image = np.round(self.n_sample * self.pos_ratio)
@@ -265,219 +265,6 @@ class ProposalTargetCreator_percam(object):
         # Offset range of classes from [0, n_fg_class - 1] to [1, n_fg_class].
         # The label with value 0 is the background.
         gt_roi_label_left = label[gt_assignment] + 1 # 每一个roi对应的gt及其gt的分类
-
-        # Select foreground RoIs as those with >= pos_iou_thresh IoU.
-        pos_index = np.where(max_iou >= self.pos_iou_thresh)[0]
-        pos_roi_per_this_image = int(min(pos_roi_per_image, pos_index.size))
-        if pos_index.size > 0:
-            pos_index = np.random.choice(
-                pos_index, size=pos_roi_per_this_image, replace=False)
-
-        # Select background RoIs as those within
-        # [neg_iou_thresh_lo, neg_iou_thresh_hi).
-        neg_index = np.where((max_iou < self.neg_iou_thresh_hi) &
-                             (max_iou >= self.neg_iou_thresh_lo))[0]
-        neg_roi_per_this_image = self.n_sample - pos_roi_per_this_image
-        neg_roi_per_this_image = int(min(neg_roi_per_this_image,
-                                         neg_index.size))
-        if neg_index.size > 0:
-            neg_index = np.random.choice(
-                neg_index, size=neg_roi_per_this_image, replace=False)
-
-        # The indices that we're selecting (both positive and negative).
-        keep_index = np.append(pos_index, neg_index) # 前left_pos_index个是参与角度回归的正样本
-        gt_label = gt_roi_label_left[keep_index]
-        gt_label[pos_roi_per_this_image:] = 0  # negative labels --> 0
-
-        sample_roi = roi[keep_index]
-        tmp_array = []
-        tmp_array2 = []
-        # ------------------------开始转换坐标-------------------------
-
-        xmid = Const.grid_width / 2
-        ymid = Const.grid_height / 2  # 中点，青色
-
-        xmin = xmid - 20
-        xmax = xmid + 20
-        ymin = ymid - 20
-        ymax = ymid + 20
-        
-        t = torch.tensor([[ymin, xmin, ymax, xmax]])
-        t_3d = generate_3d_bbox(t)
-        t_3d = getprojected_3dbox(t_3d, extrin[0], intrin[0])
-        t_2d_2d = get_outter(t_3d)
-        tmp_array.append(t_2d_2d)
-        tmp_array2.append(t)
-
-        xmid = Const.grid_width  - 30
-        ymid = Const.grid_height / 2  # xmax，ymid，最右端中点，紫色
-
-        xmin = xmid - 20
-        xmax = xmid + 20
-        ymin = ymid - 20
-        ymax = ymid + 20
-        
-        t = torch.tensor([[ymin, xmin, ymax, xmax]])
-        t_3d = generate_3d_bbox(t)
-        t_3d = getprojected_3dbox(t_3d, extrin[0], intrin[0])
-        t_2d_2d = get_outter(t_3d)
-        tmp_array.append(t_2d_2d)
-        tmp_array2.append(t)
-
-        xmid = 30
-        ymid = Const.grid_height / 2 # xmin, ymid 最左端中点，深蓝色
-
-        xmin = xmid - 20
-        xmax = xmid + 20
-        ymin = ymid - 20
-        ymax = ymid + 20
-        
-        t = torch.tensor([[ymin, xmin, ymax, xmax]])
-        t_3d = generate_3d_bbox(t)
-        t_3d = getprojected_3dbox(t_3d, extrin[0], intrin[0])
-        t_2d_2d = get_outter(t_3d)
-        tmp_array.append(t_2d_2d)
-        tmp_array2.append(t)
-
-        xmid = Const.grid_width / 2
-        ymid = Const.grid_height -30  # xmid，ymax，顶端中点，黄色
-
-        xmin = xmid - 20
-        xmax = xmid + 20
-        ymin = ymid - 20
-        ymax = ymid + 20
-        
-        t = torch.tensor([[ymin, xmin, ymax, xmax]])
-        t_3d = generate_3d_bbox(t)
-        t_3d = getprojected_3dbox(t_3d, extrin[0], intrin[0])
-        t_2d_2d = get_outter(t_3d)
-        tmp_array.append(t_2d_2d)
-        tmp_array2.append(t)
-
-        xmid = Const.grid_width / 2  # xmid，ymin，底端中点，绿色
-        ymid = 30
-
-        xmin = xmid - 20
-        xmax = xmid + 20
-        ymin = ymid - 20
-        ymax = ymid + 20
-        
-        t = torch.tensor([[ymin, xmin, ymax, xmax]])
-        t_3d = generate_3d_bbox(t)
-        t_3d = getprojected_3dbox(t_3d, extrin[0], intrin[0])
-        t_2d_2d = get_outter(t_3d)
-        tmp_array.append(t_2d_2d)
-        tmp_array2.append(t)
-        #-------------------------------------------------
-        #-------------------------------------------------
-        
-
-
-        roi_3d = generate_3d_bbox(sample_roi)
-        bbox_2d = getprojected_3dbox(roi_3d, extrin[0], intrin[0])
-        bbox_2d = get_outter(bbox_2d)
-
-        gt_roi_loc = bbox2loc(bbox_2d, gt_bbox[gt_assignment[keep_index]])
-        gt_loc = ((gt_roi_loc - np.array(loc_normalize_mean, np.float32)) / np.array(loc_normalize_std, np.float32))
-
-        return bbox_2d, sample_roi, gt_loc, gt_label, len(pos_index), tmp_array, t_3d, tmp_array2
-
-class ProposalTargetCreator_ori(object):
-    """Assign ground truth bounding boxes to given RoIs.
-
-    The :meth:`__call__` of this class generates training targets
-    for each object proposal.
-    This is used to train Faster RCNN [#]_.
-
-    .. [#] Shaoqing Ren, Kaiming He, Ross Girshick, Jian Sun. \
-    Faster R-CNN: Towards Real-Time Object Detection with \
-    Region Proposal Networks. NIPS 2015.
-
-    Args:
-        n_sample (int): The number of sampled regions.
-        pos_ratio (float): Fraction of regions that is labeled as a
-            foreground.
-        pos_iou_thresh (float): IoU threshold for a RoI to be considered as a
-            foreground.
-        neg_iou_thresh_hi (float): RoI is considered to be the background
-            if IoU is in
-            [:obj:`neg_iou_thresh_hi`, :obj:`neg_iou_thresh_hi`).
-        neg_iou_thresh_lo (float): See above.
-
-    """
-
-    def __init__(self,
-                 n_sample=128,
-                 pos_ratio=0.25, pos_iou_thresh=0.6,
-                 neg_iou_thresh_hi=0.5, neg_iou_thresh_lo=0.0
-                 ):
-        self.n_sample = n_sample
-        self.pos_ratio = pos_ratio
-        self.pos_iou_thresh = pos_iou_thresh
-        self.neg_iou_thresh_hi = neg_iou_thresh_hi
-        self.neg_iou_thresh_lo = neg_iou_thresh_lo  # NOTE:default 0.1 in py-faster-rcnn
-
-    def __call__(self, roi, bbox, label,
-                 loc_normalize_mean=(0., 0., 0., 0.),
-                 loc_normalize_std=(0.1, 0.1, 0.2, 0.2)):
-        """Assigns ground truth to sampled proposals.
-
-        This function samples total of :obj:`self.n_sample` RoIs
-        from the combination of :obj:`roi` and :obj:`bbox`.
-        The RoIs are assigned with the ground truth class labels as well as
-        bounding box offsets and scales to match the ground truth bounding
-        boxes. As many as :obj:`pos_ratio * self.n_sample` RoIs are
-        sampled as foregrounds.
-
-        Offsets and scales of bounding boxes are calculated using
-        :func:`model.utils.bbox_tools.bbox2loc`.
-        Also, types of input arrays and output arrays are same.
-
-        Here are notations.
-
-        * :math:`S` is the total number of sampled RoIs, which equals \
-            :obj:`self.n_sample`.
-        * :math:`L` is number of object classes possibly including the \
-            background.
-
-        Args:
-            roi (array): Region of Interests (RoIs) from which we sample.
-                Its shape is :math:`(R, 4)`
-            bbox (array): The coordinates of ground truth bounding boxes.
-                Its shape is :math:`(R', 4)`.
-            label (array): Ground truth bounding box labels. Its shape
-                is :math:`(R',)`. Its range is :math:`[0, L - 1]`, where
-                :math:`L` is the number of foreground classes.
-            loc_normalize_mean (tuple of four floats): Mean values to normalize
-                coordinates of bouding boxes.
-            loc_normalize_std (tupler of four floats): Standard deviation of
-                the coordinates of bounding boxes.
-
-        Returns:
-            (array, array, array):
-
-            * **sample_roi**: Regions of interests that are sampled. \
-                Its shape is :math:`(S, 4)`.
-            * **gt_roi_loc**: Offsets and scales to match \
-                the sampled RoIs to the ground truth bounding boxes. \
-                Its shape is :math:`(S, 4)`.
-            * **gt_roi_label**: Labels assigned to sampled RoIs. Its shape is \
-                :math:`(S,)`. Its range is :math:`[0, L]`. The label with \
-                value 0 is the background.
-
-        """
-        n_bbox, _ = bbox.shape
-
-        roi = np.concatenate((roi, bbox), axis=0)
-
-        pos_roi_per_image = np.round(self.n_sample * self.pos_ratio)
-        iou = bbox_iou(roi, bbox)
-        gt_assignment = iou.argmax(axis=1)
-        max_iou = iou.max(axis=1)
-        # Offset range of classes from [0, n_fg_class - 1] to [1, n_fg_class].
-        # The label with value 0 is the background.
-        gt_roi_label = label[gt_assignment] + 1
-
         # Select foreground RoIs as those with >= pos_iou_thresh IoU.
         pos_index = np.where(max_iou >= self.pos_iou_thresh)[0]
         pos_roi_per_this_image = int(min(pos_roi_per_image, pos_index.size))
@@ -498,18 +285,130 @@ class ProposalTargetCreator_ori(object):
 
         # The indices that we're selecting (both positive and negative).
         keep_index = np.append(pos_index, neg_index)
-        gt_roi_label = gt_roi_label[keep_index]
-        gt_roi_label[pos_roi_per_this_image:] = 0  # negative labels --> 0
+        gt_label = gt_roi_label_left[keep_index]
+        gt_label[pos_roi_per_this_image:] = 0
         sample_roi = roi[keep_index]
+        tmp_array = []
+        tmp_array2 = []
+        # ------------------------开始转换坐标-------------------------
+        # xmid = Const.grid_width / 2
+        # ymid = Const.grid_height / 2  # 中点，青色
+        # xmin = xmid - 20
+        # xmax = xmid + 20
+        # ymin = ymid - 20
+        # ymax = ymid + 20
+        # bev_points = np.array([[xmax, ymax, xmin, ymin]])
+        # t_3d = generate_3d_bbox(bev_points)[0].T[[1,0,2]] # transfer to [xxx], [yyy], [zzz]
+        # world_coord = get_worldcoord_from_worldgrid_3d(t_3d)
+        # img_coord = projection.get_imagecoord_from_worldcoord(world_coord, intrin[0], extrin[0]).T
+        # # img_coord = img_coord[:, np.where((img_coord[0] > 0) & (img_coord[1] > 0) &
+        # #                               (img_coord[0] < 1920) & (img_coord[1] < 1080))[0]].T # x, y in opencv annotation mode, right x, down y, [0,0] up left corner
+        # # print(img_coord.shape)
+        # t_2d_2d = get_outter([img_coord])
+        # tmp_array.append(t_2d_2d)
+        # bev_points = bev_points.reshape(4)[[3,2,1,0]]
+        # tmp_array2.append(bev_points)
 
-        # Compute offsets and scales to match sampled RoIs to the GTs.
-        # print(sample_roi.shape, bbox[gt_assignment[keep_index]].shape)
-        gt_roi_loc = bbox2loc(sample_roi, bbox[gt_assignment[keep_index]])
+        # xmid = Const.grid_width  - 30
+        # ymid = Const.grid_height / 2  # xmax，ymid，最右端中点，紫色
 
-        gt_roi_loc = ((gt_roi_loc - np.array(loc_normalize_mean, np.float32)
-                       ) / np.array(loc_normalize_std, np.float32))
+        # xmin = xmid - 20
+        # xmax = xmid + 20
+        # ymin = ymid - 20
+        # ymax = ymid + 20
+        
+        # bev_points = np.array([[xmax, ymax, xmin, ymin]])
+        # t_3d = generate_3d_bbox(bev_points)[0].T[[1,0,2]] # transfer to [xxx], [yyy], [zzz]
+        # world_coord = get_worldcoord_from_worldgrid_3d(t_3d)
+        # img_coord = projection.get_imagecoord_from_worldcoord(world_coord, intrin[0], extrin[0]).T
+        # # img_coord = img_coord[:, np.where((img_coord[0] > 0) & (img_coord[1] > 0) &
+        # #                               (img_coord[0] < 1920) & (img_coord[1] < 1080))[0]].T # x, y in opencv annotation mode, right x, down y, [0,0] up left corner
+        # t_2d_2d = get_outter([img_coord])
+        # tmp_array.append(t_2d_2d)
+        # bev_points = bev_points.reshape(4)[[3,2,1,0]]
+        # tmp_array2.append(bev_points)
 
-        return sample_roi, gt_roi_loc, gt_roi_label
+        # xmid = 30
+        # ymid = Const.grid_height / 2 # xmin, ymid 最左端中点，深蓝色
+        # # [xmid, ymid] = get_worldcoord_from_worldgrid([xmid, ymid])
+
+        # xmin = xmid - 20
+        # xmax = xmid + 20
+        # ymin = ymid - 20
+        # ymax = ymid + 20
+        
+        # bev_points = np.array([[xmax, ymax, xmin, ymin]])
+        # t_3d = generate_3d_bbox(bev_points)[0].T[[1,0,2]] # transfer to [xxx], [yyy], [zzz]
+        # world_coord = get_worldcoord_from_worldgrid_3d(t_3d)
+        # img_coord = projection.get_imagecoord_from_worldcoord(world_coord, intrin[0], extrin[0]).T
+        # # img_coord = img_coord[:, np.where((img_coord[0] > 0) & (img_coord[1] > 0) &
+        # #                               (img_coord[0] < 1920) & (img_coord[1] < 1080))[0]].T # x, y in opencv annotation mode, right x, down y, [0,0] up left corner
+        
+        # t_2d_2d = get_outter([img_coord])
+        # tmp_array.append(t_2d_2d)
+        # bev_points = bev_points.reshape(4)[[3,2,1,0]]
+        # tmp_array2.append(bev_points)
+
+        # xmid = Const.grid_width / 2
+        # ymid = Const.grid_height -30  # xmid，ymax，顶端中点，黄色
+        # # [xmid, ymid] = get_worldcoord_from_worldgrid([xmid, ymid])
+
+        # xmin = xmid - 20
+        # xmax = xmid + 20
+        # ymin = ymid - 20
+        # ymax = ymid + 20
+        
+        # bev_points = np.array([[xmax, ymax, xmin, ymin]])
+        # t_3d = generate_3d_bbox(bev_points)[0].T[[1,0,2]] # transfer to [xxx], [yyy], [zzz]
+        # world_coord = get_worldcoord_from_worldgrid_3d(t_3d)
+        # img_coord = projection.get_imagecoord_from_worldcoord(world_coord, intrin[0], extrin[0]).T
+        # # img_coord = img_coord[:, np.where((img_coord[0] > 0) & (img_coord[1] > 0) &
+        # #                               (img_coord[0] < 1920) & (img_coord[1] < 1080))[0]].T # x, y in opencv annotation mode, right x, down y, [0,0] up left corner
+        # t_2d_2d = get_outter([img_coord])
+        # tmp_array.append(t_2d_2d)
+        # bev_points = bev_points.reshape(4)[[3,2,1,0]]
+        # tmp_array2.append(bev_points)
+        # xmid = Const.grid_width / 2  # xmid，ymin，底端中点，绿色
+        # ymid = 30
+        # # [xmid, ymid] = get_worldcoord_from_worldgrid([xmid, ymid])
+        # # img_coord = get_imagecoord_from_worldcoord(world_coord, intrin[0], extrin[0])
+
+        # xmin = xmid - 20
+        # xmax = xmid + 20
+        # ymin = ymid - 20
+        # ymax = ymid + 20
+        
+        # bev_points = np.array([[xmax, ymax, xmin, ymin]])
+        # t_3d = generate_3d_bbox(bev_points)[0].T[[1,0,2]] # transfer to [xxx], [yyy], [zzz]
+        # world_coord = get_worldcoord_from_worldgrid_3d(t_3d)
+        # img_coord = projection.get_imagecoord_from_worldcoord(world_coord, intrin[0], extrin[0]).T
+        # # img_coord = img_coord[:, np.where((img_coord[0] > 0) & (img_coord[1] > 0) &
+        # #                               (img_coord[0] < 1920) & (img_coord[1] < 1080))[0]].T # x, y in opencv annotation mode, right x, down y, [0,0] up left corner
+        # t_2d_2d = get_outterbbox_2d([img_coord])
+        # tmp_array.append(t_2d_2d)
+        # bev_points = bev_points.reshape(4)[[3,2,1,0]]
+        # tmp_array2.append(bev_points)
+        #-------------------------------------------------
+        #-------------------------------------------------
+        roi_outter = []
+        sample_roi2 = sample_roi[:, [3, 2, 1, 0]]
+        # roi_3d = generate_3d_bbox(sample_roi2)
+        for sam_roi in sample_roi2:
+            sam_roi = np.array([sam_roi])
+            t_3d = generate_3d_bbox(sam_roi)[0].T[[1,0,2]] # transfer to [xxx], [yyy], [zzz]
+            # print(t_3d.shape)
+            world_coord = get_worldcoord_from_worldgrid_3d(t_3d)
+            img_coord = projection.get_imagecoord_from_worldcoord(world_coord, intrin[0], extrin[0]).T
+            t_2d_2d = get_outter([img_coord])
+            roi_outter.append(t_2d_2d[0])
+        bbox_2d = np.array(roi_outter, dtype=np.float)
+        # print(bbox_2d.shape)
+        # print(gt_bbox[gt_assignment[keep_index]])
+        gt_roi_loc = bbox2loc(bbox_2d, gt_bbox[gt_assignment[keep_index]])
+        gt_loc = ((gt_roi_loc - np.array(loc_normalize_mean, np.float32)) / np.array(loc_normalize_std, np.float32))
+        # print(tmp_array2)
+        return bbox_2d, sample_roi, gt_loc, gt_label, len(pos_index), None, t_3d, keep_index
+
 
 class AnchorTargetCreator(object):
     """Assign the ground truth bounding boxes to anchors.
@@ -537,7 +436,7 @@ class AnchorTargetCreator(object):
     """
 
     def __init__(self,
-                 n_sample=512,
+                 n_sample=128,
                  pos_iou_thresh=0.8, neg_iou_thresh=0.3,
                  pos_ratio=0.8):
         self.n_sample = n_sample
@@ -596,11 +495,10 @@ class AnchorTargetCreator(object):
         label = _unmap(label, n_anchor, inside_index, fill=-1)
         loc = _unmap(loc, n_anchor, inside_index, fill=0)
 
-        # -----------------------------------------------------------
-        # tmp = np.zeros((Const.grid_height, Const.grid_width), dtype=np.uint8())
-        # import cv2
-        # tmp = cv2.cvtColor(tmp, cv2.COLOR_GRAY2BGR)
-        # print(len(label[inside_index]), len(anchor))
+        # a = np.zeros((Const.grid_height, Const.grid_width))
+        # bevimg = np.uint8(a)
+        # tmp = cv2.cvtColor(bevimg, cv2.COLOR_GRAY2BGR)
+
         # for idx, anc in enumerate(anchor):
         #     if label[inside_index][idx] == 1:
         #         cv2.rectangle(tmp, (int(anc[1]), int(anc[0])), (int(anc[3]), int(anc[2])), color=(255, 0, 0))
@@ -856,13 +754,6 @@ def generate_3d_bbox2(pred_bboxs):
     return res
 
 def getimage_pt2(points3d, extrin, intrin):
-    # 此处输入的是以左下角为原点的坐标，输出的是opencv格式的左上角为原点的坐标
-    newpoints3d = np.vstack((points3d, 1.0))
-    Zc = np.dot(extrin, newpoints3d)[-1]
-    imagepoints = (np.dot(intrin, np.dot(extrin, newpoints3d)) / Zc).astype(np.int)
-    return [imagepoints[0, 0], imagepoints[1, 0]]
-
-def getprojected_3dbox2(points3ds, extrin, intrin, isleft = True):
     if isleft:
         extrin_ = extrin[0].numpy()
         intrin_ = intrin[0].numpy()
@@ -872,11 +763,6 @@ def getprojected_3dbox2(points3ds, extrin, intrin, isleft = True):
 
     extrin_big = extrin_.repeat(points3ds.shape[0] * 8, axis=0)
     intrin_big = intrin_.repeat(points3ds.shape[0] * 8, axis=0)
-
-    points3ds_big = points3ds.reshape(points3ds.shape[0], 8, 3, 1)
-    homog = np.ones((points3ds.shape[0], 8, 1, 1))
-    homo3dpts = np.concatenate((points3ds_big, homog), 2).reshape(points3ds.shape[0] * 8, 4, 1)
-    res = np.matmul(extrin_big, homo3dpts)
     Zc = res[:, -1]
     res2 = np.matmul(intrin_big, res)
     imagepoints = (res2.reshape(-1, 3) / Zc).reshape((points3ds.shape[0], 8, 3))[:, :, :2].astype(int)
@@ -908,20 +794,18 @@ def generate_3d_bbox(pred_bboxs):
     for i in range(pred_bboxs.shape[0]):
         # xmin, ymin, xmax, ymax = pred_bboxs[i]
         xmax, ymax, xmin, ymin = pred_bboxs[i]
-        xmin, ymin = get_worldcoord_from_worldgrid([xmin, ymin])
-        xmax, ymax = get_worldcoord_from_worldgrid([xmax, ymax])
         
-        pt0 = [xmax, Const.grid_height - ymin, 0]
-        pt1 = [xmin, Const.grid_height - ymin, 0]
-        pt2 = [xmin, Const.grid_height - ymax, 0]
-        pt3 = [xmax, Const.grid_height - ymax, 0]
-        pt_h_0 = [xmax, Const.grid_height - ymin, Const.car_height]
-        pt_h_1 = [xmin, Const.grid_height - ymin, Const.car_height]
-        pt_h_2 = [xmin, Const.grid_height - ymax, Const.car_height]
-        pt_h_3 = [xmax, Const.grid_height - ymax, Const.car_height]
-        if Const.grid_height - ymax < 0:
-            print("y", Const.grid_height - ymax, Const.grid_height, ymax, ymin)
-            print("x", xmax, xmin)
+        pt0 = [xmax, ymin, 0]
+        pt1 = [xmin, ymin, 0]
+        pt2 = [xmin, ymax, 0]
+        pt3 = [xmax, ymax, 0]
+        pt_h_0 = [xmax, ymin, Const.car_height]
+        pt_h_1 = [xmin, ymin, Const.car_height]
+        pt_h_2 = [xmin, ymax, Const.car_height]
+        pt_h_3 = [xmax, ymax, Const.car_height]
+        # if Const.grid_height - ymax < 0:
+        #     print("y", Const.grid_height - ymax, Const.grid_height, ymax, ymin)
+        #     print("x", xmax, xmin)
         boxes_3d.append([pt0, pt1, pt2, pt3, pt_h_0, pt_h_1, pt_h_2, pt_h_3])
     return np.array(boxes_3d).reshape((n_bbox, 8, 3))
 
@@ -929,9 +813,15 @@ def getimage_pt(points3d, extrin, intrin):
     # 此处输入的是以左下角为原点的坐标，输出的是opencv格式的左上角为原点的坐标
     newpoints3d = np.vstack((points3d, 1.0))
     Zc = np.dot(extrin, newpoints3d)[-1]
+    
     imagepoints = (np.dot(intrin, np.dot(extrin, newpoints3d)) / Zc).astype(np.int)
+    
     return [imagepoints[0, 0], imagepoints[1, 0]]
     # return [imagepoints[0, 0], imagepoints[1, 0]]
+
+from detectors.utils import projection
+
+
 
 def getprojected_3dbox(points3ds, extrin, intrin):
     bboxes = []
@@ -963,3 +853,20 @@ def get_worldcoord_from_worldgrid(worldgrid):
         # coord_x = -300 + 2.5 * grid_x
         # coord_y = -900 + 2.5 * grid_y
         return np.array([coord_x, coord_y])
+
+def get_worldcoord_from_worldgrid_3d(worldgrid):
+        # datasets default unit: centimeter & origin: (-300,-900)
+        grid_x, grid_y, grid_z = worldgrid
+        coord_x = -300 + 2.5 * grid_x
+        coord_y = -900 + 2.5 * grid_y
+        return np.array([coord_x, coord_y, grid_z])
+
+def get_imagecoord_from_worldcoord(world_coord, intrinsic_mat, extrinsic_mat):
+    project_mat = intrinsic_mat @ extrinsic_mat
+    # print(project_mat)
+    project_mat = np.delete(project_mat, 2, 1)
+    # print(project_mat)
+    world_coord = np.concatenate([world_coord, np.ones([1, world_coord.shape[1]])], axis=0)
+    image_coord = project_mat @ world_coord
+    image_coord = image_coord[:2, :] / image_coord[2, :]
+    return image_coord

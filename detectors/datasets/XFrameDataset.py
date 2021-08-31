@@ -38,6 +38,7 @@ class XFrameDataset(VisionDataset):
         self.mark = {}
         self.cls = {}
         self.download(frame_range)
+        self.generate_3dbased(frame_range)
 
         self.gt_fpath = os.path.join(self.root, 'gt.txt')
         if not os.path.exists(self.gt_fpath) or force_download:
@@ -86,47 +87,48 @@ class XFrameDataset(VisionDataset):
         os.makedirs(os.path.dirname(self.gt_fpath), exist_ok=True)
         np.savetxt(self.gt_fpath, og_gt, '%d')
 
-    # def download(self, frame_range):
-    #     for fname in sorted(os.listdir(os.path.join(self.root, 'annotations_positions'))):
-    #         frame = int(fname.split('.')[0])
-    #         if frame in frame_range:
-    #             with open(os.path.join(self.root, 'annotations_positions', fname)) as json_file:
-    #                 all_pedestrians = json.load(json_file)
-    #             i_s, j_s, v_s = [], [], []
-    #             head_row_cam_s, head_col_cam_s = [[] for _ in range(self.num_cam)], \
-    #                                              [[] for _ in range(self.num_cam)]
-    #             foot_row_cam_s, foot_col_cam_s, v_cam_s = [[] for _ in range(self.num_cam)], \
-    #                                                       [[] for _ in range(self.num_cam)], \
-    #                                                       [[] for _ in range(self.num_cam)]
-    #             for single_pedestrian in all_pedestrians:
-    #                 x, y = self.base.get_worldgrid_from_pos(single_pedestrian['positionID'])
-    #                 if self.base.indexing == 'xy':
-    #                     i_s.append(int(y / self.grid_reduce))
-    #                     j_s.append(int(x / self.grid_reduce))
-    #                 else:
-    #                     i_s.append(int(x / self.grid_reduce))
-    #                     j_s.append(int(y / self.grid_reduce))
-    #                 v_s.append(single_pedestrian['personID'] + 1 if self.reID else 1)
-    #                 for cam in range(self.num_cam):
-    #                     x = max(min(int((single_pedestrian['views'][cam]['xmin'] +
-    #                                      single_pedestrian['views'][cam]['xmax']) / 2), self.img_shape[1] - 1), 0)
-    #                     y_head = max(single_pedestrian['views'][cam]['ymin'], 0)
-    #                     y_foot = min(single_pedestrian['views'][cam]['ymax'], self.img_shape[0] - 1)
-    #                     if x > 0 and y > 0:
-    #                         head_row_cam_s[cam].append(y_head)
-    #                         head_col_cam_s[cam].append(x)
-    #                         foot_row_cam_s[cam].append(y_foot)
-    #                         foot_col_cam_s[cam].append(x)
-    #                         v_cam_s[cam].append(single_pedestrian['personID'] + 1 if self.reID else 1)
-    #             occupancy_map = coo_matrix((v_s, (i_s, j_s)), shape=self.reducedgrid_shape)
-    #             self.map_gt[frame] = occupancy_map
-    #             self.imgs_head_foot_gt[frame] = {}
-    #             for cam in range(self.num_cam):
-    #                 img_gt_head = coo_matrix((v_cam_s[cam], (head_row_cam_s[cam], head_col_cam_s[cam])),
-    #                                          shape=self.img_shape)
-    #                 img_gt_foot = coo_matrix((v_cam_s[cam], (foot_row_cam_s[cam], foot_col_cam_s[cam])),
-    #                                          shape=self.img_shape)
-    #                 self.imgs_head_foot_gt[frame][cam] = [img_gt_head, img_gt_foot]
+
+    def generate_3dbased(self, frame_range):
+        for fname in sorted(os.listdir(os.path.join(self.root, 'annotations_positions'))):
+            frame = int(fname.split('.')[0])
+            if frame in frame_range:
+                frame_per_cam_bbox = [[] for _ in range(self.num_cam)]
+                with open(os.path.join(self.root, 'annotations_positions', fname)) as json_file:
+                    all_pedestrians = json.load(json_file)
+                for single_pedestrian in all_pedestrians:
+                    def is_in_cam(cam):
+                        return not (single_pedestrian['views'][cam]['xmin'] == -1 and
+                                    single_pedestrian['views'][cam]['xmax'] == -1 and
+                                    single_pedestrian['views'][cam]['ymin'] == -1 and
+                                    single_pedestrian['views'][cam]['ymax'] == -1)
+
+                    in_cam_range = sum(is_in_cam(cam) for cam in range(self.num_cam))
+                    if not in_cam_range:
+                        continue
+                    x, y = self.base.get_worldgrid_from_pos(single_pedestrian['positionID'])
+                    ymin_od, xmin_od, ymax_od, xmax_od = max(min(int(x - 10), self.img_shape[0] - 1), 0),\
+                                                         max(min(int(y - 10), self.img_shape[1] - 1), 0),\
+                                                         max(min(int(x + 10), self.img_shape[0] - 1), 0),\
+                                                         max(min(int(y + 10), self.img_shape[1] - 1), 0)
+                    sample = np.array([[ymin_od, xmin_od, ymax_od, xmax_od]])
+                    sample_roi2 = sample[:, [3, 2, 1, 0]]
+                    for cam in range(self.num_cam):
+                        # 根据中心点坐标制作gt perview box，注意，刚读出来的xy是颠倒的
+                        sam_roi = sample_roi2
+                        t_3d = generate_3d_bbox(sam_roi)[0].T[[1,0,2]] # transfer to [xxx], [yyy], [zzz]
+                        world_coord = get_worldcoord_from_worldgrid_3d(t_3d)
+                        img_coord = get_imagecoord_from_worldcoord(world_coord, self.intrinsic_matrix[cam], self.extrinsic_matrix[cam]).T
+                        t_2d_2d = get_outter([img_coord])
+                        
+                        if is_in_cam(cam):
+                            t_2d_td = np.array(t_2d_2d)
+                            t_2d_2d[:, 0::2] = np.clip(t_2d_td[:, 0::2], 0, Const.ori_img_height).astype(np.int)  # ymax, ymin
+                            t_2d_2d[:, 1::2] = np.clip(t_2d_td[:, 1::2], 0, Const.ori_img_width).astype(np.int)  # xmax, xmin
+                            frame_per_cam_bbox[cam].append(list(t_2d_2d[0]))
+                        else:
+                            frame_per_cam_bbox[cam].append([-1, -1, -1, -1])
+                self.bboxes[frame] = frame_per_cam_bbox
+
 
     def download(self, frame_range):
         for fname in sorted(os.listdir(os.path.join(self.root, 'annotations_positions'))):
@@ -139,25 +141,24 @@ class XFrameDataset(VisionDataset):
                 with open(os.path.join(self.root, 'annotations_positions', fname)) as json_file:
                     all_pedestrians = json.load(json_file)
                 for single_pedestrian in all_pedestrians:
+                    def is_in_cam(cam):
+                        return not (single_pedestrian['views'][cam]['xmin'] == -1 and
+                                    single_pedestrian['views'][cam]['xmax'] == -1 and
+                                    single_pedestrian['views'][cam]['ymin'] == -1 and
+                                    single_pedestrian['views'][cam]['ymax'] == -1)
+
+                    in_cam_range = sum(is_in_cam(cam) for cam in range(self.num_cam))
+                    if not in_cam_range:
+                        continue
                     x, y = self.base.get_worldgrid_from_pos(single_pedestrian['positionID'])
                     frame_wxy.append([y / self.grid_reduce, x / self.grid_reduce])
-
-                    ymin_od, xmin_od, ymax_od, xmax_od = max(min(int(x - 15), self.img_shape[0] - 1), 0),\
-                                                         max(min(int(y - 15), self.img_shape[1] - 1), 0),\
-                                                         max(min(int(x + 15), self.img_shape[0] - 1), 0),\
-                                                         max(min(int(y + 15), self.img_shape[1] - 1), 0)
+                    ymin_od, xmin_od, ymax_od, xmax_od = max(min(int(x - 10), self.img_shape[0] - 1), 0),\
+                                                         max(min(int(y - 10), self.img_shape[1] - 1), 0),\
+                                                         max(min(int(x + 10), self.img_shape[0] - 1), 0),\
+                                                         max(min(int(y + 10), self.img_shape[1] - 1), 0)
                     frame_bbox_od.append([ymin_od, xmin_od, ymax_od, xmax_od])
-
                     frame_cls.append([0])
 
-                    for cam in range(self.num_cam):
-                        ymin, xmin, ymax, xmax = max(min(int((single_pedestrian['views'][cam]['ymin'])), self.img_shape[0] - 1), 0),\
-                                                 max(min(int((single_pedestrian['views'][cam]['xmin'])), self.img_shape[1] - 1), 0),\
-                                                 max(min(int((single_pedestrian['views'][cam]['ymax'])), self.img_shape[0] - 1), 0),\
-                                                 max(min(int((single_pedestrian['views'][cam]['xmax'])), self.img_shape[1] - 1), 0)
-                        frame_per_cam_bbox[cam].append([ymin, xmin, ymax, xmax])
-
-                self.bboxes[frame] = frame_per_cam_bbox
                 self.world_xy[frame] = frame_wxy
                 self.bboxes_od[frame] = frame_bbox_od
                 self.cls[frame] = frame_cls
@@ -183,42 +184,68 @@ class XFrameDataset(VisionDataset):
         return len(self.world_xy.keys())
 
 
-# def test():
-#     from multiview_detector.datasets.Wildtrack import Wildtrack
-#     # from multiview_detector.datasets.MultiviewX import MultiviewX
-#     from multiview_detector.utils.projection import get_worldcoord_from_imagecoord
-#     dataset = frameDataset(Wildtrack(os.path.expanduser('~/Data/Wildtrack')))
-#     # test projection
-#     world_grid_maps = []
-#     xx, yy = np.meshgrid(np.arange(0, 1920, 20), np.arange(0, 1080, 20))
-#     H, W = xx.shape
-#     image_coords = np.stack([xx, yy], axis=2).reshape([-1, 2])
-#     import matplotlib.pyplot as plt
-#     for cam in range(dataset.num_cam):
-#         world_coords = get_worldcoord_from_imagecoord(image_coords.transpose(), dataset.base.intrinsic_matrices[cam],
-#                                                       dataset.base.extrinsic_matrices[cam])
-#         world_grids = dataset.base.get_worldgrid_from_worldcoord(world_coords).transpose().reshape([H, W, 2])
-#         world_grid_map = np.zeros(dataset.worldgrid_shape)
-#         for i in range(H):
-#             for j in range(W):
-#                 x, y = world_grids[i, j]
-#                 if dataset.base.indexing == 'xy':
-#                     if x in range(dataset.worldgrid_shape[1]) and y in range(dataset.worldgrid_shape[0]):
-#                         world_grid_map[int(y), int(x)] += 1
-#                 else:
-#                     if x in range(dataset.worldgrid_shape[0]) and y in range(dataset.worldgrid_shape[1]):
-#                         world_grid_map[int(x), int(y)] += 1
-#         world_grid_map = world_grid_map != 0
-#         plt.imshow(world_grid_map)
-#         plt.show()
-#         world_grid_maps.append(world_grid_map)
-#         pass
-#     plt.imshow(np.sum(np.stack(world_grid_maps), axis=0))
-#     plt.show()
-#     pass
-#     imgs, map_gt, imgs_gt, _ = dataset.__getitem__(0)
-#     pass
-#
-#
-# if __name__ == '__main__':
-#     test()
+def is_in_cam(cam):
+    return not (single_pedestrian['views'][cam]['xmin'] == -1 and
+                                single_pedestrian['views'][cam]['xmax'] == -1 and
+                                single_pedestrian['views'][cam]['ymin'] == -1 and
+                                single_pedestrian['views'][cam]['ymax'] == -1)
+
+def get_outter(projected_3dboxes):
+    outter_boxes = []
+    for boxes in projected_3dboxes:
+        xmax = max(boxes[:, 0])
+        xmin = min(boxes[:, 0])
+        ymax = max(boxes[:, 1])
+        ymin = min(boxes[:, 1])
+        outter_boxes.append([ymin, xmin, ymax, xmax])
+    return np.array(outter_boxes, dtype=np.float)
+
+
+def get_worldcoord_from_worldgrid(worldgrid):
+        # datasets default unit: centimeter & origin: (-300,-900)
+        grid_x, grid_y = worldgrid
+        coord_x = -300 + 2.5 * grid_x
+        coord_y = -900 + 2.5 * grid_y
+        # coord_x = -300 + 2.5 * grid_x
+        # coord_y = -900 + 2.5 * grid_y
+        return np.array([coord_x, coord_y])
+
+def generate_3d_bbox(pred_bboxs):
+    # 输出以左下角为原点的3d坐标
+    n_bbox = pred_bboxs.shape[0]
+    boxes_3d = [] #
+    for i in range(pred_bboxs.shape[0]):
+        # xmin, ymin, xmax, ymax = pred_bboxs[i]
+        xmax, ymax, xmin, ymin = pred_bboxs[i]
+        
+        pt0 = [xmax, ymin, 0]
+        pt1 = [xmin, ymin, 0]
+        pt2 = [xmin, ymax, 0]
+        pt3 = [xmax, ymax, 0]
+        pt_h_0 = [xmax, ymin, Const.car_height]
+        pt_h_1 = [xmin, ymin, Const.car_height]
+        pt_h_2 = [xmin, ymax, Const.car_height]
+        pt_h_3 = [xmax, ymax, Const.car_height]
+        # if Const.grid_height - ymax < 0:
+        #     print("y", Const.grid_height - ymax, Const.grid_height, ymax, ymin)
+        #     print("x", xmax, xmin)
+        boxes_3d.append([pt0, pt1, pt2, pt3, pt_h_0, pt_h_1, pt_h_2, pt_h_3])
+    return np.array(boxes_3d).reshape((n_bbox, 8, 3))
+
+
+def get_worldcoord_from_worldgrid_3d(worldgrid):
+        # datasets default unit: centimeter & origin: (-300,-900)
+        grid_x, grid_y, grid_z = worldgrid
+        coord_x = -300 + 2.5 * grid_x
+        coord_y = -900 + 2.5 * grid_y
+        return np.array([coord_x, coord_y, grid_z])
+
+def get_imagecoord_from_worldcoord(world_coord, intrinsic_mat, extrinsic_mat):
+    project_mat = intrinsic_mat @ extrinsic_mat
+    # print(project_mat)
+    # project_mat = np.delete(project_mat, 2, 1)
+    # print(project_mat)
+    world_coord = np.concatenate([world_coord, np.ones([1, world_coord.shape[1]])], axis=0)
+    image_coord = project_mat @ world_coord
+    image_coord = image_coord[:2, :] / image_coord[2, :]
+    return image_coord

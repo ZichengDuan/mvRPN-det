@@ -1,0 +1,7 @@
+Traceback (most recent call last):
+  File "main.py", line 16, in <module>
+    from detectors.models.persp_trans_detector import PerspTransDetector
+  File "/root/deep_learning/dzc/mvRPN-det/detectors/models/persp_trans_detector.py", line 56
+    self.rpn = RegionProposalNetwork(in_channels=3586, mid_channels=3586, ratios=[1], anchor_scales=[1* (4 / (Const.reduce)), 1.5* (4 / (Const.reduce))], 2* (4 / (Const.reduce)), 1.5* (4 / (Const.reduce))]).cuda()
+                                                                                                                                                                                                            ^
+SyntaxError: invalid syntax

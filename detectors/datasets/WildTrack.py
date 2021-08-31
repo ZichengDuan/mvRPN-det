@@ -3,8 +3,6 @@ import numpy as np
 import cv2
 import xml.etree.ElementTree as ET
 import re
-import warnings
-warnings.filterwarnings("ignore")
 from torchvision.datasets import VisionDataset
 
 intrinsic_camera_matrix_filenames = ['intr_CVLab1.xml', 'intr_CVLab2.xml', 'intr_CVLab3.xml', 'intr_CVLab4.xml',
@@ -14,12 +12,12 @@ extrinsic_camera_matrix_filenames = ['extr_CVLab1.xml', 'extr_CVLab2.xml', 'extr
 
 
 class Wildtrack(VisionDataset):
-    def __init__(self, root, args = None):
-        super().__init__(root, args)
+    def __init__(self, root):
+        super().__init__(root)
         # WILDTRACK has ij-indexing: H*W=480*1440, so x should be \in [0,480), y \in [0,1440)
         # WILDTRACK has in-consistent unit: centi-meter (cm) for calibration & pos annotation,
         self.__name__ = 'Wildtrack'
-        self.img_shape, self.worldgrid_shape = [1080, 1920], [1200, 3600]  # H,W; N_row,N_col
+        self.img_shape, self.worldgrid_shape = [1080, 1920], [480, 1440]  # H,W; N_row,N_col
         self.num_cam, self.num_frame = 7, 2000
         # x,y actually means i,j in Wildtrack, which correspond to h,w
         self.indexing = 'ij'
@@ -63,6 +61,13 @@ class Wildtrack(VisionDataset):
         coord_y = -900 + 2.5 * grid_y
         return np.array([coord_x, coord_y])
 
+    def get_worldcoord_from_worldgrid_3d(self, worldgrid):
+        # datasets default unit: centimeter & origin: (-300,-900)
+        grid_x, grid_y, grid_z = worldgrid
+        coord_x = -300 + 2.5 * grid_x
+        coord_y = -900 + 2.5 * grid_y
+        return np.array([coord_x, coord_y, grid_z])
+
     def get_worldcoord_from_pos(self, pos):
         grid = self.get_worldgrid_from_pos(pos)
         return self.get_worldcoord_from_worldgrid(grid)
@@ -91,13 +96,9 @@ class Wildtrack(VisionDataset):
         rotation_matrix, _ = cv2.Rodrigues(rvec)
         translation_matrix = np.array(tvec, dtype=np.float).reshape(3, 1)
         extrinsic_matrix = np.hstack((rotation_matrix, translation_matrix))
-        
-        # for i in range(3):
-        #     extrinsic_matrix[i,3] /= 10
 
         return intrinsic_matrix, extrinsic_matrix
 
-    # 只是用来生成视频用的似乎
     def read_pom(self):
         bbox_by_pos_cam = {}
         cam_pos_pattern = re.compile(r'(\d+) (\d+)')
@@ -115,31 +116,3 @@ class Wildtrack(VisionDataset):
                         bbox_by_pos_cam[pos][cam] = [max(left, 0), max(top, 0),
                                                      min(right, 1920 - 1), min(bottom, 1080 - 1)]
         return bbox_by_pos_cam
-
-
-def test():
-    from multiview_detector.utils.projection import get_imagecoord_from_worldcoord
-    dataset = Wildtrack(os.path.expanduser('/home/dzc/Data/Wildtrack'))
-    pom = dataset.read_pom()
-
-    foot_3ds = dataset.get_worldcoord_from_pos(np.arange(np.product(dataset.worldgrid_shape)))
-    errors = []
-    for cam in range(dataset.num_cam):
-        projected_foot_2d = get_imagecoord_from_worldcoord(foot_3ds, dataset.intrinsic_matrices[cam],
-                                                           dataset.extrinsic_matrices[cam])
-        for pos in range(np.product(dataset.worldgrid_shape)):
-            bbox = pom[pos][cam]
-            foot_3d = dataset.get_worldcoord_from_pos(pos)
-            if bbox is None:
-                continue
-            foot_2d = [(bbox[0] + bbox[2]) / 2, bbox[3]]
-            p_foot_2d = projected_foot_2d[:, pos]
-            p_foot_2d = np.maximum(p_foot_2d, 0)
-            p_foot_2d = np.minimum(p_foot_2d, [1920, 1080])
-            errors.append(np.linalg.norm(p_foot_2d - foot_2d))
-
-    print(f'average error in image pixels: {np.average(errors)}')
-    pass
-
-if __name__ == '__main__':
-    test()

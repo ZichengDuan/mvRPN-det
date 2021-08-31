@@ -52,8 +52,8 @@ class PerspTransDetector(nn.Module):
             self.proj_mats = [torch.from_numpy(map_zoom_mat @ imgcoord2worldgrid_matrices[cam] @ img_zoom_mat)
                               for cam in range(self.num_cam)]
 
-        self.backbone = nn.Sequential(*list(resnet18(pretrained=False, replace_stride_with_dilation=[False, False, False]).children())[:-2]).cuda()
-        self.rpn = RegionProposalNetwork(in_channels=3586, mid_channels=3586, ratios=[1], anchor_scales=[1* (4 / (Const.reduce))]).cuda()
+        self.backbone = nn.Sequential(*list(resnet18(pretrained=True, replace_stride_with_dilation=[False, False, True]).children())[:-2]).cuda()
+        self.rpn = RegionProposalNetwork(in_channels=3586, mid_channels=3586, ratios=[1], anchor_scales=[2, 4]).cuda()
 
 
     def forward(self, imgs, frame, gt_boxes = None, epoch = None, visualize=False, train = True, mark = None):
@@ -71,10 +71,10 @@ class PerspTransDetector(nn.Module):
             img_feature = F.interpolate(img_feature, self.upsample_shape, mode='bilinear')
 
             # print(img_feature.shape)
-            # if cam == 0:
-            #     plt.imsave("img_norm_0.jpg", img_feature[0][0].detach().cpu().numpy())
-            # # else:
-            # #     plt.imsave("img_norm_1.jpg", img_feature[0][0].cpu().numpy())
+            if cam == 0:
+                plt.imsave("img_norm_0.jpg", img_feature[0][0].detach().cpu().numpy())
+            # else:
+            #     plt.imsave("img_norm_1.jpg", img_feature[0][0].cpu().numpy())
 
             img_featuremap.append(img_feature)
 
@@ -82,10 +82,9 @@ class PerspTransDetector(nn.Module):
 
             world_feature = kornia.warp_perspective(img_feature.cuda(), proj_mat, self.reducedgrid_shape) # 0.0142 * 2 = 0.028
 
-            world_feature = kornia.vflip(world_feature)
+            # world_feature = kornia.vflip(world_feature)
             world_features.append(world_feature.cuda())
-            # if cam == 5:
-            #     plt.imsave("world_features.jpg", torch.norm(world_feature[0].detach(), dim=0).cpu().numpy())
+            # plt.imsave("world_features_%d.jpg" % cam, torch.norm(world_feature[0].detach(), dim=0).cpu().numpy())
 
         world_features = torch.cat(world_features + [self.coord_map.repeat([B, 1, 1, 1]).cuda()], dim=1)
         plt.imsave("world_features.jpg", torch.norm(world_features[0].detach(), dim=0).cpu().numpy())

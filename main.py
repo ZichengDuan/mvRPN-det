@@ -59,7 +59,7 @@ def main(args):
 
     # model
     model = PerspTransDetector(train_set)
-    roi_head = VGG16RoIHead(Const.roi_classes + 1,  7, 1/Const.reduce)
+    roi_head = VGG16RoIHead(Const.roi_classes + 1, 7, 1/Const.reduce)
     optimizer = optim.Adam(params=itertools.chain(model.parameters(), roi_head.parameters()), lr=args.lr, weight_decay=args.weight_decay)
     print('Settings:')
     print(vars(args))
@@ -72,19 +72,21 @@ def main(args):
     # roi_head.load_state_dict(torch.load('%s/roi_rpn_head_%d.pth' % (Const.modelsavedir, 30)))
     print()
     # model.load_state_dict(torch.load("%s/mvdet_rpn_%d.pth" % (Const.modelsavedir, 4)))
+    # model.load_state_dict(torch.load("%s/mvdet_rpn_%d.pth" % (Const.modelsavedir, 1)))
+    # roi_head.load_state_dict(torch.load("%s/roi_rpn_head_%d.pth" % (Const.modelsavedir, 1)))
+
     for epoch in tqdm.tqdm(range(1, args.epochs + 1)):
         if not args.resume:
             print('Training...')
-            # model.load_state_dict(torch.load("%s/mvdet_sep_rpn_%d.pth" % (Const.modelsavedir, 10)))
-            # roi_head.load_state_dict(torch.load("%s/roi_rpn_head_%d.pth" % (Const.modelsavedir, 10)))
             loss = trainer.train(epoch, train_loader, optimizer, writer)
             torch.save(model.state_dict(), os.path.join('%s/mvdet_rpn_%d.pth' % (Const.modelsavedir, epoch)))
             torch.save(roi_head.state_dict(), os.path.join('%s/roi_rpn_head_%d.pth' % (Const.modelsavedir, epoch)))
-            # trainer.test(epoch, test_looftFrameDatasetader, writer)
+            trainer.test(epoch, test_loader, writer)
+
         else:
             print('Testing...')
-            model.load_state_dict(torch.load("%s/mvdet_rpn_%d.pth" % (Const.modelsavedir, 10)))
-            roi_head.load_state_dict(torch.load("%s/roi_rpn_head_%d.pth" % (Const.modelsavedir, 10)))
+            model.load_state_dict(torch.load("%s/mvdet_rpn_%d.pth" % (Const.modelsavedir, 11)))
+            roi_head.load_state_dict(torch.load("%s/roi_rpn_head_%d.pth" % (Const.modelsavedir, 11)))
             trainer.test(epoch, test_loader, writer)
             break
     writer.close()
@@ -99,7 +101,7 @@ if __name__ == '__main__':
     parser.add_argument('-j', '--num_workers', type=int, default=8)
     parser.add_argument('-b', '--batch_size', type=int, default=1, metavar='N',
                         help='input batch size for training (default: 1)')
-    parser.add_argument('--epochs', type=int, default=35, metavar='N', help='number of epochs to train (default: 10)')
+    parser.add_argument('--epochs', type=int, default=15, metavar='N', help='number of epochs to train (default: 10)')
     parser.add_argument('--lr', type=float, default=0.0001, metavar='LR', help='learning rate (default: 0.1)')
     parser.add_argument('--weight_decay', type=float, default=1e-5)
     parser.add_argument('--momentum', type=float, default=0.5, metavar='M', help='SGD momentum (default: 0.5)')

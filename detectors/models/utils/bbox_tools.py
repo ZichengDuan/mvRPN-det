@@ -124,7 +124,10 @@ def bbox2loc(src_bbox, dst_bbox):
     ctr_y = src_bbox[:, 0] + 0.5 * height
     ctr_x = src_bbox[:, 1] + 0.5 * width
 
+    
     base_height = dst_bbox[:, 2] - dst_bbox[:, 0]
+
+
     base_width = dst_bbox[:, 3] - dst_bbox[:, 1]
     base_ctr_y = dst_bbox[:, 0] + 0.5 * base_height
     base_ctr_x = dst_bbox[:, 1] + 0.5 * base_width
@@ -137,10 +140,9 @@ def bbox2loc(src_bbox, dst_bbox):
     dx = (base_ctr_x - ctr_x) / width
     dh = xp.log(base_height / height)
     dw = xp.log(base_width / width)
-    # print(base_height[:5], height[:5], dw[:5])
-    # if dw == -np.inf:
-    #     print("aaa", base_width/ width, base_width, width)
+
     loc = xp.vstack((dy, dx, dh, dw)).transpose()
+    # print(loc)
     return loc
 
 
