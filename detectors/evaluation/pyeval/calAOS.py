@@ -43,7 +43,7 @@ def CLEAR_MOD_HUN2(gt, det):
         det_results = det[det[:, 0] == t - 1]
         # final_prec, final_aos = cal_AOS(39, gt_results, det_results)
         # frame_infolist = cal_frame_TPFP(30, gt_results, det_results)
-        frame_infolist = cal_frame_TPFP_iou(0.25, gt_results, det_results)
+        frame_infolist = cal_frame_TPFP_iou(0.5, gt_results, det_results)
         if all_infolist is None:
             all_infolist = frame_infolist
         else:

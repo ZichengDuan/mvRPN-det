@@ -556,7 +556,7 @@ class AnchorTargetCreator(object):
 
     def __init__(self,
                  n_sample=256,
-                 pos_iou_thresh=0.8, neg_iou_thresh=0.3,
+                 pos_iou_thresh=0.7, neg_iou_thresh=0.3,
                  pos_ratio=0.5):
         self.n_sample = n_sample
         self.pos_iou_thresh = pos_iou_thresh
@@ -610,18 +610,18 @@ class AnchorTargetCreator(object):
         loc = _unmap(loc, n_anchor, inside_index, fill=0)
 
         # -----------------------------------------------------------
-        tmp = np.zeros((Const.grid_height, Const.grid_width), dtype=np.uint8())
-        import cv2
-        tmp = cv2.cvtColor(tmp, cv2.COLOR_GRAY2BGR)
-
-        for idx, anc in enumerate(anchor):
-            if label[inside_index][idx] == 1:
-                cv2.rectangle(tmp, (int(anc[1]), int(anc[0])), (int(anc[3]), int(anc[2])), color=(255, 255, 0))
-
-        for idx, bbx in enumerate(bbox):
-            cv2.rectangle(tmp, (int(bbx[1]), int(bbx[0])), (int(bbx[3]), int(bbx[2])), color=(34, 34,178), thickness=2)
-
-        cv2.imwrite("/home/dzc/Desktop/CASIA/proj/mvRPN-det/anchorBase.jpg", tmp)
+        # tmp = np.zeros((Const.grid_height, Const.grid_width), dtype=np.uint8())
+        # import cv2
+        # tmp = cv2.cvtColor(tmp, cv2.COLOR_GRAY2BGR)
+        #
+        # for idx, anc in enumerate(anchor):
+        #     if label[inside_index][idx] == 1:
+        #         cv2.rectangle(tmp, (int(anc[1]), int(anc[0])), (int(anc[3]), int(anc[2])), color=(255, 255, 0))
+        #
+        # for idx, bbx in enumerate(bbox):
+        #     cv2.rectangle(tmp, (int(bbx[1]), int(bbx[0])), (int(bbx[3]), int(bbx[2])), color=(34, 34,178), thickness=2)
+        #
+        # cv2.imwrite("/home/dzc/Desktop/CASIA/proj/mvRPN-det/anchorBase.jpg", tmp)
         # # -----------------------------------------------------------
         return loc, label
 

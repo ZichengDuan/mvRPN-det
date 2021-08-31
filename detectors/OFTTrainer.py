@@ -72,16 +72,15 @@ class OFTtrainer(BaseTrainer):
             # a = np.zeros((Const.grid_height, Const.grid_width))
             # bevimg = np.uint8(a)
             # tmp = cv2.cvtColor(bevimg, cv2.COLOR_GRAY2BGR)
-
-            bevimg = cv2.imread("/home/dzc/Data/opensource/bevimgs/%d.jpg" % frame)
-
-            for roiii in rois:
-                ymin, xmin, ymax, xmax = roiii
-                cv2.rectangle(bevimg, (int(xmin), int(ymin)), (int(xmax), int(ymax)), color=(255, 255, 0), thickness=1)
-            for i in range(len(gt_bbox[0])):
-                ymin, xmin, ymax, xmax = gt_bbox[0][i]
-                cv2.rectangle(bevimg, (int(xmin), int(ymin)), (int(xmax), int(ymax)), color=(100, 100, 200), thickness=3)
-            cv2.imwrite("/home/dzc/Desktop/CASIA/proj/mvRPN-det/results/images/rpn_boxes/rois.jpg", bevimg)
+            if batch_idx % 20 == 0:
+                bevimg = cv2.imread("/home/dzc/Data/opensource/bevimgs/%d.jpg" % frame)
+                for roiii in rois:
+                    ymin, xmin, ymax, xmax = roiii
+                    cv2.rectangle(bevimg, (int(xmin), int(ymin)), (int(xmax), int(ymax)), color=(255, 255, 0), thickness=1)
+                for i in range(len(gt_bbox[0])):
+                    ymin, xmin, ymax, xmax = gt_bbox[0][i]
+                    cv2.rectangle(bevimg, (int(xmin), int(ymin)), (int(xmax), int(ymax)), color=(100, 100, 200), thickness=3)
+                cv2.imwrite("/home/dzc/Desktop/CASIA/proj/mvRPN-det/results/images/rpn_boxes/rois.jpg", bevimg)
             roi = torch.tensor(rois)
 
             # visualize angle
@@ -129,9 +128,6 @@ class OFTtrainer(BaseTrainer):
             # print(rpn_loc[np.where(gt_rpn_label != -1)[0]][:5], gt_rpn_loc[np.where(gt_rpn_label != -1)[0]][:5])
             # ----------------ROI------------------------------
             # 还需要在双视角下的回归gt，以及筛选过后的分类gt，gt_left_loc, gt_left_label, gt_right_loc, gt_right_label
-
-            left = cv2.imread("/home/dzc/Data/opensource/img/left1/%d.jpg" % frame)
-            right = cv2.imread("/home/dzc/Data/opensource/img/right2/%d.jpg" % frame)
 
             left_2d_bbox, left_sample_roi, left_gt_loc, left_gt_label, left_gt_sincos, left_pos_num, right_2d_bbox,right_sample_roi, right_gt_loc, right_gt_label, right_gt_sincos, right_pos_num = self.proposal_target_creator(
                 roi,
@@ -195,7 +191,7 @@ class OFTtrainer(BaseTrainer):
             # ----------------------Loss-----------------------------
             # loss = rpn_loc_loss * 3 + rpn_cls_loss * 3 + \
             #         (all_roi_loc_loss  + all_roi_cls_loss + all_sincos_loss)
-            loss = rpn_loc_loss + rpn_cls_loss +  (all_roi_loc_loss  + all_roi_cls_loss + all_sincos_loss)
+            loss = (rpn_loc_loss + rpn_cls_loss) * 3 +  (all_roi_loc_loss  + all_roi_cls_loss + all_sincos_loss)
 
             Loss += loss.item()
 
@@ -357,7 +353,7 @@ class OFTtrainer(BaseTrainer):
             all_roi_remain = np.concatenate((roi[left_index_inside], roi[right_index_inside]))
             all_pred_sincos = np.concatenate((at.tonumpy(left_pred_sincos), at.tonumpy(right_pred_sincos)))
             v, indices = torch.tensor(all_front_prob).sort(0)
-            indices_remain = indices[v > 0.15]
+            indices_remain = indices[v > 0.7]
             print(frame)
             all_roi_remain = all_roi_remain[indices_remain].reshape(len(indices_remain), 4)
             all_pred_sincos = all_pred_sincos[indices_remain].reshape(len(indices_remain), 2)
