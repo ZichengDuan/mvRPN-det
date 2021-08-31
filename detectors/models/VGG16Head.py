@@ -55,10 +55,10 @@ class VGG16RoIHead(nn.Module):
                                    nn.Dropout(),
                                    nn.Linear(512, n_class)).to("cuda:1")
 
-        self.ang_regressor = nn.Sequential(nn.Linear(1024, 1024),
+        self.ang_regressor = nn.Sequential(nn.Linear(1024, 512),
                                            nn.ReLU(True),
                                            nn.Dropout(),
-                                           nn.Linear(1024, 512),
+                                           nn.Linear(512, 512),
                                            nn.ReLU(True),
                                            nn.Dropout(),
                                            nn.Linear(512, 2)).to("cuda:1")
