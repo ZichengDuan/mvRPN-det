@@ -22,7 +22,7 @@ class Const:
 
     reduce =4
 
-    dataset = "opensource"
+    dataset = "mix_simp"
 
     car_dist = math.sqrt(50/2 * 50/2 + 60/2 * 60/2)
 
