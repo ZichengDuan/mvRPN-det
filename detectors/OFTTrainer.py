@@ -353,7 +353,7 @@ class OFTtrainer(BaseTrainer):
             all_roi_remain = np.concatenate((roi[left_index_inside], roi[right_index_inside]))
             all_pred_sincos = np.concatenate((at.tonumpy(left_pred_sincos), at.tonumpy(right_pred_sincos)))
             v, indices = torch.tensor(all_front_prob).sort(0)
-            indices_remain = indices[v > 0.7]
+            indices_remain = indices[v > 0]
             print(frame)
             all_roi_remain = all_roi_remain[indices_remain].reshape(len(indices_remain), 4)
             all_pred_sincos = all_pred_sincos[indices_remain].reshape(len(indices_remain), 2)

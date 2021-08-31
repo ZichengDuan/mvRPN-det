@@ -90,7 +90,7 @@ def main(args):
         else:
             print('Testing...')
             model.load_state_dict(torch.load("%s/mvdet_rpn_%d.pth" % (Const.modelsavedir, 20)))
-            roi_head.load_state_dict(torch.load("%s/roi_rpn_head_%d.pth" % (Const.modelsavedir, 20)))
+            roi_head.load_state_dict(torch.load("%s/roi_rpn_head_%d.pth" % (Const.modelsavedir, 12)))
             trainer.test(epoch, test_loader, writer)
             break
     writer.close()
