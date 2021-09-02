@@ -9,7 +9,7 @@ from torch import nn
 
 from .utils.bbox_tools import generate_anchor_base
 from .utils.creator_tool import ProposalCreator
-
+from .utils.bbox_tools import loc2bbox
 class RegionProposalNetwork(nn.Module):
     def __init__(
             self, in_channels=1026, mid_channels=1026, ratios=[0.5, 1, 2],
@@ -70,6 +70,8 @@ class RegionProposalNetwork(nn.Module):
         # print("dzcc", rpn_locs.shape)
         rpn_locs = rpn_locs.permute(0, 2, 3, 1).contiguous().view(n, -1, 4)
         # print(rpn_locs.shape)
+
+
         rpn_scores = self.score(h)
         rpn_scores = rpn_scores.permute(0, 2, 3, 1).contiguous()
         # rpn_softmax_scores = F.softmax(rpn_scores.view(n, hh, ww, n_anchor, 2), dim=4)

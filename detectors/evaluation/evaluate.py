@@ -47,4 +47,5 @@ if __name__ == "__main__":
     # print(f'python eval: MODA {moda:.1f}, MODP {modp:.1f}, prec {precision:.1f}, rcll {recall:.1f}')
 
     recall, precision, moda, modp = evaluate(res_fpath, gt_fpath, 'Wildtrack')
+
     print(f'eval: MODA {moda:.1f}, MODP {modp:.1f}, prec {precision:.1f}, rcll {recall:.1f}')

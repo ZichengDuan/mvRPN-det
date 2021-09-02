@@ -604,10 +604,21 @@ class AnchorTargetCreator(object):
 
         # compute bounding box regression targets
         loc = bbox2loc(anchor, bbox[argmax_ious])
+        # dious = torch.zeros(size=(n_anchor, ))
+        # for i in range(n_anchor):
+        #     a_ymin, a_xmin, a_ymax, a_xmax = anchor[i]
+        #     b_ymin, b_xmin, b_ymax, b_xmax = bbox[argmax_ious][i]
+        #     dious[i] = Diou(torch.tensor([a_xmin, a_ymin, a_xmax, a_ymax]), torch.tensor([b_xmin, b_ymin, b_xmax, b_ymax]))
 
+        # dious = Diou(torch.tensor(anchor[:, [1, 0, 3, 2]]), torch.tensor(bbox[argmax_ious][:, [1, 0, 3, 2]]))
+        # anchor[:, [1, 0, 3, 2]]
+        # bbox[argmax_ious][:, [1, 0, 3, 2]]
+
+        # print(anchor.shape, argmax_ious.shape, loc.shape, bbox.shape, argmax_ious[:10])
         # map up to original set of anchors
         label = _unmap(label, n_anchor, inside_index, fill=-1)
         loc = _unmap(loc, n_anchor, inside_index, fill=0)
+        # dious = _unmap(dious.numpy(), n_anchor, inside_index, fill=0)
 
         # -----------------------------------------------------------
         # tmp = np.zeros((Const.grid_height, Const.grid_width), dtype=np.uint8())
@@ -742,7 +753,7 @@ class ProposalCreator:
                  n_train_pre_nms=12000,
                  n_train_post_nms=3000,
                  n_test_pre_nms=6000,
-                 n_test_post_nms=300,
+                 n_test_post_nms=50,
                  min_size=16
                  ):
         self.parent_model = parent_model
@@ -957,3 +968,45 @@ def get_outter(projected_3dboxes):
         ymin = min(boxes[:, 1])
         outter_boxes.append([ymin, xmin, ymax, xmax])
     return np.array(outter_boxes, dtype=np.float)
+
+def Diou(bboxes1, bboxes2):
+    rows = bboxes1.shape[0]
+    cols = bboxes2.shape[0]
+    dious = torch.zeros((rows, cols))
+    if rows * cols == 0:  #
+        return dious
+    exchange = False
+    if bboxes1.shape[0] > bboxes2.shape[0]:
+        bboxes1, bboxes2 = bboxes2, bboxes1
+        dious = torch.zeros((cols, rows))
+        exchange = True
+    # #xmin,ymin,xmax,ymax->[:,0],[:,1],[:,2],[:,3]
+    w1 = bboxes1[:, 2] - bboxes1[:, 0]
+    h1 = bboxes1[:, 3] - bboxes1[:, 1]
+    w2 = bboxes2[:, 2] - bboxes2[:, 0]
+    h2 = bboxes2[:, 3] - bboxes2[:, 1]
+
+    area1 = w1 * h1
+    area2 = w2 * h2
+
+    center_x1 = (bboxes1[:, 2] + bboxes1[:, 0]) / 2
+    center_y1 = (bboxes1[:, 3] + bboxes1[:, 1]) / 2
+    center_x2 = (bboxes2[:, 2] + bboxes2[:, 0]) / 2
+    center_y2 = (bboxes2[:, 3] + bboxes2[:, 1]) / 2
+
+    inter_max_xy = torch.min(bboxes1[:, 2:], bboxes2[:, 2:])
+    inter_min_xy = torch.max(bboxes1[:, :2], bboxes2[:, :2])
+    out_max_xy = torch.max(bboxes1[:, 2:], bboxes2[:, 2:])
+    out_min_xy = torch.min(bboxes1[:, :2], bboxes2[:, :2])
+
+    inter = torch.clamp((inter_max_xy - inter_min_xy), min=0)
+    inter_area = inter[:, 0] * inter[:, 1]
+    inter_diag = (center_x2 - center_x1) ** 2 + (center_y2 - center_y1) ** 2
+    outer = torch.clamp((out_max_xy - out_min_xy), min=0)
+    outer_diag = (outer[:, 0] ** 2) + (outer[:, 1] ** 2)
+    union = area1 + area2 - inter_area
+    dious = inter_area / union - (inter_diag) / outer_diag
+    dious = torch.clamp(dious, min=-1.0, max=1.0)
+    if exchange:
+        dious = dious.T
+    return dious

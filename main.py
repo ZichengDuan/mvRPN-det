@@ -52,10 +52,13 @@ def main(args):
     data_path = os.path.expanduser('/home/dzc/Data/%s' % Const.dataset)
     # data_path2 = os.path.expanduser('/home/dzc/Data/%s' % Const.dataset)
     base = Robomaster_1_dataset(data_path, args, worldgrid_shape=Const.grid_size)
-    train_set = oftFrameDataset(base, train=True, transform=train_trans, grid_reduce=Const.reduce)
-    test_set = oftFrameDataset(base , train=False, transform=test_trans, grid_reduce=Const.reduce)
+    train_set = oftFrameDataset(base, train=1, transform=train_trans, grid_reduce=Const.reduce)
+    val_set = oftFrameDataset(base, train=3, transform=test_trans, grid_reduce=Const.reduce)
+    test_set = oftFrameDataset(base , train=2, transform=test_trans, grid_reduce=Const.reduce)
     train_loader = torch.utils.data.DataLoader(train_set, batch_size=args.batch_size, shuffle=True,
                                                num_workers=args.num_workers, pin_memory=True, drop_last=True)
+    val_loader = torch.utils.data.DataLoader(val_set, batch_size=args.batch_size, shuffle=False,
+                                              num_workers=args.num_workers, pin_memory=True, drop_last=True)
     test_loader = torch.utils.data.DataLoader(test_set, batch_size=args.batch_size, shuffle=False,
                                               num_workers=args.num_workers, pin_memory=True, drop_last=True)
 
@@ -74,8 +77,8 @@ def main(args):
     # trainer = RPNtrainer(model, roi_head, denormalize)
 
     # learn0.
-    model.load_state_dict(torch.load('%s/mvdet_rpn_%d.pth' % (Const.modelsavedir, 2)))
-    roi_head.load_state_dict(torch.load('%s/roi_rpn_head_%d.pth' % (Const.modelsavedir, 2)))
+    # model.load_state_dict(torch.load('%s/mvdet_rpn_%d.pth' % (Const.modelsavedir, 3)))
+    # roi_head.load_state_dict(torch.load('%s/roi_rpn_head_%d.pth' % (Const.modelsavedir, 3)))
     print()
     # model.load_state_dict(torch.load("%s/mvdet_rpn_%d.pth" % (Const.modelsavedir, 4)))
     for epoch in tqdm.tqdm(range(1, args.epochs + 1)):
@@ -86,11 +89,11 @@ def main(args):
             loss = trainer.train(epoch, train_loader, optimizer, writer)
             torch.save(model.state_dict(), os.path.join('%s/mvdet_rpn_%d.pth' % (Const.modelsavedir, epoch)))
             torch.save(roi_head.state_dict(), os.path.join('%s/roi_rpn_head_%d.pth' % (Const.modelsavedir, epoch)))
-            # trainer.test(epoch, test_loader, writer)
+            trainer.test(epoch, val_loader, writer)
         else:
             print('Testing...')
-            model.load_state_dict(torch.load("%s/mvdet_rpn_%d.pth" % (Const.modelsavedir, 20)))
-            roi_head.load_state_dict(torch.load("%s/roi_rpn_head_%d.pth" % (Const.modelsavedir, 12)))
+            model.load_state_dict(torch.load("%s/mvdet_rpn_%d.pth" % (Const.modelsavedir, 3)))
+            roi_head.load_state_dict(torch.load("%s/roi_rpn_head_%d.pth" % (Const.modelsavedir, 3)))
             trainer.test(epoch, test_loader, writer)
             break
     writer.close()
@@ -107,9 +110,9 @@ if __name__ == '__main__':
                         help='input batch size for training (default: 1)')
     parser.add_argument('--epochs', type=int, default=30, metavar='N', help='number of epochs to train (default: 10)')
     parser.add_argument('--lr', type=float, default=0.0001, metavar='LR', help='learning rate (default: 0.1)')
-    parser.add_argument('--weight_decay', type=float, default=1e-6)
+    parser.add_argument('--weight_decay', type=float, default=1e-5)
     parser.add_argument('--momentum', type=float, default=0.5, metavar='M', help='SGD momentum (default: 0.5)')
-    parser.add_argument('--seed', type=int, default=71, help='random seed (default: None)')
+    parser.add_argument('--seed', type=int, default=7, help='random seed (default: None)')
 
     parser.add_argument('--resume', type=bool, default = True)
     args = parser.parse_args()

@@ -14,7 +14,7 @@ import random
 warnings.filterwarnings("ignore")
 
 class oftFrameDataset(VisionDataset):
-    def __init__(self, base,  train=True, transform=ToTensor(), target_transform=ToTensor(),
+    def __init__(self, base,  train=1, transform=ToTensor(), target_transform=ToTensor(),
                  reID=False, grid_reduce=Const.reduce, img_reduce=Const.reduce, train_ratio=0.9):
         super().__init__(base.root, transform=transform, target_transform=target_transform)
 
@@ -30,19 +30,13 @@ class oftFrameDataset(VisionDataset):
         # self.extrinsic_matrix2 = base.extrinsic_matrices2
         # self.intrinsic_matrix2 = base.intrinsic_matrices2
 
-        if train:
+        if train == 1:
             frame_range = list(range(0, 1800)) + list(range(2100, 3500)) + list(range(3600, 4330))
             # frame_range = [0]
+        elif train == 3:
+            frame_range = list (range(2000, 2100)) + list(range(3500, 3600))
         else:
-            frame_range = list (range(1800, 2100)) + list(range(3500, 3600))
-            # frame_range = list(range(1700, 1800))
-            # frame_range = [724]
-
-
-        # if train:
-        #     frame_range = list(range(0, 200))
-        # else:
-        #     frame_range = list(range(2500, 3021))
+            frame_range = list(range(1800, 2100)) + list(range(3500, 3600))
 
         self.upsample_shape = list(map(lambda x: int(x / self.img_reduce), self.img_shape))
         img_reduce_local = np.array(self.img_shape) / np.array(self.upsample_shape)

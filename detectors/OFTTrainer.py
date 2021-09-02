@@ -12,6 +12,7 @@ from detectors.utils.nms_new import nms_new, _suppress, vis_nms
 from detectors.utils.nms import nms
 # from detectors.evaluation.evaluate import matlab_eval, python_eval
 from detectors.evaluation.evaluate import evaluate
+from detectors.evaluation.pyeval.calAOS import evaluateDetectionAPAOS
 import torch.nn as nn
 import warnings
 from detectors.loss.gaussian_mse import GaussianMSE
@@ -25,6 +26,9 @@ from torchvision.ops import boxes as box_ops
 warnings.filterwarnings("ignore")
 import time
 import cv2
+
+
+
 
 def fix_bn(m):
    classname = m.__class__.__name__
@@ -117,6 +121,10 @@ class OFTtrainer(BaseTrainer):
                 anchor,
                 img_size)
 
+
+            # gt_anchor
+            # pred_regressed_rpn = loc2bbox(anchor, rpn_locs)
+
             rpn_loc_loss = _fast_rcnn_loc_loss(
                 rpn_loc,
                 gt_rpn_loc,
@@ -194,7 +202,6 @@ class OFTtrainer(BaseTrainer):
             loss = (rpn_loc_loss + rpn_cls_loss) * 3 +  (all_roi_loc_loss  + all_roi_cls_loss + all_sincos_loss)
 
             Loss += loss.item()
-
 
             RPN_CLS_LOSS += rpn_cls_loss.item()
             RPN_LOC_LOSS += rpn_loc_loss.item()
@@ -353,7 +360,7 @@ class OFTtrainer(BaseTrainer):
             all_roi_remain = np.concatenate((roi[left_index_inside], roi[right_index_inside]))
             all_pred_sincos = np.concatenate((at.tonumpy(left_pred_sincos), at.tonumpy(right_pred_sincos)))
             v, indices = torch.tensor(all_front_prob).sort(0)
-            indices_remain = indices[v > 0]
+            indices_remain = indices[v > 0.75]
             print(frame)
             all_roi_remain = all_roi_remain[indices_remain].reshape(len(indices_remain), 4)
             all_pred_sincos = all_pred_sincos[indices_remain].reshape(len(indices_remain), 2)
@@ -366,9 +373,6 @@ class OFTtrainer(BaseTrainer):
                     keep = [0]
                 else:
                     keep = box_ops.nms(torch.tensor(all_roi_remain), torch.tensor(all_front_prob), 0)
-                    # y = (all_roi_remain[:, 0] + all_roi_remain[:, 2]) / 2
-                    # x = (all_roi_remain[:, 1] + all_roi_remain[:, 3]) / 2
-                    # keep, _ = nms(torch.tensor(points), torch.tensor(all_front_prob), dist_thres=78, top_k=50)
                 all_bev_boxes, all_sincos_remain, position_mark_keep = all_roi_remain[keep].reshape(len(keep), 4), \
                                                                        all_pred_sincos[keep].reshape(len(keep), 2), \
                                                                        position_mark[keep].reshape(len(keep))
@@ -400,8 +404,9 @@ class OFTtrainer(BaseTrainer):
 
         recall, precision, moda, modp = evaluate(os.path.abspath(res_fpath), os.path.abspath(gt_fpath),
                                                         data_loader.dataset.base.__name__)
-
-        print(recall, precision, moda, modp)
+        ap, aos, OS = evaluateDetectionAPAOS(all_res_fpath, all_gt_fpath)
+        print("MODA: ", moda, ", MODP: ", modp, ", Recall: ", recall, ", Prec: ", precision)
+        print("AP: ", ap, " ,AOS: ", aos, ", OS: ", OS)
 
 
 
@@ -427,6 +432,7 @@ def visualize_3dbox(pred_ori, pred_angle, position_mark, gt_bbox, bev_angle, all
     for j, bbox in enumerate(gt_bbox):
         ymin, xmin, ymax, xmax = bbox
         theta = bev_angle[j]
+        # theta =torch.tensor(0)
 
         x1_ori, x2_ori, x3_ori, x4_ori, x_mid = xmin, xmin, xmax, xmax, (xmin + xmax) / 2 - 40
         y1_ori, y2_ori, y3_ori, y4_ori, y_mid = Const.grid_height - ymin, Const.grid_height - ymax, Const.grid_height - ymax, Const.grid_height - ymin, (Const.grid_height -ymax + Const.grid_height -ymin) / 2
@@ -726,7 +732,7 @@ def visualize_3dbox(pred_ori, pred_angle, position_mark, gt_bbox, bev_angle, all
             score = all_front_prob[i]
         if position_mark[i] == 0:
             center_x, center_y = int((bbox[1] + bbox[3]) // 2), int((bbox[0] + bbox[2]) // 2)
-            w, h = 60/2, 50/2
+            w, h = 50/2, 60/2
             xmin = center_x - w
             xmax = center_x + w
             ymin = center_y - h
@@ -756,7 +762,7 @@ def visualize_3dbox(pred_ori, pred_angle, position_mark, gt_bbox, bev_angle, all
             # angle += np.pi
         else:
             center_x, center_y = int((xmin + xmax) // 2), int((ymin + ymax) // 2)
-            w, h = 60/2, 50/2
+            w, h = 50/2, 60/2
             xmin = center_x - w
             xmax = center_x + w
             ymin = center_y - h
@@ -778,6 +784,7 @@ def visualize_3dbox(pred_ori, pred_angle, position_mark, gt_bbox, bev_angle, all
             # angle += np.pi
         theta_l = angle
         theta = theta_l + ray
+        # theta = torch.tensor(0)
         w = xmax-xmin
         h = ymax-ymin
         if position_mark[i] == 0:
@@ -905,6 +912,26 @@ def _fast_rcnn_loc_loss(pred_loc, gt_loc, gt_label, sigma):
     # Normalize by total number of negtive and positive rois.
     loc_loss /= ((gt_label >= 0).sum().float())  # ignore gt_label==-1 for rpn_loss
     return loc_loss
+
+# def _fast_rcnn_diou_loss(pred_loc, gt_loc, gt_label, sigma):
+#     in_weight = torch.zeros(gt_loc.shape).to(pred_loc.device)
+#     print(in_weight.shape, gt_label.shape)
+#     gt_loc = torch.tensor(gt_loc).to(pred_loc.device)
+#     gt_label = torch.tensor(gt_label).to(pred_loc.device)
+#
+#     # print(in_weight.shape, gt_loc.shape, gt_label.shape)
+#     # Localization loss is calculated only for positive rois.
+#     # NOTE:  unlike origin implementation,
+#     # we don't need inside_weight and outside_weight, they can calculate by gt_label
+#     # print(gt_label)
+#     in_weight[(torch.tensor(gt_label) > 0).view(-1, 1).expand_as(in_weight).cuda()] = 1
+#     print("dzc", in_weight.shape, in_weight[:10])
+#     loc_loss = _smooth_l1_loss(pred_loc, gt_loc, in_weight.detach(), sigma)
+#     # loc_loss = F.smooth_l1_loss(pred_loc, gt_loc)
+#
+#     # Normalize by total number of negtive and positive rois.
+#     loc_loss /= ((gt_label >= 0).sum().float())  # ignore gt_label==-1 for rpn_loss
+#     return loc_loss
 
 def generate_3d_bbox(pred_bboxs):
     # 输出以左下角为原点的3d坐标

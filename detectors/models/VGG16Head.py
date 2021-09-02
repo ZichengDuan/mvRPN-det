@@ -27,10 +27,10 @@ class VGG16RoIHead(nn.Module):
         #                                  nn.LeakyReLU(True),
         #                                  ).to("cuda:0")
 
-        self.classifier = nn.Sequential(nn.Linear(25088, 1024, bias=True),
+        self.classifier = nn.Sequential(nn.Linear(25088, 4096, bias=True),
                                    nn.ReLU(inplace=True),
                                    nn.Dropout(p=0.5, inplace=False),
-                                   nn.Linear(1024, 1024, bias=True),
+                                   nn.Linear(4096, 4096, bias=True),
                                    nn.ReLU(inplace=True),
                                    nn.Dropout(p=0.5, inplace=False),
                                    ).to("cuda:1")
@@ -43,17 +43,11 @@ class VGG16RoIHead(nn.Module):
         #                            nn.Dropout(p=0.5, inplace=False),
         #                            ).to("cuda:1")
 
-        self.cls_loc = nn.Sequential(nn.Linear(1024, 512),
-                                     nn.ReLU(True),
-                                     nn.Dropout(),
-                                     nn.Linear(512, n_class * 4)).to("cuda:1")
+        self.cls_loc = nn.Sequential(nn.Linear(4096, n_class * 4)).to("cuda:1")
 
-        self.score = nn.Sequential(nn.Linear(1024, 512),
-                                   nn.ReLU(True),
-                                   nn.Dropout(),
-                                   nn.Linear(512, n_class)).to("cuda:1")
+        self.score = nn.Sequential(nn.Linear(4096, n_class)).to("cuda:1")
 
-        self.ang_regressor = nn.Sequential(nn.Linear(1024, 1024),
+        self.ang_regressor = nn.Sequential(nn.Linear(4096, 1024),
                                            nn.ReLU(True),
                                            nn.Dropout(),
                                            nn.Linear(1024, 512),

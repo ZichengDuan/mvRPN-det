@@ -32,7 +32,7 @@ def getDistance(x1, y1, x2, y2):
 
 def CLEAR_MOD_HUN2(gt, det):
     F = int(max(gt[:, 0])) + 1
-    # F =
+    # F = 1
     precs = 0
     aos = 0
     all_infolist = None
@@ -41,6 +41,7 @@ def CLEAR_MOD_HUN2(gt, det):
     for t in range(1, F + 1):
         gt_results = gt[gt[:, 0] == t - 1]
         det_results = det[det[:, 0] == t - 1]
+        # print(gt_results, det_results)
         # final_prec, final_aos = cal_AOS(39, gt_results, det_results)
         # frame_infolist = cal_frame_TPFP(30, gt_results, det_results)
         frame_infolist = cal_frame_TPFP_iou(0.5, gt_results, det_results)
@@ -231,7 +232,6 @@ def cal_frame_TPFP_iou(dist_threshold, gt_res, pred_res):
             xmin_gt, ymin_gt, xmax_gt, ymax_gt = wh2bottomleft([x_gt, y_gt, w_gt, h_gt])
 
             iou = bbox_iou([xmin_gt, ymin_gt, xmax_gt, ymax_gt], [xmin_pred, ymin_pred, xmax_pred, ymax_pred])
-            # print(iou)
             if max_iou != 0 and iou >= dist_threshold and iou > max_iou:
                 # 找到距离最近的gt分配给那个pred，始终没分配到gt的pred认为是FN
                 max_iou = iou
@@ -243,6 +243,7 @@ def cal_frame_TPFP_iou(dist_threshold, gt_res, pred_res):
         frame_gt_det_match[i][1] = max_idx
         frame_gt_det_match[i][2] = max_iou
         frame_gt_det_match[i][3] = ori_pred - cur_gt_ori
+
 
     TP = 0
     FP = 0
