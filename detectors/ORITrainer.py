@@ -502,12 +502,12 @@ class ORITrainer(BaseTrainer):
                 for l in range(len(test_pred_res)):
                     all_pred_res.append(test_pred_res[l])
 
-        res_fpath = '/home/dzc/Data/%s/dzc_res/res.txt' % Const.dataset
-        gt_fpath = '/home/dzc/Data/%s/dzc_res/test_gt.txt' % Const.dataset
+        res_fpath = '/root/deep_learning/dzc/data/%s/dzc_res/res.txt' % Const.dataset
+        gt_fpath = '/root/deep_learning/dzc/data/%s/dzc_res/test_gt.txt' % Const.dataset
         np.savetxt(res_fpath, np.array(all_res).reshape(-1, 3), "%d")
 
-        all_res_fpath = '/home/dzc/Data/%s/dzc_res/all_res.txt' % Const.dataset
-        all_gt_fpath = '/home/dzc/Data/%s/dzc_res/all_test_gt.txt' % Const.dataset
+        all_res_fpath = '/root/deep_learning/dzc/data/%s/dzc_res/all_res.txt' % Const.dataset
+        all_gt_fpath = '/root/deep_learning/dzc/data/%s/dzc_res/all_test_gt.txt' % Const.dataset
         print(all_pred_res)
         all_gt_res = np.array(all_gt_res).reshape(-1, 6)
         all_pred_res = np.array(all_pred_res).reshape(-1, 7)
