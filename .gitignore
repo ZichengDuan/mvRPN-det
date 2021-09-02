@@ -3,6 +3,8 @@
 /4carreal_object_detection/
 /results/images/
 /results/trained/
+/results/testres/
+/results/
 /prune/
 /prune/data/
 /prune/data/cifar-10-batches-py/

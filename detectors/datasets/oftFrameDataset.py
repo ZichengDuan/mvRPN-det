@@ -26,14 +26,11 @@ class oftFrameDataset(VisionDataset):
         self.reducedgrid_shape = list(map(lambda x: int(x / self.grid_reduce), self.worldgrid_shape))
         self.extrinsic_matrix = base.extrinsic_matrices
         self.intrinsic_matrix = base.intrinsic_matrices
-
-        self.extrinsic_matrix2 = base.extrinsic_matrices2
-        self.intrinsic_matrix2 = base.intrinsic_matrices2
-
         if train:
-            frame_range = list(range(0, 1400)) + list(range(2000, 6989))
+            frame_range = list(range(0, 1800)) + list(range(2100, 3500)) + list(range(3600, 4330))
+            # frame_range = [0]
         else:
-            frame_range = range(1400, 2000)
+            frame_range = list (range(1800, 2100)) + list(range(3500, 3600))
             # frame_range = list(range(3610, 3650))
             # frame_range = list(range(2500, 3021))
             # frame_range = list([1308])
@@ -357,7 +354,6 @@ class oftFrameDataset(VisionDataset):
                 left_conf, right_conf, \
                frame, \
                self.extrinsic_matrix, self.intrinsic_matrix, \
-               self.extrinsic_matrix2, self.intrinsic_matrix2, \
                mark
 
     def __len__(self):
