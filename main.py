@@ -27,7 +27,7 @@ warnings.filterwarnings("ignore")
 
 def main(args):
     # seed
-    writer = SummaryWriter('/home/dzc/Desktop/CASIA/proj/mvRPN-det/results/tensorboard/log')
+    writer = SummaryWriter('/root/deep_learning/dzc/mvRPN-det/results/tensorboard/log')
 
     if args.seed is not None:
         np.random.seed(args.seed)
@@ -49,7 +49,7 @@ def main(args):
     # resize = T.Resize([240, 320]) # h, w
     train_trans = T.Compose([T.ToTensor(), normalize])
     test_trans = T.Compose([T.ToTensor(), normalize])
-    data_path = os.path.expanduser('/home/dzc/Data/%s' % Const.dataset)
+    data_path = os.path.expanduser('/root/deep_learning/dzc/data/%s' % Const.dataset)
     # data_path2 = os.path.expanduser('/home/dzc/Data/%s' % Const.dataset)
     base = Robomaster_1_dataset(data_path, args, worldgrid_shape=Const.grid_size)
     train_set = oftFrameDataset(base, train=1, transform=train_trans, grid_reduce=Const.reduce)
@@ -77,8 +77,8 @@ def main(args):
     # trainer = RPNtrainer(model, roi_head, denormalize)
 
     # learn0.
-    # model.load_state_dict(torch.load('%s/mvdet_rpn_%d.pth' % (Const.modelsavedir, 3)))
-    # roi_head.load_state_dict(torch.load('%s/roi_rpn_head_%d.pth' % (Const.modelsavedir, 3)))
+    model.load_state_dict(torch.load('%s/mvdet_rpn_%d.pth' % (Const.modelsavedir, 1)))
+    roi_head.load_state_dict(torch.load('%s/roi_rpn_head_%d.pth' % (Const.modelsavedir, 1)))
     print()
     # model.load_state_dict(torch.load("%s/mvdet_rpn_%d.pth" % (Const.modelsavedir, 4)))
     for epoch in tqdm.tqdm(range(1, args.epochs + 1)):
@@ -92,8 +92,8 @@ def main(args):
             trainer.test(epoch, val_loader, writer)
         else:
             print('Testing...')
-            model.load_state_dict(torch.load("%s/mvdet_rpn_%d.pth" % (Const.modelsavedir, 3)))
-            roi_head.load_state_dict(torch.load("%s/roi_rpn_head_%d.pth" % (Const.modelsavedir, 3)))
+            model.load_state_dict(torch.load("%s/mvdet_rpn_%d.pth" % (Const.modelsavedir, 1)))
+            roi_head.load_state_dict(torch.load("%s/roi_rpn_head_%d.pth" % (Const.modelsavedir, 1)))
             trainer.test(epoch, test_loader, writer)
             break
     writer.close()
@@ -114,7 +114,7 @@ if __name__ == '__main__':
     parser.add_argument('--momentum', type=float, default=0.5, metavar='M', help='SGD momentum (default: 0.5)')
     parser.add_argument('--seed', type=int, default=7, help='random seed (default: None)')
 
-    parser.add_argument('--resume', type=bool, default = True)
+    parser.add_argument('--resume', type=bool, default = False)
     args = parser.parse_args()
 
     main(args)

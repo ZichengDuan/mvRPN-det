@@ -32,7 +32,8 @@ class PerspTransDetector(nn.Module):
     def __init__(self, dataset = None):
         super().__init__()
         if dataset is not None:
-            self.num_cam = dataset.num_cam
+            # self.num_cam = dataset.num_cam
+            self.num_cam = 1
             self.img_shape, self.reducedgrid_shape = dataset.img_shape, dataset.reducedgrid_shape
             # calculate the
             imgcoord2worldgrid_matrices = self.get_imgcoord2worldgrid_matrices(dataset.base.intrinsic_matrices,
@@ -50,40 +51,30 @@ class PerspTransDetector(nn.Module):
                               for cam in range(self.num_cam)]
 
 
-        self.backbone = nn.Sequential(*list(resnet18(pretrained=True, replace_stride_with_dilation=[False, False, True]).children())[:-2]).to('cuda:0')
-        self.rpn = RegionProposalNetwork(in_channels=1026, mid_channels=1026, ratios=[0.9, 1.1], anchor_scales=[4]).to('cuda:1')
+        self.backbone = nn.Sequential(*list(resnet18(pretrained=True, replace_stride_with_dilation=[False, False, True]).children())[:-2]).cuda()
+        self.rpn = RegionProposalNetwork(in_channels=514, mid_channels=514, ratios=[0.9, 1.1], anchor_scales=[4]).cuda()
 
 
     def forward(self, imgs,frame, gt_boxes = None, epoch = None, visualize=False, train = True, mark = None):
         B, N, C, H, W = imgs.shape
-        assert N == self.num_cam
+        # assert N == self.num_cam
         world_features = []
         img_featuremap = []
 
         for cam in range(self.num_cam):
             if hasattr(torch.cuda, 'empty_cache'):
                 torch.cuda.empty_cache()
-            img_feature =self.backbone(imgs[:, cam].to('cuda:0'))
+            img_feature =self.backbone(imgs[:, cam].cuda())
             img_feature = F.interpolate(img_feature, self.upsample_shape, mode='bilinear')
-
-            # if cam == 0:
-            #     plt.imsave("img_norm_0.jpg", img_feature[0][0].cpu().numpy())
-            # else:
-            #     plt.imsave("img_norm_1.jpg", img_feature[0][0].cpu().numpy())
 
             img_featuremap.append(img_feature)
 
-            # if mark == 0:
-            #     proj_mat = self.proj_mats[cam].repeat([B, 1, 1]).float().to('cuda:1')
-            # else:
-            #     proj_mat = self.proj_mats2[cam].repeat([B, 1, 1]).float().to('cuda:1')
-
-            proj_mat = self.proj_mats[cam].repeat([B, 1, 1]).float().to('cuda:1')
-            world_feature = kornia.warp_perspective(img_feature.to('cuda:1'), proj_mat, self.reducedgrid_shape) # 0.0142 * 2 = 0.028
+            proj_mat = self.proj_mats[cam].repeat([B, 1, 1]).float().cuda()
+            world_feature = kornia.warp_perspective(img_feature.cuda(), proj_mat, self.reducedgrid_shape) # 0.0142 * 2 = 0.028
 
             world_feature = kornia.vflip(world_feature)
-            world_features.append(world_feature.to('cuda:1'))
-        world_features = torch.cat(world_features + [self.coord_map.repeat([B, 1, 1, 1]).to('cuda:1')], dim=1)
+            world_features.append(world_feature.cuda())
+        world_features = torch.cat(world_features + [self.coord_map.repeat([B, 1, 1, 1]).cuda()], dim=1)
         # plt.imsave("world_features.jpg", torch.norm(world_features[0], dim=0).cpu().numpy())
         # 3d特征图
         # feature_to_plot = world_features[0][0].detach().cpu().numpy()

@@ -30,7 +30,7 @@ def bbox_iou(box1, box2):
 def getDistance(x1, y1, x2, y2):
     return math.sqrt(pow((x1 - x2), 2) + pow((y1 - y2), 2))
 
-def CLEAR_MOD_HUN2(gt, det):
+def CLEAR_MOD_HUN2(gt, det, thresh):
     F = int(max(gt[:, 0])) + 1
     # F = 1
     precs = 0
@@ -44,7 +44,7 @@ def CLEAR_MOD_HUN2(gt, det):
         # print(gt_results, det_results)
         # final_prec, final_aos = cal_AOS(39, gt_results, det_results)
         # frame_infolist = cal_frame_TPFP(30, gt_results, det_results)
-        frame_infolist = cal_frame_TPFP_iou(0.5, gt_results, det_results)
+        frame_infolist = cal_frame_TPFP_iou(thresh, gt_results, det_results)
         if all_infolist is None:
             all_infolist = frame_infolist
         else:
@@ -108,6 +108,8 @@ def CLEAR_MOD_HUN2(gt, det):
     print(final_11_aos)
 
     return final_11_precision, final_11_aos
+
+
 
 def cal_frame_TPFP(dist_threshold, gt_res, pred_res):
     # prec = TP / (TP + FP)
@@ -371,12 +373,13 @@ def evaluateDetectionAPAOS(res_fpath, gt_fpath):
             detAllMatrix = np.concatenate((detAllMatrix, tmp_arr), axis=0)
         frame_ctr += 1
 
-    AP, AOS = CLEAR_MOD_HUN2(gtAllMatrix, detAllMatrix)
-    return AP, AOS, AOS/AP
+    AP_50, AOS_50 = CLEAR_MOD_HUN2(gtAllMatrix, detAllMatrix, 0.5)
+    AP_25, AOS_25 = CLEAR_MOD_HUN2(gtAllMatrix, detAllMatrix, 0.25)
+    return AP_50, AOS_50, AOS_50/AP_50, AP_25, AOS_25, AOS_25/AP_25
 
 
 if __name__ == "__main__":
     res_fpath = "/home/dzc/Desktop/CASIA/proj/mvRPN-det/detectors/evaluation/pyeval/all_res.txt"
     gt_fpath = "/home/dzc/Desktop/CASIA/proj/mvRPN-det/detectors/evaluation/pyeval/all_test_gt.txt"
-    AP, AOS, OS = evaluateDetectionAPAOS(res_fpath, gt_fpath)
+    AP_50, AOS_50, OS_50, AP_25, AOS_25, OS_25 = evaluateDetectionAPAOS(res_fpath, gt_fpath)
     print("AP: %.2f" % (AP*100), "AOS: %.2f" % (AOS*100), "OS: %.2f" % (OS))

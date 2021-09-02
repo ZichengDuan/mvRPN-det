@@ -4,5 +4,6 @@
 /results/images/
 /results/trained/
 /prune/
+/results/
 /prune/data/
 /prune/data/cifar-10-batches-py/

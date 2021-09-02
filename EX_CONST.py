@@ -22,7 +22,7 @@ class Const:
 
     reduce =4
 
-    dataset = "opensource"
+    dataset = "opensource2"
 
     car_dist = math.sqrt(50/2 * 50/2 + 60/2 * 60/2)
 
@@ -41,7 +41,7 @@ class Const:
 
     roi_classes = 1
 
-    modelsavedir = "/home/dzc/Desktop/CASIA/proj/mvRPN-det/results/trained/opensource"
+    modelsavedir = "/root/deep_learning/dzc/mvRPN-det/results/trained/proj_featuremono_wroi_opensource"
 
     imgsavedir = "/home/dzc/Desktop/CASIA/proj/mvRPN-det/results/images/testing_set"
 
