@@ -52,7 +52,9 @@ def main(args):
     data_path = os.path.expanduser('/root/deep_learning/dzc/data/%s' % Const.dataset)
     # data_path2 = os.path.expanduser('/home/dzc/Data/%s' % Const.dataset)
     base = Robomaster_1_dataset(data_path, args, worldgrid_shape=Const.grid_size)
-    
+    train_set = oftFrameDataset(base, train=1, transform=train_trans, grid_reduce=Const.reduce)
+    val_set = oftFrameDataset(base, train=3, transform=test_trans, grid_reduce=Const.reduce)
+    test_set = oftFrameDataset(base , train=2, transform=test_trans, grid_reduce=Const.reduce)
     train_loader = torch.utils.data.DataLoader(train_set, batch_size=args.batch_size, shuffle=True,
                                                num_workers=args.num_workers, pin_memory=True, drop_last=True)
     test_loader = torch.utils.data.DataLoader(test_set, batch_size=args.batch_size, shuffle=False,
