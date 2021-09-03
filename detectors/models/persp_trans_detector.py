@@ -69,6 +69,7 @@ class PerspTransDetector(nn.Module):
 
 
     def forward(self, imgs,frame, gt_boxes = None, epoch = None, visualize=False, train = True, mark = None):
+        # print(imgs.shape)
         B, N, C, H, W = imgs.shape
         assert N == self.num_cam
         world_features = []

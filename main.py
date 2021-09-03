@@ -24,6 +24,10 @@ from detectors.models.VGG16Head import VGG16RoIHead
 from tensorboardX import SummaryWriter
 import torch.nn as nn
 warnings.filterwarnings("ignore")
+def fix_bn(m):
+   classname = m.__class__.__name__
+   if classname.find('BatchNorm') != -1:
+       m.eval()
 
 def main(args):
     # seed
@@ -60,11 +64,28 @@ def main(args):
                                                num_workers=args.num_workers, pin_memory=True, drop_last=True)
     test_loader = torch.utils.data.DataLoader(test_set, batch_size=args.batch_size, shuffle=False,
                                               num_workers=args.num_workers, pin_memory=True, drop_last=True)
+    val_loader = torch.utils.data.DataLoader(val_set, batch_size=args.batch_size, shuffle=False,
+                                              num_workers=args.num_workers, pin_memory=True, drop_last=True)
 
     # model
     model = PerspTransDetector(train_set)
-    # classifier = model.classifier
-    roi_head = VGG16RoIHead(Const.roi_classes + 1,  7, 1/Const.reduce)
+    roi_head = VGG16RoIHead(Const.roi_classes + 1, 7, 1 / Const.reduce)
+
+    model.load_state_dict(torch.load('%s/mvdet_rpn_%d.pth' % (Const.rpnsavedir, 4)))
+    for param in model.named_parameters():
+        param[1].requires_grad = False
+    model.apply(fix_bn)
+
+    saved_roi_head = torch.load('%s/roi_rpn_head_%d.pth' % (Const.rpnsavedir, 4))
+    roi_head_dict = roi_head.state_dict()
+    new_state_dict = {k: v for k,v in saved_roi_head.items() if k in roi_head_dict.keys()}
+    roi_head_dict.update(new_state_dict)
+    roi_head.load_state_dict(roi_head_dict)
+
+    for param in roi_head.named_parameters():
+        if "orientation" not in param[0] and "confidence" not in param[0]:
+            param[1].requires_grad = False
+
     optimizer = optim.Adam(params=itertools.chain(model.parameters(), roi_head.parameters()), lr=args.lr, weight_decay=args.weight_decay)
     # optimizer = optim.Adam([{'params': filter(lambda p: p.requires_grad, model.backbone.parameters()), 'lr': 1e-3},
     #                         {'params': filter(lambda p: p.requires_grad, model.rpn.parameters())},
@@ -76,8 +97,14 @@ def main(args):
     # trainer = RPNtrainer(model, roi_head, denormalize)
 
     # learn0.
-    # model.load_state_dict(torch.load('%s/mvdet_rpn_%d.pth' % (Const.modelsavedir, 30)))
+    # model.load_state_dict(torch.load('%s/mvdet_rpn_%d.pth' % (Const.rpnsavedir, 4)))
     # roi_head.load_state_dict(torch.load('%s/roi_rpn_head_%d.pth' % (Const.modelsavedir, 30)))
+    # for param in model.named_parameters():
+    #     param[1].requires_grad = False
+    # model.apply(fix_bn)
+
+
+
     print()
     # model.load_state_dict(torch.load("%s/mvdet_rpn_%d.pth" % (Const.modelsavedir, 4)))
     for epoch in tqdm.tqdm(range(1, args.epochs + 1)):
@@ -88,11 +115,11 @@ def main(args):
             loss = trainer.train(epoch, train_loader, optimizer, writer)
             torch.save(model.state_dict(), os.path.join('%s/mvdet_rpn_%d.pth' % (Const.modelsavedir, epoch)))
             torch.save(roi_head.state_dict(), os.path.join('%s/roi_rpn_head_%d.pth' % (Const.modelsavedir, epoch)))
-            trainer.test(epoch, val_set, writer)
+            trainer.test(epoch, val_loader, writer)
         else:
             print('Testing...')
-            model.load_state_dict(torch.load("%s/mvdet_rpn_%d.pth" % (Const.modelsavedir, 12)))
-            roi_head.load_state_dict(torch.load("%s/roi_rpn_head_%d.pth" % (Const.modelsavedir, 12)))
+            # model.load_state_dict(torch.load("%s/mvdet_rpn_%d.pth" % (Const.rpnsavedir, 4)))
+            # roi_head.load_state_dict(torch.load("%s/roi_rpn_head_%d.pth" % (Const.modelsavedir, 1)))
             trainer.test(epoch, test_loader, writer)
             break
     writer.close()
@@ -109,12 +136,12 @@ if __name__ == '__main__':
     parser.add_argument('-b', '--batch_size', type=int, default=1, metavar='N',
                         help='input batch size for training (default: 1)')
     parser.add_argument('--epochs', type=int, default=35, metavar='N', help='number of epochs to train (default: 10)')
-    parser.add_argument('--lr', type=float, default=0.00015, metavar='LR', help='learning rate (default: 0.1)')
+    parser.add_argument('--lr', type=float, default=0.0001, metavar='LR', help='learning rate (default: 0.1)')
     parser.add_argument('--weight_decay', type=float, default=1e-5)
     parser.add_argument('--momentum', type=float, default=0.5, metavar='M', help='SGD momentum (default: 0.5)')
     parser.add_argument('--seed', type=int, default=71, help='random seed (default: None)')
 
-    parser.add_argument('--resume', type=bool, default = False)
+    parser.add_argument('--resume', type=bool, default = True)
     args = parser.parse_args()
 
     main(args)

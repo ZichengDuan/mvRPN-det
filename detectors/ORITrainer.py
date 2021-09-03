@@ -81,6 +81,9 @@ class ORITrainer(BaseTrainer):
         #     param.requires_grad = False
         # for name, param in self.roi_head.named_parameters():
         #     param.requires_grad = False
+        self.model.train()
+        self.roi_head.train()
+        self.model.apply(fix_bn)
 
         Loss = 0
         RPN_CLS_LOSS = 0
@@ -290,10 +293,10 @@ class ORITrainer(BaseTrainer):
             # ----------------------Loss-----------------------------
             # loss = rpn_loc_loss * 3 + rpn_cls_loss * 3 + \
             #         (all_roi_loc_loss + all_roi_cls_loss + all_sincos_loss)
-            loss = rpn_loc_loss * 3 + rpn_cls_loss * 3 + \
-                    (all_roi_loc_loss + all_roi_cls_loss + all_orientation_loss + all_conf_loss)
-
-            # loss = (rpn_loc_loss + rpn_cls_loss) * 0 +  all_roi_loc_loss + all_roi_cls_loss + all_sincos_loss
+            # loss = (rpn_loc_loss + rpn_cls_loss) * 3 + \
+            #         (all_roi_loc_loss + all_roi_cls_loss)
+            loss = (rpn_loc_loss + rpn_cls_loss) * 3 + \
+                    (all_roi_loc_loss + all_roi_cls_loss + 0.4 * all_orientation_loss + all_conf_loss)
             Loss += loss.item()
 
 
@@ -301,7 +304,6 @@ class ORITrainer(BaseTrainer):
             RPN_LOC_LOSS += rpn_loc_loss.item()
             ALL_ROI_LOC_LOSS += all_roi_loc_loss.item()
             ALL_ROI_CLS_LOSS += all_roi_cls_loss.item()
-            # ALL_ANGLE_REG_LOSS += all_sincos_loss.item()
             ALL_ORI_LOSS += all_orientation_loss.item()
             ALL_CONF_LOSS += all_conf_loss.item()
             # ------------------------------------------------------------
@@ -331,6 +333,7 @@ class ORITrainer(BaseTrainer):
 
     def test(self,epoch, data_loader, writer):
         self.model.eval()
+        self.roi_head.eval()
         rpn_time = 0
         trans_time = 0
         roi_time = 0
@@ -545,7 +548,7 @@ def visualize_3dbox(pred_ori, pred_alpha, position_mark, gt_bbox, bev_angle, all
     for j, bbox in enumerate(gt_bbox):
         ymin, xmin, ymax, xmax = bbox
         theta = bev_angle[j]
-
+        theta = torch.tensor(0)
         center_x, center_y = int((xmin + xmax) // 2), int((ymin + ymax) // 2)
         w = 60
         h = 50
@@ -894,6 +897,10 @@ def visualize_3dbox(pred_ori, pred_alpha, position_mark, gt_bbox, bev_angle, all
         else:
             center_x, center_y = int((xmin + xmax) // 2), int((ymin + ymax) // 2)
             w, h = 60/2, 50/2
+            xmin = center_x - w
+            xmax = center_x + w
+            ymin = center_y - h
+            ymax = center_y + h
             x1_ori, x2_ori, x3_ori, x4_ori, x_mid = xmin, xmin, xmax, xmax, (xmin + xmax) / 2 + 40
             y1_ori, y2_ori, y3_ori, y4_ori, y_mid = Const.grid_height -ymin, Const.grid_height -ymax, Const.grid_height -ymax, Const.grid_height -ymin, (Const.grid_height -ymax + Const.grid_height -ymin) / 2
             center_x, center_y = int((xmin + xmax) // 2), int((ymin + ymax) // 2)
@@ -911,6 +918,7 @@ def visualize_3dbox(pred_ori, pred_alpha, position_mark, gt_bbox, bev_angle, all
             angle += np.pi
         theta_l = angle
         theta = theta_l + ray
+        theta = torch.tensor(0)
         w = xmax-xmin
         h = ymax-ymin
         if position_mark[i] == 0:
