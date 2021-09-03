@@ -64,8 +64,16 @@ def main(args):
 
     # model
     model = PerspTransDetector(train_set)
-    # classifier = model.classifier
+    # for param in model.named_parameters():
+    #     param[1].requires_grad = False
+
     roi_head = VGG16RoIHead(Const.roi_classes + 1,  7, 1/Const.reduce)
+    # for param in roi_head.named_parameters():
+    #     if "ang_regressor" not in param[0]:
+    #         param[1].requires_grad = False
+    # for param in roi_head.named_parameters():
+    #     print(param[1].requires_grad)
+
     # optimizer = optim.Adam(params=itertools.chain(model.parameters(), roi_head.parameters()), lr=args.lr, weight_decay=args.weight_decay)
     optimizer = optim.Adam([{'params': filter(lambda p: p.requires_grad, model.backbone.parameters())},
                             {'params': filter(lambda p: p.requires_grad, model.rpn.parameters())},
@@ -89,8 +97,8 @@ def main(args):
             trainer.test(epoch, val_loader, writer)
         else:
             print('Testing...')
-            model.load_state_dict(torch.load("%s/mvdet_rpn_%d.pth" % (Const.modelsavedir, 6)))
-            roi_head.load_state_dict(torch.load("%s/roi_rpn_head_%d.pth" % (Const.modelsavedir, 5)))
+            model.load_state_dict(torch.load("%s/mvdet_rpn_%d.pth" % (Const.modelsavedir, 4)))
+            roi_head.load_state_dict(torch.load("%s/roi_rpn_head_%d.pth" % (Const.modelsavedir, 4)))
             trainer.test(epoch, test_loader, writer)
             break
     writer.close()

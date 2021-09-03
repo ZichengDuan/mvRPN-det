@@ -401,9 +401,10 @@ class OFTtrainer(BaseTrainer):
 
         recall, precision, moda, modp = evaluate(os.path.abspath(res_fpath), os.path.abspath(gt_fpath),
                                                         data_loader.dataset.base.__name__)
-        ap, aos, OS = evaluateDetectionAPAOS(all_res_fpath, all_gt_fpath)
+        ap50, aos50, OS50, ap25, aos25, OS25 = evaluateDetectionAPAOS(all_res_fpath, all_gt_fpath)
         print("MODA: ", moda, ", MODP: ", modp, ", Recall: ", recall, ", Prec: ", precision)
-        print("AP: ", ap, " ,AOS: ", aos, ", OS: ", OS)
+        print("AP: ", ap50, " ,AOS: ", aos50, ", OS: ", OS50)
+        print("AP: ", ap25, " ,AOS: ", aos25, ", OS: ", OS25)
 
 
     @property
