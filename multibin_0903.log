@@ -1,0 +1,7 @@
+/root/deep_learning/dzc/data/opensource2/dzc_res/train_gt.txt
+/root/deep_learning/dzc/data/opensource2/dzc_res/train_gt.txt
+/root/deep_learning/dzc/data/opensource2/dzc_res/train_gt.txt
+Settings:
+{'reID': False, 'variant': 'default', 'dataset': 'robo', 'num_workers': 8, 'batch_size': 1, 'epochs': 35, 'lr': 0.00015, 'weight_decay': 1e-05, 'momentum': 0.5, 'seed': 71, 'resume': False}
+
+  0%|          | 0/35 [00:00<?, ?it/s]Training...

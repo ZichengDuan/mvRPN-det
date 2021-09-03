@@ -47,13 +47,12 @@ def main(args):
     denormalize = img_color_denormalize((0.485, 0.456, 0.406), (0.229, 0.224, 0.225))
     # resize = T.Resize([384, 512]) # h, w
     # resize = T.Resize([240, 320]) # h, w
-    train_trans = T.Compose([T.ToTensor(), bright, saturation, normalize])
+    train_trans = T.Compose([T.ToTensor(), normalize])
     test_trans = T.Compose([T.ToTensor(), normalize])
     data_path = os.path.expanduser('/root/deep_learning/dzc/data/%s' % Const.dataset)
     # data_path2 = os.path.expanduser('/home/dzc/Data/%s' % Const.dataset)
     base = Robomaster_1_dataset(data_path, args, worldgrid_shape=Const.grid_size)
-    train_set = oftFrameDataset(base, train=True, transform=train_trans, grid_reduce=Const.reduce)
-    test_set = oftFrameDataset(base , train=False, transform=test_trans, grid_reduce=Const.reduce)
+    
     train_loader = torch.utils.data.DataLoader(train_set, batch_size=args.batch_size, shuffle=True,
                                                num_workers=args.num_workers, pin_memory=True, drop_last=True)
     test_loader = torch.utils.data.DataLoader(test_set, batch_size=args.batch_size, shuffle=False,
@@ -86,11 +85,11 @@ def main(args):
             loss = trainer.train(epoch, train_loader, optimizer, writer)
             torch.save(model.state_dict(), os.path.join('%s/mvdet_rpn_%d.pth' % (Const.modelsavedir, epoch)))
             torch.save(roi_head.state_dict(), os.path.join('%s/roi_rpn_head_%d.pth' % (Const.modelsavedir, epoch)))
-            # trainer.test(epoch, test_loader, writer)
+            trainer.test(epoch, test_loader, writer)
         else:
             print('Testing...')
-            model.load_state_dict(torch.load("%s/mvdet_rpn_%d.pth" % (Const.modelsavedir, 8)))
-            roi_head.load_state_dict(torch.load("%s/roi_rpn_head_%d.pth" % (Const.modelsavedir, 4)))
+            model.load_state_dict(torch.load("%s/mvdet_rpn_%d.pth" % (Const.modelsavedir, 12)))
+            roi_head.load_state_dict(torch.load("%s/roi_rpn_head_%d.pth" % (Const.modelsavedir, 12)))
             trainer.test(epoch, test_loader, writer)
             break
     writer.close()
@@ -112,7 +111,7 @@ if __name__ == '__main__':
     parser.add_argument('--momentum', type=float, default=0.5, metavar='M', help='SGD momentum (default: 0.5)')
     parser.add_argument('--seed', type=int, default=71, help='random seed (default: None)')
 
-    parser.add_argument('--resume', type=bool, default = True)
+    parser.add_argument('--resume', type=bool, default = False)
     args = parser.parse_args()
 
     main(args)

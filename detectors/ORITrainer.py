@@ -12,6 +12,7 @@ sys.path.append("..")
 import matplotlib.pyplot as plt
 from detectors.utils.nms_new import nms_new, _suppress, vis_nms
 # from detectors.evaluation.evaluate import matlab_eval, python_eval
+from detectors.evaluation.pyeval.calAOS import evaluateDetectionAPAOS
 from detectors.evaluation.evaluate import evaluate
 import torch.nn as nn
 import warnings
@@ -502,23 +503,24 @@ class ORITrainer(BaseTrainer):
                 for l in range(len(test_pred_res)):
                     all_pred_res.append(test_pred_res[l])
 
-        res_fpath = '/root/deep_learning/dzc/data/%s/dzc_res/res.txt' % Const.dataset
-        gt_fpath = '/root/deep_learning/dzc/data/%s/dzc_res/test_gt.txt' % Const.dataset
-        np.savetxt(res_fpath, np.array(all_res).reshape(-1, 3), "%d")
-
-        all_res_fpath = '/root/deep_learning/dzc/data/%s/dzc_res/all_res.txt' % Const.dataset
+        res_fpath = '/root/deep_learning/dzc/data/%s/dzc_res/all_res.txt' % Const.dataset
         all_gt_fpath = '/root/deep_learning/dzc/data/%s/dzc_res/all_test_gt.txt' % Const.dataset
-        print(all_pred_res)
+        # print(all_pred_res)
         all_gt_res = np.array(all_gt_res).reshape(-1, 6)
         all_pred_res = np.array(all_pred_res).reshape(-1, 7)
 
-        np.savetxt(all_res_fpath, all_pred_res, "%f")
+        np.savetxt(res_fpath, all_pred_res, "%f")
         np.savetxt(all_gt_fpath, all_gt_res, "%f")
 
-        recall, precision, moda, modp = evaluate(os.path.abspath(res_fpath), os.path.abspath(gt_fpath),
+        recall, precision, moda, modp = evaluate(os.path.abspath(res_fpath), os.path.abspath(all_gt_fpath),
                                                         data_loader.dataset.base.__name__)
+        
+        AP_50, AOS_50, OS_50, AP_25, AOS_25, OS_25 = evaluateDetectionAPAOS(res_fpath, all_gt_fpath)
+        print("MODA: ", moda, ", MODP: ", modp, ", Recall: ", recall, ", Prec: ", precision)
+        print("AP_50: ", AP_50, " ,AOS_50: ", AOS_50, ", OS_50: ", OS_50)
+        print("AP_25: ", AP_25, " ,AOS_25: ", AOS_25, ", OS_25: ", OS_25)
 
-        print(recall, precision, moda, modp)
+        # print(recall, precision, moda, modp)
 
 
     @property
@@ -544,11 +546,17 @@ def visualize_3dbox(pred_ori, pred_alpha, position_mark, gt_bbox, bev_angle, all
         ymin, xmin, ymax, xmax = bbox
         theta = bev_angle[j]
 
+        center_x, center_y = int((xmin + xmax) // 2), int((ymin + ymax) // 2)
+        w = 60
+        h = 50
+        xmin = center_x - w//2
+        xmax = center_x + w//2
+        ymin = center_y - h//2
+        ymax = center_y + h//2
+
         x1_ori, x2_ori, x3_ori, x4_ori, x_mid = xmin, xmin, xmax, xmax, (xmin + xmax) / 2 - 40
         y1_ori, y2_ori, y3_ori, y4_ori, y_mid = Const.grid_height - ymin, Const.grid_height - ymax, Const.grid_height - ymax, Const.grid_height - ymin, (Const.grid_height -ymax + Const.grid_height -ymin) / 2
-        center_x, center_y = int((xmin + xmax) // 2), int((ymin + ymax) // 2)
-        w = 50
-        h = 60
+        
         all_gt_res.append([idx.item(), center_x, center_y, w, h, np.rad2deg(theta.item())])
 
 
@@ -863,6 +871,12 @@ def visualize_3dbox(pred_ori, pred_alpha, position_mark, gt_bbox, bev_angle, all
         else:
             score = all_front_prob[i]
         if position_mark[i] == 0:
+            center_x, center_y = int((bbox[1] + bbox[3]) // 2), int((bbox[0] + bbox[2]) // 2)
+            w, h = 60/2, 50/2
+            xmin = center_x - w
+            xmax = center_x + w
+            ymin = center_y - h
+            ymax = center_y + h
             x1_ori, x2_ori, x3_ori, x4_ori, x_mid = xmin, xmin, xmax, xmax, (xmin + xmax) / 2 + 40
             y1_ori, y2_ori, y3_ori, y4_ori, y_mid = Const.grid_height -ymin, Const.grid_height -ymax, Const.grid_height -ymax, Const.grid_height -ymin, (Const.grid_height -ymax + Const.grid_height -ymin) / 2
             center_x, center_y = int((bbox[1] + bbox[3]) // 2), int((bbox[0] + bbox[2]) // 2)
@@ -878,6 +892,8 @@ def visualize_3dbox(pred_ori, pred_alpha, position_mark, gt_bbox, bev_angle, all
             #         sincos[1] > 0:
             #     angle += 2 * np.pi
         else:
+            center_x, center_y = int((xmin + xmax) // 2), int((ymin + ymax) // 2)
+            w, h = 60/2, 50/2
             x1_ori, x2_ori, x3_ori, x4_ori, x_mid = xmin, xmin, xmax, xmax, (xmin + xmax) / 2 + 40
             y1_ori, y2_ori, y3_ori, y4_ori, y_mid = Const.grid_height -ymin, Const.grid_height -ymax, Const.grid_height -ymax, Const.grid_height -ymin, (Const.grid_height -ymax + Const.grid_height -ymin) / 2
             center_x, center_y = int((xmin + xmax) // 2), int((ymin + ymax) // 2)
@@ -895,9 +911,14 @@ def visualize_3dbox(pred_ori, pred_alpha, position_mark, gt_bbox, bev_angle, all
             angle += np.pi
         theta_l = angle
         theta = theta_l + ray
-        w = 50
-        h = 60
-        all_pred_res.append([idx.item(), center_x, center_y, w, h,  np.rad2deg(theta.item()), score])
+        w = xmax-xmin
+        h = ymax-ymin
+        if position_mark[i] == 0:
+            theta_left = theta + np.pi
+            all_pred_res.append([idx.item(), center_x, center_y, w, h,  np.rad2deg(theta_left.item()), score])
+        else:
+            all_pred_res.append([idx.item(), center_x, center_y, w, h, np.rad2deg(theta.item()), score])
+        
 
         x1_rot, x2_rot, x3_rot, x4_rot, xmid_rot = \
             int(math.cos(theta) * (x1_ori - center_x) - math.sin(theta) * (y1_ori - (Const.grid_height - center_y)) + center_x), \
