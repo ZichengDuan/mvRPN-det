@@ -66,15 +66,14 @@ def main(args):
     model = PerspTransDetector(train_set)
     # classifier = model.classifier
     roi_head = VGG16RoIHead(Const.roi_classes + 1,  7, 1/Const.reduce)
-    optimizer = optim.Adam(params=itertools.chain(model.parameters(), roi_head.parameters()), lr=args.lr, weight_decay=args.weight_decay)
-    # optimizer = optim.Adam([{'params': filter(lambda p: p.requires_grad, model.backbone.parameters()), 'lr': 1e-3},
-    #                         {'params': filter(lambda p: p.requires_grad, model.rpn.parameters())},
-    #                         {'params': filter(lambda p: p.requires_grad, roi_head.parameters())}], lr=args.lr, weight_decay=args.weight_decay)
+    # optimizer = optim.Adam(params=itertools.chain(model.parameters(), roi_head.parameters()), lr=args.lr, weight_decay=args.weight_decay)
+    optimizer = optim.Adam([{'params': filter(lambda p: p.requires_grad, model.backbone.parameters())},
+                            {'params': filter(lambda p: p.requires_grad, model.rpn.parameters())},
+                            {'params': filter(lambda p: p.requires_grad, roi_head.parameters()), 'lr': 1.5*1e-3}], lr=args.lr, weight_decay=args.weight_decay)
     print('Settings:')
     print(vars(args))
 
     trainer = OFTtrainer(model, roi_head, denormalize)
-    # trainer = RPNtrainer(model, roi_head, denormalize)
 
     # learn0.
     # model.load_state_dict(torch.load('%s/mvdet_rpn_%d.pth' % (Const.modelsavedir, 3)))
@@ -84,16 +83,14 @@ def main(args):
     for epoch in tqdm.tqdm(range(1, args.epochs + 1)):
         if not args.resume:
             print('Training...')
-            # model.load_state_dict(torch.load("%s/mvdet_sep_rpn_%d.pth" % (Const.modelsavedir, 10)))
-            # roi_head.load_state_dict(torch.load("%s/roi_rpn_head_%d.pth" % (Const.modelsavedir, 10)))
             loss = trainer.train(epoch, train_loader, optimizer, writer)
             torch.save(model.state_dict(), os.path.join('%s/mvdet_rpn_%d.pth' % (Const.modelsavedir, epoch)))
             torch.save(roi_head.state_dict(), os.path.join('%s/roi_rpn_head_%d.pth' % (Const.modelsavedir, epoch)))
             trainer.test(epoch, val_loader, writer)
         else:
             print('Testing...')
-            model.load_state_dict(torch.load("%s/mvdet_rpn_%d.pth" % (Const.modelsavedir, 3)))
-            roi_head.load_state_dict(torch.load("%s/roi_rpn_head_%d.pth" % (Const.modelsavedir, 3)))
+            model.load_state_dict(torch.load("%s/mvdet_rpn_%d.pth" % (Const.modelsavedir, 6)))
+            roi_head.load_state_dict(torch.load("%s/roi_rpn_head_%d.pth" % (Const.modelsavedir, 5)))
             trainer.test(epoch, test_loader, writer)
             break
     writer.close()

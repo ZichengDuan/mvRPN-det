@@ -188,7 +188,6 @@ class OFTtrainer(BaseTrainer):
 
             all_pred_sincos = torch.cat((left_pred_sincos, right_pred_sincos))
             all_gt_sincos = torch.cat((torch.tensor(left_gt_sincos), torch.tensor(right_gt_sincos)))
-
             all_roi_loc_loss = _fast_rcnn_loc_loss(
                 all_roi_loc.contiguous(),
                 all_roi_gt_loc,
@@ -197,9 +196,7 @@ class OFTtrainer(BaseTrainer):
             all_roi_cls_loss = nn.CrossEntropyLoss()(all_roi_score, all_gt_label.to(all_roi_score.device))
             all_sincos_loss = self.MSELoss(all_pred_sincos.float(), torch.tensor(all_gt_sincos).to(all_pred_sincos.device).float())
             # ----------------------Loss-----------------------------
-            # loss = rpn_loc_loss * 3 + rpn_cls_loss * 3 + \
-            #         (all_roi_loc_loss  + all_roi_cls_loss + all_sincos_loss)
-            loss = (rpn_loc_loss + rpn_cls_loss) * 3 +  (all_roi_loc_loss  + all_roi_cls_loss + all_sincos_loss)
+            loss = (rpn_loc_loss + rpn_cls_loss) * 3 +  (all_roi_loc_loss + all_roi_cls_loss + all_sincos_loss)
 
             Loss += loss.item()
 
@@ -409,7 +406,6 @@ class OFTtrainer(BaseTrainer):
         print("AP: ", ap, " ,AOS: ", aos, ", OS: ", OS)
 
 
-
     @property
     def n_class(self):
         # Total number of classes including the background.
@@ -433,12 +429,17 @@ def visualize_3dbox(pred_ori, pred_angle, position_mark, gt_bbox, bev_angle, all
         ymin, xmin, ymax, xmax = bbox
         theta = bev_angle[j]
         # theta =torch.tensor(0)
-
-        x1_ori, x2_ori, x3_ori, x4_ori, x_mid = xmin, xmin, xmax, xmax, (xmin + xmax) / 2 - 40
-        y1_ori, y2_ori, y3_ori, y4_ori, y_mid = Const.grid_height - ymin, Const.grid_height - ymax, Const.grid_height - ymax, Const.grid_height - ymin, (Const.grid_height -ymax + Const.grid_height -ymin) / 2
         center_x, center_y = int((xmin + xmax) // 2), int((ymin + ymax) // 2)
-        w = 50
-        h = 60
+        w = 60
+        h = 50
+        xmin = center_x - w//2
+        xmax = center_x + w//2
+        ymin = center_y - h//2
+        ymax = center_y + h//2
+        x1_ori, x2_ori, x3_ori, x4_ori, x_mid = center_x - w//2, xmin, xmax, xmax, (xmin + xmax) / 2 - 40
+        y1_ori, y2_ori, y3_ori, y4_ori, y_mid = Const.grid_height - ymin, Const.grid_height - ymax, Const.grid_height - ymax, Const.grid_height - ymin, (Const.grid_height -ymax + Const.grid_height -ymin) / 2
+        # center_x, center_y = int((xmin + xmax) // 2), int((ymin + ymax) // 2)
+
         all_gt_res.append([idx.item(), center_x, center_y, w, h, np.rad2deg(theta.item())])
 
 
@@ -481,52 +482,52 @@ def visualize_3dbox(pred_ori, pred_angle, position_mark, gt_bbox, bev_angle, all
     gt_ori = np.array(boxes_3d).reshape((gt_n_bbox, 9, 3))
     gt_projected_2d = getprojected_3dbox(gt_ori, extrin, intrin, isleft=True)
     gt_projected_2d = getprojected_3dbox(gt_ori, extrin, intrin, isleft=False)
-    for k in range(gt_n_bbox):
-        color = (0, 60, 199)
-        cv2.line(right_img, (gt_projected_2d[k][0][0], gt_projected_2d[k][0][1]),
-                 (gt_projected_2d[k][1][0], gt_projected_2d[k][1][1]), color=color, thickness=1)
-        cv2.line(right_img, (gt_projected_2d[k][0][0], gt_projected_2d[k][0][1]),
-                 (gt_projected_2d[k][3][0], gt_projected_2d[k][3][1]), color=color, thickness=1)
-        cv2.line(right_img, (gt_projected_2d[k][0][0], gt_projected_2d[k][0][1]),
-                 (gt_projected_2d[k][4][0], gt_projected_2d[k][4][1]), color=color, thickness=1)
-        cv2.line(right_img, (gt_projected_2d[k][1][0], gt_projected_2d[k][1][1]),
-                 (gt_projected_2d[k][5][0], gt_projected_2d[k][5][1]), color=color, thickness=1)
-        cv2.line(right_img, (gt_projected_2d[k][1][0], gt_projected_2d[k][1][1]),
-                 (gt_projected_2d[k][2][0], gt_projected_2d[k][2][1]), color=color, thickness=1)
-        cv2.line(right_img, (gt_projected_2d[k][2][0], gt_projected_2d[k][2][1]),
-                 (gt_projected_2d[k][3][0], gt_projected_2d[k][3][1]), color=color, thickness=1)
-        cv2.line(right_img, (gt_projected_2d[k][2][0], gt_projected_2d[k][2][1]),
-                 (gt_projected_2d[k][6][0], gt_projected_2d[k][6][1]), color=color, thickness=1)
-        cv2.line(right_img, (gt_projected_2d[k][3][0], gt_projected_2d[k][3][1]),
-                 (gt_projected_2d[k][7][0], gt_projected_2d[k][7][1]), color=color, thickness=1)
-        cv2.line(right_img, (gt_projected_2d[k][4][0], gt_projected_2d[k][4][1]),
-                 (gt_projected_2d[k][5][0], gt_projected_2d[k][5][1]), color=color, thickness=2)
-        cv2.line(right_img, (gt_projected_2d[k][5][0], gt_projected_2d[k][5][1]),
-                 (gt_projected_2d[k][6][0], gt_projected_2d[k][6][1]), color=color, thickness=1)
-        cv2.line(right_img, (gt_projected_2d[k][6][0], gt_projected_2d[k][6][1]),
-                 (gt_projected_2d[k][7][0], gt_projected_2d[k][7][1]), color=color, thickness=1)
-        cv2.line(right_img, (gt_projected_2d[k][7][0], gt_projected_2d[k][7][1]),
-                 (gt_projected_2d[k][4][0], gt_projected_2d[k][4][1]), color=color, thickness=1)
-        cv2.line(right_img, (gt_projected_2d[k][7][0], gt_projected_2d[k][7][1]),
-                 (gt_projected_2d[k][4][0], gt_projected_2d[k][4][1]), color=color, thickness=1)
-
-        # cv2.line(left_img, (projected_2d[k][0+ 9][0], projected_2d[k][0+ 9][1]), (projected_2d[k][1+ 9][0], projected_2d[k][1+ 9][1]), color = (255, 255, 0))
-        # cv2.line(left_img, (projected_2d[k][0+ 9][0], projected_2d[k][0+ 9][1]), (projected_2d[k][3+ 9][0], projected_2d[k][3+ 9][1]), color = (255, 255, 0))
-        # cv2.line(left_img, (projected_2d[k][0+ 9][0], projected_2d[k][0+ 9][1]), (projected_2d[k][4+ 9][0], projected_2d[k][4+ 9][1]), color = (255, 255, 0))
-        # cv2.line(left_img, (projected_2d[k][1+ 9][0], projected_2d[k][1+ 9][1]), (projected_2d[k][5+ 9][0], projected_2d[k][5+ 9][1]), color = (255, 255, 0))
-        # cv2.line(left_img, (projected_2d[k][1+ 9][0], projected_2d[k][1+ 9][1]), (projected_2d[k][2+ 9][0], projected_2d[k][2+ 9][1]), color = (255, 255, 0))
-        # cv2.line(left_img, (projected_2d[k][2+ 9][0], projected_2d[k][2+ 9][1]), (projected_2d[k][3+ 9][0], projected_2d[k][3+ 9][1]), color = (255, 255, 0))
-        # cv2.line(left_img, (projected_2d[k][2+ 9][0], projected_2d[k][2+ 9][1]), (projected_2d[k][6+ 9][0], projected_2d[k][6+ 9][1]), color = (255, 255, 0))
-        # cv2.line(left_img, (projected_2d[k][3+ 9][0], projected_2d[k][3+ 9][1]), (projected_2d[k][7+ 9][0], projected_2d[k][7+ 9][1]), color = (255, 255, 0))
-        # cv2.line(left_img, (projected_2d[k][4+ 9][0], projected_2d[k][4+ 9][1]), (projected_2d[k][5+ 9][0], projected_2d[k][5+ 9][1]), color = (255, 255, 0))
-        # cv2.line(left_img, (projected_2d[k][5+ 9][0], projected_2d[k][5+ 9][1]), (projected_2d[k][6+ 9][0], projected_2d[k][6+ 9][1]), color = (255, 255, 0))
-        # cv2.line(left_img, (projected_2d[k][6+ 9][0], projected_2d[k][6+ 9][1]), (projected_2d[k][7+ 9][0], projected_2d[k][7+ 9][1]), color = (255, 255, 0))
-        # cv2.line(left_img, (projected_2d[k][7+ 9][0], projected_2d[k][7+ 9][1]), (projected_2d[k][4+ 9][0], projected_2d[k][4+ 9][1]), color = (255, 255, 0))
-        # cv2.line(left_img, (projected_2d[k][7+ 9][0], projected_2d[k][7+ 9][1]), (projected_2d[k][4+ 9][0], projected_2d[k][4+ 9][1]), color = (255, 255, 0))
-        #
-        cv2.arrowedLine(right_img, (int((gt_projected_2d[k][0][0] + gt_projected_2d[k][2][0]) / 2),
-                                    int((gt_projected_2d[k][0][1] + gt_projected_2d[k][2][1]) / 2)),
-                        (gt_projected_2d[k][8][0], gt_projected_2d[k][8][1]), color=(255, 60, 199), thickness=2)
+    # for k in range(gt_n_bbox):
+    #     color = (0, 60, 199)
+    #     cv2.line(right_img, (gt_projected_2d[k][0][0], gt_projected_2d[k][0][1]),
+    #              (gt_projected_2d[k][1][0], gt_projected_2d[k][1][1]), color=color, thickness=1)
+    #     cv2.line(right_img, (gt_projected_2d[k][0][0], gt_projected_2d[k][0][1]),
+    #              (gt_projected_2d[k][3][0], gt_projected_2d[k][3][1]), color=color, thickness=1)
+    #     cv2.line(right_img, (gt_projected_2d[k][0][0], gt_projected_2d[k][0][1]),
+    #              (gt_projected_2d[k][4][0], gt_projected_2d[k][4][1]), color=color, thickness=1)
+    #     cv2.line(right_img, (gt_projected_2d[k][1][0], gt_projected_2d[k][1][1]),
+    #              (gt_projected_2d[k][5][0], gt_projected_2d[k][5][1]), color=color, thickness=1)
+    #     cv2.line(right_img, (gt_projected_2d[k][1][0], gt_projected_2d[k][1][1]),
+    #              (gt_projected_2d[k][2][0], gt_projected_2d[k][2][1]), color=color, thickness=1)
+    #     cv2.line(right_img, (gt_projected_2d[k][2][0], gt_projected_2d[k][2][1]),
+    #              (gt_projected_2d[k][3][0], gt_projected_2d[k][3][1]), color=color, thickness=1)
+    #     cv2.line(right_img, (gt_projected_2d[k][2][0], gt_projected_2d[k][2][1]),
+    #              (gt_projected_2d[k][6][0], gt_projected_2d[k][6][1]), color=color, thickness=1)
+    #     cv2.line(right_img, (gt_projected_2d[k][3][0], gt_projected_2d[k][3][1]),
+    #              (gt_projected_2d[k][7][0], gt_projected_2d[k][7][1]), color=color, thickness=1)
+    #     cv2.line(right_img, (gt_projected_2d[k][4][0], gt_projected_2d[k][4][1]),
+    #              (gt_projected_2d[k][5][0], gt_projected_2d[k][5][1]), color=color, thickness=2)
+    #     cv2.line(right_img, (gt_projected_2d[k][5][0], gt_projected_2d[k][5][1]),
+    #              (gt_projected_2d[k][6][0], gt_projected_2d[k][6][1]), color=color, thickness=1)
+    #     cv2.line(right_img, (gt_projected_2d[k][6][0], gt_projected_2d[k][6][1]),
+    #              (gt_projected_2d[k][7][0], gt_projected_2d[k][7][1]), color=color, thickness=1)
+    #     cv2.line(right_img, (gt_projected_2d[k][7][0], gt_projected_2d[k][7][1]),
+    #              (gt_projected_2d[k][4][0], gt_projected_2d[k][4][1]), color=color, thickness=1)
+    #     cv2.line(right_img, (gt_projected_2d[k][7][0], gt_projected_2d[k][7][1]),
+    #              (gt_projected_2d[k][4][0], gt_projected_2d[k][4][1]), color=color, thickness=1)
+    #
+    #     # cv2.line(left_img, (projected_2d[k][0+ 9][0], projected_2d[k][0+ 9][1]), (projected_2d[k][1+ 9][0], projected_2d[k][1+ 9][1]), color = (255, 255, 0))
+    #     # cv2.line(left_img, (projected_2d[k][0+ 9][0], projected_2d[k][0+ 9][1]), (projected_2d[k][3+ 9][0], projected_2d[k][3+ 9][1]), color = (255, 255, 0))
+    #     # cv2.line(left_img, (projected_2d[k][0+ 9][0], projected_2d[k][0+ 9][1]), (projected_2d[k][4+ 9][0], projected_2d[k][4+ 9][1]), color = (255, 255, 0))
+    #     # cv2.line(left_img, (projected_2d[k][1+ 9][0], projected_2d[k][1+ 9][1]), (projected_2d[k][5+ 9][0], projected_2d[k][5+ 9][1]), color = (255, 255, 0))
+    #     # cv2.line(left_img, (projected_2d[k][1+ 9][0], projected_2d[k][1+ 9][1]), (projected_2d[k][2+ 9][0], projected_2d[k][2+ 9][1]), color = (255, 255, 0))
+    #     # cv2.line(left_img, (projected_2d[k][2+ 9][0], projected_2d[k][2+ 9][1]), (projected_2d[k][3+ 9][0], projected_2d[k][3+ 9][1]), color = (255, 255, 0))
+    #     # cv2.line(left_img, (projected_2d[k][2+ 9][0], projected_2d[k][2+ 9][1]), (projected_2d[k][6+ 9][0], projected_2d[k][6+ 9][1]), color = (255, 255, 0))
+    #     # cv2.line(left_img, (projected_2d[k][3+ 9][0], projected_2d[k][3+ 9][1]), (projected_2d[k][7+ 9][0], projected_2d[k][7+ 9][1]), color = (255, 255, 0))
+    #     # cv2.line(left_img, (projected_2d[k][4+ 9][0], projected_2d[k][4+ 9][1]), (projected_2d[k][5+ 9][0], projected_2d[k][5+ 9][1]), color = (255, 255, 0))
+    #     # cv2.line(left_img, (projected_2d[k][5+ 9][0], projected_2d[k][5+ 9][1]), (projected_2d[k][6+ 9][0], projected_2d[k][6+ 9][1]), color = (255, 255, 0))
+    #     # cv2.line(left_img, (projected_2d[k][6+ 9][0], projected_2d[k][6+ 9][1]), (projected_2d[k][7+ 9][0], projected_2d[k][7+ 9][1]), color = (255, 255, 0))
+    #     # cv2.line(left_img, (projected_2d[k][7+ 9][0], projected_2d[k][7+ 9][1]), (projected_2d[k][4+ 9][0], projected_2d[k][4+ 9][1]), color = (255, 255, 0))
+    #     # cv2.line(left_img, (projected_2d[k][7+ 9][0], projected_2d[k][7+ 9][1]), (projected_2d[k][4+ 9][0], projected_2d[k][4+ 9][1]), color = (255, 255, 0))
+    #     #
+    #     cv2.arrowedLine(right_img, (int((gt_projected_2d[k][0][0] + gt_projected_2d[k][2][0]) / 2),
+    #                                 int((gt_projected_2d[k][0][1] + gt_projected_2d[k][2][1]) / 2)),
+    #                     (gt_projected_2d[k][8][0], gt_projected_2d[k][8][1]), color=(255, 60, 199), thickness=2)
         # cv2.line(left_img, (int((projected_2d[k][0+ 9][0] + projected_2d[k][2+ 9][0]) / 2), int((projected_2d[k][0+ 9][1] + projected_2d[k][2+ 9][1]) / 2)), (projected_2d[k][8+ 9][0], projected_2d[k][8+ 9][1]), color = (255, 60, 199), thickness=2)
     # cv2.imwrite("/home/dzc/Desktop/CASIA/proj/mvRPN-det/results/images/3d_box_blend/%d_gt.jpg" % idx, right_img)
     # right_img = cv2.imread("/home/dzc/Data/opensource/img/right2/%d.jpg" % (idx))
@@ -732,7 +733,7 @@ def visualize_3dbox(pred_ori, pred_angle, position_mark, gt_bbox, bev_angle, all
             score = all_front_prob[i]
         if position_mark[i] == 0:
             center_x, center_y = int((bbox[1] + bbox[3]) // 2), int((bbox[0] + bbox[2]) // 2)
-            w, h = 50/2, 60/2
+            w, h = 60/2, 50/2
             xmin = center_x - w
             xmax = center_x + w
             ymin = center_y - h
@@ -762,7 +763,7 @@ def visualize_3dbox(pred_ori, pred_angle, position_mark, gt_bbox, bev_angle, all
             # angle += np.pi
         else:
             center_x, center_y = int((xmin + xmax) // 2), int((ymin + ymax) // 2)
-            w, h = 50/2, 60/2
+            w, h = 60/2, 50/2
             xmin = center_x - w
             xmax = center_x + w
             ymin = center_y - h
@@ -878,7 +879,7 @@ def visualize_3dbox(pred_ori, pred_angle, position_mark, gt_bbox, bev_angle, all
         # cv2.line(left_img, (projected_2d[k][7+ 9][0], projected_2d[k][7+ 9][1]), (projected_2d[k][4+ 9][0], projected_2d[k][4+ 9][1]), color = (255, 255, 0))
         # cv2.line(left_img, (projected_2d[k][7+ 9][0], projected_2d[k][7+ 9][1]), (projected_2d[k][4+ 9][0], projected_2d[k][4+ 9][1]), color = (255, 255, 0))
         #
-        # cv2.arrowedLine(right_img, (int((projected_2d[k][0][0] + projected_2d[k][2][0]) / 2), int((projected_2d[k][0][1] + projected_2d[k][2][1]) / 2)), (projected_2d[k][8][0], projected_2d[k][8][1]), color = (255, 60, 199), thickness=2)
+        cv2.arrowedLine(right_img, (int((projected_2d[k][0][0] + projected_2d[k][2][0]) / 2), int((projected_2d[k][0][1] + projected_2d[k][2][1]) / 2)), (projected_2d[k][8][0], projected_2d[k][8][1]), color = (255, 60, 199), thickness=2)
         # cv2.line(left_img, (int((projected_2d[k][0+ 9][0] + projected_2d[k][2+ 9][0]) / 2), int((projected_2d[k][0+ 9][1] + projected_2d[k][2+ 9][1]) / 2)), (projected_2d[k][8+ 9][0], projected_2d[k][8+ 9][1]), color = (255, 60, 199), thickness=2)
 
     cv2.imwrite("/home/dzc/Desktop/CASIA/proj/mvRPN-det/results/images/3d_box_blend/%d.jpg" % idx, right_img)

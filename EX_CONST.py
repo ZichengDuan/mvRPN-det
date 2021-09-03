@@ -41,7 +41,7 @@ class Const:
 
     roi_classes = 1
 
-    modelsavedir = "/home/dzc/Desktop/CASIA/proj/mvRPN-det/results/trained/opensource"
+    modelsavedir = "/home/dzc/Desktop/CASIA/proj/mvRPN-det/results/trained/opensource_2"
 
     imgsavedir = "/home/dzc/Desktop/CASIA/proj/mvRPN-det/results/images/testing_set"
 

@@ -37,6 +37,7 @@ class oftFrameDataset(VisionDataset):
             frame_range = list (range(2000, 2100)) + list(range(3500, 3600))
         else:
             frame_range = list(range(1800, 2100)) + list(range(3500, 3600))
+            # frame_range = list(range(1500, 1800))
 
         self.upsample_shape = list(map(lambda x: int(x / self.img_reduce), self.img_shape))
         img_reduce_local = np.array(self.img_shape) / np.array(self.upsample_shape)
