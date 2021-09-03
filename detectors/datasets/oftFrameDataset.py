@@ -30,10 +30,12 @@ class oftFrameDataset(VisionDataset):
         self.extrinsic_matrix2 = base.extrinsic_matrices2
         self.intrinsic_matrix2 = base.intrinsic_matrices2
 
-        if train:
-            frame_range = list(range(0, 1400)) + list(range(2000, 6989))
+        if train == 1:
+            frame_range = list(range(0, 1800)) + list(range(2100, 3500)) + list(range(3600, 4330))
+        elif train == 3:
+            frame_range = list(range(2000, 2100)) + list(range(3500, 3600))
         else:
-            frame_range = list(range(1400, 2000))
+            frame_range = list(range(1800, 2100)) + list(range(3500, 3600))
 
 
         # if train:

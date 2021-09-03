@@ -50,8 +50,9 @@ def main(args):
     data_path = os.path.expanduser('/home/dzc/Data/%s' % Const.dataset)
     # data_path2 = os.path.expanduser('/home/dzc/Data/%s' % Const.dataset)
     base = Robomaster_1_dataset(data_path, args, worldgrid_shape=Const.grid_size)
-    train_set = oftFrameDataset(base, train=True, transform=train_trans, grid_reduce=Const.reduce)
-    test_set = oftFrameDataset(base , train=False, transform=test_trans, grid_reduce=Const.reduce)
+    train_set = oftFrameDataset(base, train=1, transform=train_trans, grid_reduce=Const.reduce)
+    val_set = oftFrameDataset(base, train=3, transform=test_trans, grid_reduce=Const.reduce)
+    test_set = oftFrameDataset(base, train=2, transform=test_trans, grid_reduce=Const.reduce)
     train_loader = torch.utils.data.DataLoader(train_set, batch_size=args.batch_size, shuffle=True,
                                                num_workers=args.num_workers, pin_memory=True, drop_last=True)
     test_loader = torch.utils.data.DataLoader(test_set, batch_size=args.batch_size, shuffle=False,
@@ -109,7 +110,7 @@ if __name__ == '__main__':
     parser.add_argument('--momentum', type=float, default=0.5, metavar='M', help='SGD momentum (default: 0.5)')
     parser.add_argument('--seed', type=int, default=16, help='random seed (default: None)')
 
-    parser.add_argument('--resume', type=bool, default = True)
+    parser.add_argument('--resume', type=bool, default = False)
     args = parser.parse_args()
 
     main(args)
