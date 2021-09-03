@@ -22,7 +22,7 @@ class Const:
 
     reduce =4
 
-    dataset = "opensource2"
+    dataset = "opensource"
 
     car_dist = math.sqrt(50/2 * 50/2 + 60/2 * 60/2)
 
@@ -41,7 +41,7 @@ class Const:
 
     roi_classes = 1
 
-    modelsavedir = "/root/deep_learning/dzc/mvRPN-det/results/trained/3timesrpnloss_2"
+    modelsavedir = "/home/dzc/Desktop/CASIA/proj/mvRPN-det/results/trained/multibin"
 
     imgsavedir = "/root/deep_learning/dzc/mvRPN-det/results/images/testing_set"
 

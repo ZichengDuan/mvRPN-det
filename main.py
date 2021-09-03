@@ -27,7 +27,7 @@ warnings.filterwarnings("ignore")
 
 def main(args):
     # seed
-    writer = SummaryWriter('/root/deep_learning/dzc/mvRPN-det/results/tensorboard/log')
+    writer = SummaryWriter('/home/dzc/Desktop/CASIA/proj/mvRPN-det/results/tensorboard/log')
 
     if args.seed is not None:
         np.random.seed(args.seed)
@@ -49,10 +49,13 @@ def main(args):
     # resize = T.Resize([240, 320]) # h, w
     train_trans = T.Compose([T.ToTensor(), normalize])
     test_trans = T.Compose([T.ToTensor(), normalize])
-    data_path = os.path.expanduser('/root/deep_learning/dzc/data/%s' % Const.dataset)
+    data_path = os.path.expanduser('/home/dzc/Data/%s' % Const.dataset)
+
     # data_path2 = os.path.expanduser('/home/dzc/Data/%s' % Const.dataset)
     base = Robomaster_1_dataset(data_path, args, worldgrid_shape=Const.grid_size)
-    
+    train_set = oftFrameDataset(base, train=1, transform=train_trans, grid_reduce=Const.reduce)
+    val_set = oftFrameDataset(base, train=3, transform=test_trans, grid_reduce=Const.reduce)
+    test_set = oftFrameDataset(base, train=2, transform=test_trans, grid_reduce=Const.reduce)
     train_loader = torch.utils.data.DataLoader(train_set, batch_size=args.batch_size, shuffle=True,
                                                num_workers=args.num_workers, pin_memory=True, drop_last=True)
     test_loader = torch.utils.data.DataLoader(test_set, batch_size=args.batch_size, shuffle=False,
@@ -85,7 +88,7 @@ def main(args):
             loss = trainer.train(epoch, train_loader, optimizer, writer)
             torch.save(model.state_dict(), os.path.join('%s/mvdet_rpn_%d.pth' % (Const.modelsavedir, epoch)))
             torch.save(roi_head.state_dict(), os.path.join('%s/roi_rpn_head_%d.pth' % (Const.modelsavedir, epoch)))
-            trainer.test(epoch, test_loader, writer)
+            trainer.test(epoch, val_set, writer)
         else:
             print('Testing...')
             model.load_state_dict(torch.load("%s/mvdet_rpn_%d.pth" % (Const.modelsavedir, 12)))

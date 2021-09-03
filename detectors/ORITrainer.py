@@ -503,8 +503,8 @@ class ORITrainer(BaseTrainer):
                 for l in range(len(test_pred_res)):
                     all_pred_res.append(test_pred_res[l])
 
-        res_fpath = '/root/deep_learning/dzc/data/%s/dzc_res/all_res.txt' % Const.dataset
-        all_gt_fpath = '/root/deep_learning/dzc/data/%s/dzc_res/all_test_gt.txt' % Const.dataset
+        res_fpath = '/home/dzc/Data/%s/dzc_res/all_res.txt' % Const.dataset
+        all_gt_fpath = '/home/dzc/Data/%s/dzc_res/all_test_gt.txt' % Const.dataset
         # print(all_pred_res)
         all_gt_res = np.array(all_gt_res).reshape(-1, 6)
         all_pred_res = np.array(all_pred_res).reshape(-1, 7)
@@ -530,7 +530,7 @@ class ORITrainer(BaseTrainer):
 
 def visualize_3dbox(pred_ori, pred_alpha, position_mark, gt_bbox, bev_angle, all_front_prob, extrin, intrin, idx):
     # left_img = cv2.imread("/home/dzc/Data/opensource2/img/left1/%d.jpg" % (idx))
-    right_img = cv2.imread("/root/deep_learning/dzc/data/opensource2/img/right2/%d.jpg" % (idx))
+    right_img = cv2.imread("/home/dzc/Data/%s/img/right2/%d.jpg" % (Const.dataset, idx))
 
     all_pred_res = []
     all_gt_res = []
@@ -972,7 +972,7 @@ def visualize_3dbox(pred_ori, pred_alpha, position_mark, gt_bbox, bev_angle, all
         cv2.arrowedLine(right_img, (int((projected_2d[k][0][0] + projected_2d[k][2][0]) / 2), int((projected_2d[k][0][1] + projected_2d[k][2][1]) / 2)), (projected_2d[k][8][0], projected_2d[k][8][1]), color = (255, 60, 199), thickness=2)
         # cv2.line(left_img, (int((projected_2d[k][0+ 9][0] + projected_2d[k][2+ 9][0]) / 2), int((projected_2d[k][0+ 9][1] + projected_2d[k][2+ 9][1]) / 2)), (projected_2d[k][8+ 9][0], projected_2d[k][8+ 9][1]), color = (255, 60, 199), thickness=2)
 
-    cv2.imwrite("/root/deep_learning/dzc/mvRPN-det/results/images/%d.jpg" % idx, right_img)
+    cv2.imwrite("/home/dzc/Desktop/CASIA/proj/mvRPN-det/results/images/3d_box_blend/%d.jpg" % idx, right_img)
 
     return all_gt_res, all_pred_res
 
