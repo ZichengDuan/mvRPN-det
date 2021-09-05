@@ -38,6 +38,20 @@
             </Attribute>
           </value>
         </entry>
+        <entry key="/detectors/datasets/roboutils/transfer_to_json_4carreal0318.py">
+          <value>
+            <Attribute>
+              <option name="separator" value="," />
+            </Attribute>
+          </value>
+        </entry>
+        <entry key="/detectors/evaluation/pyeval/calAOS.py">
+          <value>
+            <Attribute>
+              <option name="separator" value="," />
+            </Attribute>
+          </value>
+        </entry>
         <entry key="/detectors/models/VGG16Head.py">
           <value>
             <Attribute>

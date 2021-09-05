@@ -54,17 +54,23 @@ def main(args):
     train_trans = T.Compose([T.ToTensor(), normalize])
     test_trans = T.Compose([T.ToTensor(), normalize])
     data_path = os.path.expanduser('/home/dzc/Data/%s' % Const.dataset)
+    video_datapath = os.path.expanduser(('/home/dzc/Data/mix_simp'))
 
     # data_path2 = os.path.expanduser('/home/dzc/Data/%s' % Const.dataset)
     base = Robomaster_1_dataset(data_path, args, worldgrid_shape=Const.grid_size)
+    video_base = Robomaster_1_dataset(video_datapath, args, worldgrid_shape=Const.grid_size)
+
     train_set = oftFrameDataset(base, train=1, transform=train_trans, grid_reduce=Const.reduce)
     val_set = oftFrameDataset(base, train=3, transform=test_trans, grid_reduce=Const.reduce)
     test_set = oftFrameDataset(base, train=2, transform=test_trans, grid_reduce=Const.reduce)
+    vedio_set = oftFrameDataset(video_base, train=4, transform=test_trans, grid_reduce=Const.reduce)
     train_loader = torch.utils.data.DataLoader(train_set, batch_size=args.batch_size, shuffle=True,
                                                num_workers=args.num_workers, pin_memory=True, drop_last=True)
     test_loader = torch.utils.data.DataLoader(test_set, batch_size=args.batch_size, shuffle=False,
                                               num_workers=args.num_workers, pin_memory=True, drop_last=True)
     val_loader = torch.utils.data.DataLoader(val_set, batch_size=args.batch_size, shuffle=False,
+                                              num_workers=args.num_workers, pin_memory=True, drop_last=True)
+    video_loader = torch.utils.data.DataLoader(vedio_set, batch_size=args.batch_size, shuffle=False,
                                               num_workers=args.num_workers, pin_memory=True, drop_last=True)
 
     # model
@@ -76,7 +82,7 @@ def main(args):
         param[1].requires_grad = False
     model.apply(fix_bn)
 
-    saved_roi_head = torch.load('%s/roi_rpn_head_%d.pth' % (Const.rpnsavedir, 4))
+    saved_roi_head = torch.load('%s/roi_rpn_head_%d.pth' % (Const.modelsavedir, 4))
     roi_head_dict = roi_head.state_dict()
     new_state_dict = {k: v for k,v in saved_roi_head.items() if k in roi_head_dict.keys()}
     roi_head_dict.update(new_state_dict)
@@ -86,10 +92,9 @@ def main(args):
         if "orientation" not in param[0] and "confidence" not in param[0]:
             param[1].requires_grad = False
 
-    optimizer = optim.Adam(params=itertools.chain(model.parameters(), roi_head.parameters()), lr=args.lr, weight_decay=args.weight_decay)
-    # optimizer = optim.Adam([{'params': filter(lambda p: p.requires_grad, model.backbone.parameters()), 'lr': 1e-3},
-    #                         {'params': filter(lambda p: p.requires_grad, model.rpn.parameters())},
-    #                         {'params': filter(lambda p: p.requires_grad, roi_head.parameters())}], lr=args.lr, weight_decay=args.weight_decay)
+    # optimizer = optim.Adam(params=itertools.chain(model.parameters(), roi_head.parameters()), lr=args.lr, weight_decay=args.weight_decay)
+    optimizer = optim.Adam([{'params': filter(lambda p: p.requires_grad, model.parameters())},
+                            {'params': filter(lambda p: p.requires_grad, roi_head.parameters())}], lr=args.lr, weight_decay=args.weight_decay)
     print('Settings:')
     print(vars(args))
 
@@ -120,7 +125,10 @@ def main(args):
             print('Testing...')
             # model.load_state_dict(torch.load("%s/mvdet_rpn_%d.pth" % (Const.rpnsavedir, 4)))
             # roi_head.load_state_dict(torch.load("%s/roi_rpn_head_%d.pth" % (Const.modelsavedir, 1)))
+            roi_head.eval()
+            model.eval()
             trainer.test(epoch, test_loader, writer)
+            # trainer.test(epoch, video_loader, writer)
             break
     writer.close()
 
@@ -135,11 +143,11 @@ if __name__ == '__main__':
     parser.add_argument('-j', '--num_workers', type=int, default=8)
     parser.add_argument('-b', '--batch_size', type=int, default=1, metavar='N',
                         help='input batch size for training (default: 1)')
-    parser.add_argument('--epochs', type=int, default=35, metavar='N', help='number of epochs to train (default: 10)')
+    parser.add_argument('--epochs', type=int, default=10, metavar='N', help='number of epochs to train (default: 10)')
     parser.add_argument('--lr', type=float, default=0.0001, metavar='LR', help='learning rate (default: 0.1)')
     parser.add_argument('--weight_decay', type=float, default=1e-5)
     parser.add_argument('--momentum', type=float, default=0.5, metavar='M', help='SGD momentum (default: 0.5)')
-    parser.add_argument('--seed', type=int, default=71, help='random seed (default: None)')
+    parser.add_argument('--seed', type=int, default=7, help='random seed (default: None)')
 
     parser.add_argument('--resume', type=bool, default = True)
     args = parser.parse_args()

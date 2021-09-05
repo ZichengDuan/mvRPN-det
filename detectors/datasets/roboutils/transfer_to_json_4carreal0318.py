@@ -5,17 +5,17 @@ import cv2
 
 def read_txt(left_right_dir):
     l_lhs = None
-    for i in range(0, 4358):
+    for i in range(0, 1405):
         print(i)
         idx = str(i)
-        # if 6 - len(idx) > 0:
-        #     for j in range(6 - len(idx)):
-        #         idx = "0" + idx
+        if 6 - len(idx) > 0:
+            for j in range(6 - len(idx)):
+                idx = "0" + idx
         left = open(left_right_dir + "/left1/%s.txt" % idx)
         right = open(left_right_dir + "/right2/%s.txt" % idx)
         datas = []
         annotation = open("/home/dzc/Data/4carreal_0318blend/annotations/%d.json" % (i), 'w')
-        for i in range(4):
+        for i in range(3):
             l_lhs, l_rhs = left.readline().split(":")
             r_lhs, r_rhs = right.readline().split(":")
 
@@ -37,8 +37,8 @@ def read_txt(left_right_dir):
             # for p in cont_left:
             #     print(p)
             world_x, world_y = float(cont_left[0]), float(cont_left[1])
-            left_xmax, left_ymax, left_xmin, left_ymin, _, _ = [int(float(tmp)) for tmp in cont_left[2:]]
-            right_xmax, right_ymax, right_xmin, right_ymin = [int(float(tmp)) for tmp in cont_right[-6:-2]]
+            left_xmax, left_ymax, left_xmin, left_ymin, _ = [int(float(tmp)) for tmp in cont_left[2:]]
+            right_xmax, right_ymax, right_xmin, right_ymin = [int(float(tmp)) for tmp in cont_right[-5:-1]]
             pID = i
             # ## 将角度转换为0-360度
             angle = float(cont_left[-1]) # 1carreal data此处是-2
@@ -56,9 +56,8 @@ def read_txt(left_right_dir):
             # world_x = world_x if world_x < 8080 else world_x - (world_x - 8079)
             # world_y = world_y if world_y < 4480 else world_y - (world_y - 4479)
 
-            if world_x < 8:
+            if i == 1:
                 world_x *= 1000
-            if world_y < 4.48:
                 world_y *= 1000
 
             world_y = 4490 - world_y
@@ -129,4 +128,4 @@ def read_txt(left_right_dir):
 
 
 if __name__ == "__main__":
-    read_txt("/home/dzc/Data/4carreal_0318blend/txt")
+    read_txt("/home/dzc/Data/4carreal0511_bright/txt")

@@ -223,9 +223,9 @@ class ProposalTargetCreator_conf(object):
     """
 
     def __init__(self,
-                 n_sample=128,
+                 n_sample=64,
                  pos_ratio=0.35, pos_iou_thresh=0.5,
-                 neg_iou_thresh_hi=0.2, neg_iou_thresh_lo=0.0
+                 neg_iou_thresh_hi=0.1, neg_iou_thresh_lo=0.0
                  ):
         self.n_sample = n_sample
         self.pos_ratio = pos_ratio
@@ -287,8 +287,8 @@ class ProposalTargetCreator_conf(object):
         gt_roi_angles_left = left_angles.reshape(-1, 2)[left_gt_assignment]
         gt_roi_label_left = left_label[left_gt_assignment] + 1 # 每一个roi对应的gt及其gt的分类
 
-        gt_roi_orientations_left = left_orientation.reshape(-1, 2, 2)[left_gt_assignment]
-        gt_roi_conf_left = left_conf.reshape(-1, 2)[left_gt_assignment]
+        gt_roi_orientations_left = left_orientation.reshape(-1, Const.bins, 2)[left_gt_assignment]
+        gt_roi_conf_left = left_conf.reshape(-1, Const.bins)[left_gt_assignment]
 
         # Select foreground RoIs as those with >= pos_iou_thresh IoU.
         left_pos_index = np.where(left_max_iou >= self.pos_iou_thresh)[0]
@@ -331,8 +331,8 @@ class ProposalTargetCreator_conf(object):
         gt_roi_label_right = right_label[right_gt_assignment] + 1
         gt_roi_angles_right = right_angles.reshape(-1, 2)[right_gt_assignment]
 
-        gt_roi_orientations_right = right_orientation.reshape(-1, 2, 2)[right_gt_assignment]
-        gt_roi_conf_right = right_conf.reshape(-1, 2)[right_gt_assignment]
+        gt_roi_orientations_right = right_orientation.reshape(-1, Const.bins, 2)[right_gt_assignment]
+        gt_roi_conf_right = right_conf.reshape(-1, Const.bins)[right_gt_assignment]
 
         # Select foreground RoIs as those with >= pos_iou_thresh IoU.
         right_pos_index = np.where(right_max_iou >= self.pos_iou_thresh)[0]
@@ -556,7 +556,7 @@ class AnchorTargetCreator(object):
     def __init__(self,
                  n_sample=256,
                  pos_iou_thresh=0.7, neg_iou_thresh=0.3,
-                 pos_ratio=0.7):
+                 pos_ratio=0.5):
         self.n_sample = n_sample
         self.pos_iou_thresh = pos_iou_thresh
         self.neg_iou_thresh = neg_iou_thresh
@@ -670,7 +670,6 @@ class AnchorTargetCreator(object):
 
         return argmax_ious, max_ious, gt_argmax_ious
 
-
 def _unmap(data, count, index, fill=0):
     # Unmap a subset of item (data) back to the original set of items (of
     # size count)
@@ -685,7 +684,6 @@ def _unmap(data, count, index, fill=0):
         ret[index, :] = data
     return ret
 
-
 def _get_inside_index(anchor, H, W):
     # Calc indicies of anchors which are located completely inside of the image
     # whose size is speficied.
@@ -696,7 +694,6 @@ def _get_inside_index(anchor, H, W):
         (anchor[:, 3] <= W)
     )[0]
     return index_inside
-
 
 class ProposalCreator:
     # unNOTE: I'll make it undifferential
@@ -744,7 +741,7 @@ class ProposalCreator:
                  n_train_pre_nms=12000,
                  n_train_post_nms=3000,
                  n_test_pre_nms=6000,
-                 n_test_post_nms=300,
+                 n_test_post_nms=50,
                  min_size=16
                  ):
         self.parent_model = parent_model

@@ -97,8 +97,8 @@ def evaluateDetection_py(res_fpath, gt_fpath, dataset_name):
 
 
 if __name__ == "__main__":
-    res_fpath = "../test-demo.txt"
-    gt_fpath = "../gt-demo.txt"
+    res_fpath = "/home/dzc/Desktop/CASIA/proj/mvRPN-det/detectors/evaluation/pyeval/all_res.txt"
+    gt_fpath = "/home/dzc/Desktop/CASIA/proj/mvRPN-det/detectors/evaluation/pyeval/all_test_gt.txt"
     dataset_name = "Wildtrack"
     recall, precision, moda, modp = evaluateDetection_py(res_fpath, gt_fpath, dataset_name)
     print(f'python eval: MODA {moda:.1f}, MODP {modp:.1f}, prec {precision:.1f}, rcll {recall:.1f}')

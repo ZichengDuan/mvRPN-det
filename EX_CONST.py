@@ -41,8 +41,9 @@ class Const:
 
     roi_classes = 1
 
-    modelsavedir = "/home/dzc/Desktop/CASIA/proj/mvRPN-det/results/trained/fix_backbone_multi_2"
+    modelsavedir = "/home/dzc/Desktop/CASIA/proj/mvRPN-det/results/trained/fix_backbone_multi_8bins_2"
     rpnsavedir = "/home/dzc/Desktop/CASIA/proj/mvRPN-det/results/trained/opensource"
 
     imgsavedir = "/root/deep_learning/dzc/mvRPN-det/results/images/testing_set"
 
+    bins = 8

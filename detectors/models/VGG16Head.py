@@ -6,7 +6,7 @@ import torch.nn as nn
 import torch
 import torch.nn.functional as F
 import matplotlib.pyplot as plt
-
+from EX_CONST import Const
 class VGG16RoIHead(nn.Module):
     """Faster R-CNN Head for VGG-16 based implementation.
     This class is used as a head for Faster R-CNN.
@@ -30,7 +30,8 @@ class VGG16RoIHead(nn.Module):
         #                                  nn.Conv2d(512, 512, kernel_size=3, stride=1, padding=1),
         #                                  nn.LeakyReLU(True),
         #                                  ).to("cuda:0")
-
+        # self.converter = nn.Sequential(nn.Conv2d(512, 512, kernel_size=1, stride=1),
+        #                                nn.ReLU(True)).cuda()
         self.classifier = nn.Sequential(nn.Linear(25088, 4096, bias=True),
                                    nn.ReLU(inplace=True),
                                    nn.Dropout(p=0.5, inplace=False),
@@ -60,25 +61,46 @@ class VGG16RoIHead(nn.Module):
         #                                    nn.Linear(512, 2)).cuda()
 
         self.orientation = nn.Sequential(
-            nn.Linear(25088, 256),
+            nn.Linear(25088, 2048),
             nn.ReLU(True),
             nn.Dropout(),
-            nn.Linear(256, 256),
+            nn.Linear(2048, 512),
             nn.ReLU(True),
             nn.Dropout(),
-            nn.Linear(256, 2 * 2)  # to get sin and cos
+            nn.Linear(512, Const.bins * 2)  # to get sin and cos
         ).cuda()
         self.confidence = nn.Sequential(
-            nn.Linear(25088, 256),
+            nn.Linear(25088, 2048),
             nn.ReLU(True),
             nn.Dropout(),
-            nn.Linear(256, 256),
+            nn.Linear(2048, 512),
             nn.ReLU(True),
             nn.Dropout(),
-            nn.Linear(256, 2),
+            nn.Linear(512, Const.bins),
             # nn.Softmax()
             # nn.Sigmoid()
         ).cuda()
+        #
+        # self.orientation = nn.Sequential(
+        #     nn.Linear(25088, 256),
+        #     nn.ReLU(True),
+        #     nn.Dropout(),
+        #     nn.Linear(256, 256),
+        #     nn.ReLU(True),
+        #     nn.Dropout(),
+        #     nn.Linear(256, Const.bins * 2)  # to get sin and cos
+        # ).cuda()
+        # self.confidence = nn.Sequential(
+        #     nn.Linear(25088, 256),
+        #     nn.ReLU(True),
+        #     nn.Dropout(),
+        #     nn.Linear(256, 256),
+        #     nn.ReLU(True),
+        #     nn.Dropout(),
+        #     nn.Linear(256, Const.bins),
+        #     # nn.Softmax()
+        #     # nn.Sigmoid()
+        # ).cuda()
 
         normal_init(self.cls_loc, 0, 0.001)
         normal_init(self.score, 0, 0.01)
@@ -119,6 +141,8 @@ class VGG16RoIHead(nn.Module):
         # x = self.trans_layer(x)
         plt.imsave("imgfeature.jpg", torch.norm(x[0].detach(), dim=0).cpu().numpy())
         pool = self.roi(x, indices_and_rois).cuda()
+        # print(pool.shape)
+        # pool_multibin = self.converter(pool)
         pool = pool.view(pool.size(0), -1)
         # print(self.classifier)
         # print(pool.shape)
@@ -126,7 +150,8 @@ class VGG16RoIHead(nn.Module):
         roi_cls_locs = self.cls_loc(fc7)
         roi_scores = self.score(fc7)
         orientation = self.orientation(pool)
-        orientation = orientation.view(-1, 2, 2)
+        # orientation = self.orientation(pool_multibin.view(pool_multibin.size(0), -1))
+        orientation = orientation.view(-1, Const.bins, 2)
         orientation = F.normalize(orientation, dim=2)
         confidence = self.confidence(pool)
         return roi_cls_locs, roi_scores, orientation, confidence

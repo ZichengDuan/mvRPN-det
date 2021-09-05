@@ -31,8 +31,12 @@ class oftFrameDataset(VisionDataset):
             frame_range = list(range(0, 1800)) + list(range(2100, 3500)) + list(range(3600, 4330))
         elif train == 3:
             frame_range = list (range(2000, 2100)) + list(range(3500, 3600))
-        else:
+        elif train == 2:
             frame_range = list(range(1800, 2100)) + list(range(3500, 3600))
+            # frame_range = list(range(1320, 1374)) + list(range(1715, 1799)) + list(range(2800, 2933)) + list(range(1000, 1124))
+        elif train == 4:
+            # frame_range = list(range(1800, 2100)) + list(range(3500, 3600))
+            frame_range = list(range(0, 1625))
 
 
         self.upsample_shape = list(map(lambda x: int(x / self.img_reduce), self.img_shape))
@@ -47,7 +51,7 @@ class oftFrameDataset(VisionDataset):
                           for cam in range(2)]
 
         # create angle bins
-        bins = 2
+        bins = Const.bins
         overlap = 0.1
         self.bins = bins
         self.angle_bins = np.zeros(bins)
@@ -160,6 +164,7 @@ class oftFrameDataset(VisionDataset):
                         angle_diff = left_target - self.angle_bins[bin_idx]
                         left_orientation[bin_idx, :] = np.array([np.cos(angle_diff), np.sin(angle_diff)])
                         left_confidence[bin_idx] = 1
+                    # print("left conf", left_confidence)
                     frame_left_orientation.append(left_orientation)
                     frame_left_conf.append(left_confidence)
 
@@ -180,10 +185,11 @@ class oftFrameDataset(VisionDataset):
                         angle_diff = right_target - self.angle_bins[bin_idx]
                         right_orientation[bin_idx, :] = np.array([np.cos(angle_diff), np.sin(angle_diff)])
                         right_confidence[bin_idx] = 1
+                    # print("right conf", right_confidence)
                     frame_right_orientation.append(right_orientation)
                     frame_right_conf.append(right_confidence)
 
-
+                # print(frame_left_orientation)
                 self.left_orientation[frame] = frame_left_orientation
                 self.left_conf[frame] = frame_left_conf
                 self.right_orientation[frame] = frame_right_orientation

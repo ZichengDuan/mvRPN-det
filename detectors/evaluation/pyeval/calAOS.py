@@ -1,6 +1,8 @@
 import numpy as np
 from scipy.optimize import linear_sum_assignment
 import math
+import shapely
+from shapely.geometry import Polygon, MultiPoint    # 多边形计算的库
 
 def wh2bottomleft(bbox):
     x, y, w, h = bbox
@@ -9,6 +11,36 @@ def wh2bottomleft(bbox):
     ymin = y - h/2
     ymax = y + h/2
     return xmin, ymin, xmax, ymax
+
+
+# 求任意四边形iou
+def compute_IOU(line1,line2):
+    # 四边形四个点坐标的一维数组表示，[x,y,x,y....]
+    # 如：line1 = [728, 252, 908, 215, 934, 312, 752, 355]
+    # 返回iou的值，如 0.7
+    line1_box = np.array(line1).reshape(4, 2)  # 四边形二维坐标表示
+    # 凸多边形与凹多边形
+    poly1 = Polygon(line1_box)
+    # .convex_hull  # python四边形对象，会自动计算四个点，最后四个点顺序为：左上 左下  右下 右上 左上
+    line2_box = np.array(line2).reshape(4, 2)
+    # 凸多边形与凹多边形
+    poly2 = Polygon(line2_box)
+
+    union_poly = np.concatenate((line1_box, line2_box))  # 合并两个box坐标，变为8*2
+    if not poly1.intersects(poly2):  # 如果两四边形不相交
+        iou = 0
+    else:
+        try:
+            inter_area = poly1.intersection(poly2).area  # 相交面积
+            union_area = MultiPoint(union_poly).convex_hull.area
+            if union_area == 0:
+                iou = 0
+            else:
+                iou = float(inter_area) / union_area
+        except shapely.geos.TopologicalError:
+            print('shapely.geos.TopologicalError occured, iou set to 0')
+            iou = 0
+    return iou
 
 def bbox_iou(box1, box2):
     '''
@@ -220,16 +252,20 @@ def cal_frame_TPFP_iou(dist_threshold, gt_res, pred_res):
         max_iou = -1
         max_idx = -1
         cur_gt_ori = -1
-        _, _, x_pred, y_pred, w_pred, h_pred, score, ori_pred = pred
-        w_pred, h_pred = 50, 60
-        xmin_pred, ymin_pred, xmax_pred, ymax_pred = wh2bottomleft([x_pred, y_pred, w_pred, h_pred])
+        _, _, x1_rot, y1_rot, x2_rot, y2_rot, x3_rot, y3_rot, x4_rot, y4_rot, score, ori_pred = pred
+        # w_pred, h_pred = 50, 60
+        # xmin_pred, ymin_pred, xmax_pred, ymax_pred = wh2bottomleft([x_pred, y_pred, w_pred, h_pred])
         for j, gt in enumerate(gt_res):
-            _, _, x_gt, y_gt, w_gt, h_gt, ori_gt = gt
+            _, _, gt_x1_rot, gt_y1_rot, gt_x2_rot, gt_y2_rot, gt_x3_rot, gt_y3_rot, gt_x4_rot, gt_y4_rot, ori_gt = gt
             # dist = math.sqrt(pow(x_pred - x_gt, 2)+ pow(y_pred - y_gt, 2))
-            w_gt, h_gt = 50, 60
-            xmin_gt, ymin_gt, xmax_gt, ymax_gt = wh2bottomleft([x_gt, y_gt, w_gt, h_gt])
-
-            iou = bbox_iou([xmin_gt, ymin_gt, xmax_gt, ymax_gt], [xmin_pred, ymin_pred, xmax_pred, ymax_pred])
+            # w_gt, h_gt = 50, 60
+            # xmin_gt, ymin_gt, xmax_gt, ymax_gt = wh2bottomleft([x_gt, y_gt, w_gt, h_gt])
+            # iou = bbox_iou([xmin_gt, ymin_gt, xmax_gt, ymax_gt], [xmin_pred, ymin_pred, xmax_pred, ymax_pred])
+            iou = compute_IOU([x1_rot, y1_rot, x2_rot, y2_rot, x3_rot, y3_rot, x4_rot, y4_rot],\
+                                      [gt_x1_rot, gt_y1_rot, gt_x2_rot, gt_y2_rot, gt_x3_rot, gt_y3_rot, gt_x4_rot, gt_y4_rot])
+            # if i == 0:
+            #     print("IoU: ", iou)
+            #     print([x1_rot, y1_rot, x2_rot, y2_rot, x3_rot, y3_rot, x4_rot, y4_rot], [gt_x1_rot, gt_y1_rot, gt_x2_rot, gt_y2_rot, gt_x3_rot, gt_y3_rot, gt_x4_rot, gt_y4_rot])
             if max_iou != 0 and iou >= dist_threshold and iou > max_iou:
                 # 找到距离最近的gt分配给那个pred，始终没分配到gt的pred认为是FN
                 max_iou = iou
@@ -241,6 +277,7 @@ def cal_frame_TPFP_iou(dist_threshold, gt_res, pred_res):
         frame_gt_det_match[i][1] = max_idx
         frame_gt_det_match[i][2] = max_iou
         frame_gt_det_match[i][3] = ori_pred - cur_gt_ori
+        # print("Delta: ", ori_pred - cur_gt_ori, "Pred: ", ori_pred, "Gt: ",cur_gt_ori, "Max iou:", max_iou, "Max idx: ", max_idx)
 
 
     TP = 0
@@ -320,6 +357,7 @@ def cal_frame_TPFP_iou(dist_threshold, gt_res, pred_res):
 def evaluateDetectionAPAOS(res_fpath, gt_fpath):
     gtRaw = np.loadtxt(gt_fpath)
     detRaw = np.loadtxt(res_fpath)
+
     frames = np.unique(detRaw[:, 0]) if detRaw.size else np.zeros(0)
     frame_ctr = 0
     gt_flag = True
@@ -335,14 +373,21 @@ def evaluateDetectionAPAOS(res_fpath, gt_fpath):
         idxs = np.where(gtRaw[:, 0] == t)
         idx = idxs[0]
         idx_len = len(idx)
-        tmp_arr = np.zeros(shape=(idx_len, 7))
+        tmp_arr = np.zeros(shape=(idx_len, 11))
+
+        # for n_gt in range(idx_len):
+        #     center_x, center_y, w, h, theta = gtRaw[idx[n_gt]][1:6]
         tmp_arr[:, 0] = np.array([frame_ctr for n in range(idx_len)])
         tmp_arr[:, 1] = np.array([i for i in range(idx_len)])
-        tmp_arr[:, 2] = np.array([j for j in gtRaw[idx, 1]])
-        tmp_arr[:, 3] = np.array([k for k in gtRaw[idx, 2]])
-        tmp_arr[:, 4] = np.array([k for k in gtRaw[idx, 3]])
-        tmp_arr[:, 5] = np.array([k for k in gtRaw[idx, 4]])
-        tmp_arr[:, 6] = np.array([m for m in gtRaw[idx, -1]])
+        tmp_arr[:, 2] = np.array([j for j in gtRaw[idx, -8]])
+        tmp_arr[:, 3] = np.array([k for k in gtRaw[idx, -7]])
+        tmp_arr[:, 4] = np.array([k for k in gtRaw[idx, -6]])
+        tmp_arr[:, 5] = np.array([k for k in gtRaw[idx, -5]])
+        tmp_arr[:, 6] = np.array([j for j in gtRaw[idx, -4]])
+        tmp_arr[:, 7] = np.array([k for k in gtRaw[idx, -3]])
+        tmp_arr[:, 8] = np.array([k for k in gtRaw[idx, -2]])
+        tmp_arr[:, 9] = np.array([k for k in gtRaw[idx, -1]])
+        tmp_arr[:, 10] = np.array([m for m in gtRaw[idx, -9]])
         # print(tmp_arr)
         if gt_flag:
             gtAllMatrix = tmp_arr
@@ -352,15 +397,19 @@ def evaluateDetectionAPAOS(res_fpath, gt_fpath):
         idxs = np.where(detRaw[:, 0] == t)
         idx = idxs[0]
         idx_len = len(idx)
-        tmp_arr = np.zeros(shape=(idx_len, 8))
+        tmp_arr = np.zeros(shape=(idx_len, 12))
         tmp_arr[:, 0] = np.array([frame_ctr for n in range(idx_len)])
         tmp_arr[:, 1] = np.array([i for i in range(idx_len)])
-        tmp_arr[:, 2] = np.array([j for j in detRaw[idx, 1]])
-        tmp_arr[:, 3] = np.array([k for k in detRaw[idx, 2]])
-        tmp_arr[:, 4] = np.array([k for k in detRaw[idx, 3]])
-        tmp_arr[:, 5] = np.array([k for k in detRaw[idx, 4]])
-        tmp_arr[:, 6] = np.array([m for m in detRaw[idx, -1]])
-        tmp_arr[:, 7] = np.array([p for p in detRaw[idx, -2]])
+        tmp_arr[:, 2] = np.array([j for j in detRaw[idx, -8]])
+        tmp_arr[:, 3] = np.array([k for k in detRaw[idx, -7]])
+        tmp_arr[:, 4] = np.array([k for k in detRaw[idx, -6]])
+        tmp_arr[:, 5] = np.array([k for k in detRaw[idx, -5]])
+        tmp_arr[:, 6] = np.array([j for j in detRaw[idx, -4]])
+        tmp_arr[:, 7] = np.array([k for k in detRaw[idx, -3]])
+        tmp_arr[:, 8] = np.array([k for k in detRaw[idx, -2]])
+        tmp_arr[:, 9] = np.array([k for k in detRaw[idx, -1]])
+        tmp_arr[:, 10] = np.array([m for m in detRaw[idx, -9]])
+        tmp_arr[:, 11] = np.array([p for p in detRaw[idx, -10]])
 
         if det_flag:
             detAllMatrix = tmp_arr
