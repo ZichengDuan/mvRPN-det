@@ -443,13 +443,11 @@ class ORITrainer(BaseTrainer):
 
             # [R, 2, 2]
             left_argmax = np.argmax(left_pred_conf.detach().cpu().numpy(), axis=1)
-            # print(left_argmax.shape, left_pred_orientation.shape)
             left_orient = left_pred_orientation[np.arange(len(left_pred_orientation)), left_argmax]
             left_cos = left_orient[:, 0]
             left_sin = left_orient[:, 1]
             left_alpha = np.arctan2(left_sin.cpu().detach().numpy(), left_cos.cpu().detach().numpy())
             left_alpha += left_angle_bins[np.arange(len(left_argmax)), left_argmax]   # 0~180, (R, 2), residual angle
-            # print(left_pred_conf, left_argmax)
             right_argmax = np.argmax(right_pred_conf.detach().cpu().numpy(), axis=1)
             right_orient = right_pred_orientation[np.arange(len(right_pred_orientation)), right_argmax]
             right_cos = right_orient[:, 0]
@@ -459,19 +457,22 @@ class ORITrainer(BaseTrainer):
 
             left_prob = at.tonumpy(F.softmax(at.totensor(left_roi_score), dim=1))
             left_front_prob = left_prob[:, 1]
-            right_prob = at.tonumpy(F.softmax(at.totensor(right_roi_score), dim=1))
-            right_front_prob = right_prob[:, 1]
+            # right_prob = at.tonumpy(F.softmax(at.totensor(right_roi_score), dim=1))
+            # right_front_prob = right_prob[:, 1]
 
-            # print(left_alpha.shape, left_front_prob.shape)
 
             position_mark = np.concatenate((np.zeros((left_front_prob.shape[0], )), np.ones((right_front_prob.shape[0]))))
             all_front_prob = np.concatenate((left_front_prob, right_front_prob))
             all_roi_remain = np.concatenate((roi[left_index_inside], roi[right_index_inside]))
             all_pred_alpha = np.concatenate((at.tonumpy(left_alpha), at.tonumpy(right_alpha)))
-            # all_bev_boxes, _, all_sincos_remain, position_mark_keep = nms_new(all_roi_remain, all_front_prob, all_pred_sincos, position_mark)
+
+            # position_mark = np.zeros((left_front_prob.shape[0], ))
+            # all_front_prob = left_front_prob
+            # all_roi_remain = roi[left_index_inside]
+            # all_pred_alpha =at.tonumpy(left_alpha)
 
             v, indices = torch.tensor(all_front_prob).sort(0)
-            indices_remain = indices[v > 0.75]
+            indices_remain = indices[v > 0.6]
             print(frame)
             all_roi_remain = all_roi_remain[indices_remain].reshape(len(indices_remain), 4)
             all_pred_alpha = all_pred_alpha[indices_remain].reshape(len(indices_remain), 1)
@@ -527,8 +528,8 @@ class ORITrainer(BaseTrainer):
 
 def visualize_3dbox(pred_ori, pred_alpha, position_mark, gt_bbox, bev_angle, all_front_prob, extrin, intrin, idx):
     # left_img = cv2.imread("/home/dzc/Data/opensource2/img/left1/%d.jpg" % (idx))
-    # right_img = cv2.imread("/home/dzc/Data/%s/img/right2/%d.jpg" % (Const.dataset, idx))
-    right_img = cv2.imread("/home/dzc/Data/mix_simp/img/right2/%d.jpg" % idx)
+    right_img = cv2.imread("/home/dzc/Data/%s/img/right2/%d.jpg" % (Const.dataset, idx))
+    # right_img = cv2.imread("/home/dzc/Data/mix_simp/img/right2/%d.jpg" % idx)
     # c = 1.5
     # b = 5
     # rows, cols, channels = right_img.shape

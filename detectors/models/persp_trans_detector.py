@@ -33,6 +33,7 @@ class PerspTransDetector(nn.Module):
         super().__init__()
         if dataset is not None:
             self.num_cam = dataset.num_cam
+            self.num_cam = 1
             self.img_shape, self.reducedgrid_shape = dataset.img_shape, dataset.reducedgrid_shape
             # calculate the
             imgcoord2worldgrid_matrices = self.get_imgcoord2worldgrid_matrices(dataset.base.intrinsic_matrices,
@@ -50,7 +51,8 @@ class PerspTransDetector(nn.Module):
                               for cam in range(self.num_cam)]
 
         self.backbone = nn.Sequential(*list(resnet18(pretrained=True, replace_stride_with_dilation=[False, False, True]).children())[:-2]).cuda()
-        self.rpn = RegionProposalNetwork(in_channels=1026, mid_channels=1026, ratios=[0.9, 1.1], anchor_scales=[4]).cuda()
+        # self.rpn = RegionProposalNetwork(in_channels=1026, mid_channels=1026, ratios=[0.9, 1.1], anchor_scales=[4]).cuda()
+        self.rpn = RegionProposalNetwork(in_channels=514, mid_channels=514, ratios=[1], anchor_scales=[4]).cuda()
         # my_cls = nn.Sequential(nn.Linear(25088, 2048, bias=True),
         #                        nn.ReLU(inplace=True),
         #                        nn.Dropout(p=0.5, inplace=False),
@@ -71,7 +73,7 @@ class PerspTransDetector(nn.Module):
     def forward(self, imgs,frame, gt_boxes = None, epoch = None, visualize=False, train = True, mark = None):
         # print(imgs.shape)
         B, N, C, H, W = imgs.shape
-        assert N == self.num_cam
+        # assert N == self.num_cam
         world_features = []
         img_featuremap = []
 
