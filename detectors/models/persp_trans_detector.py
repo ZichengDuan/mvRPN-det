@@ -39,9 +39,9 @@ class PerspTransDetector(nn.Module):
                                                                                dataset.base.extrinsic_matrices,
                                                                                dataset.base.worldgrid2worldcoord_mat)
 
-            imgcoord2worldgrid_matrices2 = self.get_imgcoord2worldgrid_matrices(dataset.base.intrinsic_matrices2,
-                                                                               dataset.base.extrinsic_matrices2,
-                                                                               dataset.base.worldgrid2worldcoord_mat)
+            # imgcoord2worldgrid_matrices2 = self.get_imgcoord2worldgrid_matrices(dataset.base.intrinsic_matrices2,
+            #                                                                    dataset.base.extrinsic_matrices2,
+            #                                                                    dataset.base.worldgrid2worldcoord_mat)
             self.coord_map = self.create_coord_map(self.reducedgrid_shape + [1])
             # img
             self.upsample_shape = list(map(lambda x: int(x / Const.reduce), self.img_shape))
@@ -52,11 +52,11 @@ class PerspTransDetector(nn.Module):
             self.proj_mats = [torch.from_numpy(map_zoom_mat @ imgcoord2worldgrid_matrices[cam] @ img_zoom_mat)
                               for cam in range(self.num_cam)]
 
-            self.proj_mats2 = [torch.from_numpy(map_zoom_mat @ imgcoord2worldgrid_matrices2[cam] @ img_zoom_mat)
-                              for cam in range(self.num_cam)]
+            # self.proj_mats2 = [torch.from_numpy(map_zoom_mat @ imgcoord2worldgrid_matrices2[cam] @ img_zoom_mat)
+            #                   for cam in range(self.num_cam)]
 
-        self.backbone = nn.Sequential(*list(resnet18(pretrained=True, replace_stride_with_dilation=[False, False, False]).children())[:-2]).to('cuda:0')
-        self.rpn = RegionProposalNetwork(in_channels=514, mid_channels=514, ratios=[1], anchor_scales=[4]).to('cuda:1')
+        self.backbone = nn.Sequential(*list(resnet18(pretrained=True, replace_stride_with_dilation=[False, False, True]).children())[:-2]).cuda()
+        self.rpn = RegionProposalNetwork(in_channels=514, mid_channels=514, ratios=[0.9, 1.1], anchor_scales=[4]).cuda()
         # my_cls = nn.Sequential(nn.Linear(25088, 2048, bias=True),
         #                        nn.ReLU(inplace=True),
         #                        nn.Dropout(p=0.5, inplace=False),
@@ -94,16 +94,16 @@ class PerspTransDetector(nn.Module):
             img_featuremap.append(img_feature)
 
             if mark == 0:
-                proj_mat = self.proj_mats[cam].repeat([B, 1, 1]).float().to('cuda:1')
+                proj_mat = self.proj_mats[cam].repeat([B, 1, 1]).float().cuda()
             else:
-                proj_mat = self.proj_mats2[cam].repeat([B, 1, 1]).float().to('cuda:1')
+                proj_mat = self.proj_mats2[cam].repeat([B, 1, 1]).float().cuda()
 
-            world_feature = kornia.warp_perspective(img_feature.to('cuda:1'), proj_mat, self.reducedgrid_shape) # 0.0142 * 2 = 0.028
+            world_feature = kornia.warp_perspective(img_feature.cuda(), proj_mat, self.reducedgrid_shape) # 0.0142 * 2 = 0.028
             # print("reducedgrid_shape", self.reducedgrid_shape)
 
             world_feature = kornia.vflip(world_feature)
-            world_features.append(world_feature.to('cuda:1'))
-        world_features = torch.cat(world_features + [self.coord_map.repeat([B, 1, 1, 1]).to('cuda:1')], dim=1)
+            world_features.append(world_feature.cuda())
+        world_features = torch.cat(world_features + [self.coord_map.repeat([B, 1, 1, 1]).cuda()], dim=1)
         # plt.imsave("world_features.jpg", torch.norm(world_features[0], dim=0).cpu().numpy())
         # 3d特征图
         # feature_to_plot = world_features[0][0].detach().cpu().numpy()

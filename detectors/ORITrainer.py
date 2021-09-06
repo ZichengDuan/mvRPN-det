@@ -6,34 +6,70 @@ import os
 import numpy as np
 import torch.nn.functional as F
 import matplotlib
+
 matplotlib.use('Agg')
+import sys
+
+sys.path.append("..")
 import matplotlib.pyplot as plt
 from detectors.utils.nms_new import nms_new, _suppress, vis_nms
+# from detectors.evaluation.evaluate import matlab_eval, python_eval
+from detectors.evaluation.pyeval.calAOS import evaluateDetectionAPAOS
 from detectors.evaluation.evaluate import evaluate
 import torch.nn as nn
 import warnings
 from detectors.loss.gaussian_mse import GaussianMSE
-from .models.utils.creator_tool import AnchorTargetCreator, ProposalTargetCreator, ProposalTargetCreator_ori
+from .models.utils.creator_tool import AnchorTargetCreator, ProposalTargetCreator_conf
 from .utils import array_tool as at
 from EX_CONST import Const
 from tensorboardX import SummaryWriter
 from detectors.models.utils.bbox_tools import loc2bbox
 from PIL import Image
 from torchvision.ops import boxes as box_ops
+
 warnings.filterwarnings("ignore")
 import time
 import cv2
 
+
+def generate_bins(bins):
+    angle_bins = np.zeros(bins)
+    interval = 2 * np.pi / bins
+    for i in range(1, bins):
+        angle_bins[i] = i * interval
+    angle_bins += interval / 2  # center of the bin
+
+    return angle_bins
+
+
 def fix_bn(m):
-   classname = m.__class__.__name__
-   if classname.find('BatchNorm') != -1:
-       m.eval()
+    classname = m.__class__.__name__
+    if classname.find('BatchNorm') != -1:
+        m.eval()
+
+
+def OrientationLoss(orient_batch, orientGT_batch, confGT_batch):
+    # print(orient_batch.shape, orientGT_batch.shape, confGT_batch.shape)
+    batch_size = orient_batch.size()[0]
+    indexes = torch.max(confGT_batch, dim=1)[1]
+    # print("dzc", indexes)
+    # extract just the important bin
+    orientGT_batch = orientGT_batch[torch.arange(batch_size), indexes]
+    # print("dzc", orient_batch.shape, batch_size, indexes)
+    orient_batch = orient_batch[torch.arange(batch_size), indexes]
+
+    theta_diff = torch.atan2(orientGT_batch[:, 1], orientGT_batch[:, 0])  # 每个bin的中心线和实际角度的sin cos
+    estimated_theta_diff = torch.atan2(orient_batch[:, 1], orient_batch[:, 0])
+
+    return -1 * torch.cos(theta_diff - estimated_theta_diff).mean()
+
 
 class BaseTrainer(object):
     def __init__(self):
         super(BaseTrainer, self).__init__()
 
-class OFTtrainer(BaseTrainer):
+
+class ORITrainer(BaseTrainer):
     def __init__(self, model, roi_head, denormalize):
         self.model = model
         self.roi_head = roi_head
@@ -42,37 +78,33 @@ class OFTtrainer(BaseTrainer):
         self.MSELoss = nn.MSELoss()
         self.L1Loss = nn.SmoothL1Loss()
         self.anchor_target_creator = AnchorTargetCreator()
-        self.proposal_target_creator = ProposalTargetCreator()
-        self.proposal_target_creator_ori = ProposalTargetCreator_ori()
+        self.proposal_target_creator = ProposalTargetCreator_conf()
+        # self.proposal_target_creator_ori = ProposalTargetCreator_ori()
         self.rpn_sigma = 3
         self.loc_normalize_mean = (0., 0., 0., 0.)
         self.loc_normalize_std = (0.1, 0.1, 0.2, 0.2)
+        self.bins = Const.bins
 
     def train(self, epoch, data_loader, optimizer, writer):
-        # for name, param in self.model.backbone.named_parameters():
-        #     param.requires_grad = False
-        # for name, param in self.roi_head.named_parameters():
-        #     param.requires_grad = False
+        self.model.train()
+        self.roi_head.train()
+        # self.model.apply(fix_bn)
 
         Loss = 0
         RPN_CLS_LOSS = 0
         RPN_LOC_LOSS = 0
-        LEFT_ROI_LOC_LOSS = 0
-        LEFT_ROI_CLS_LOSS = 0
-        LEFT_ANGLE_REG_LOSS = 0
         ALL_ROI_CLS_LOSS = 0
         ALL_ANGLE_REG_LOSS = 0
         ALL_ROI_LOC_LOSS = 0
-        RIGHT_ROI_LOC_LOSS = 0
-        RIGHT_ROI_CLS_LOSS = 0
-        RIGHT_ANGLE_REG_LOSS = 0
+        ALL_ORI_LOSS = 0
+        ALL_CONF_LOSS = 0
 
         for batch_idx, data in enumerate(data_loader):
             optimizer.zero_grad()
-            imgs, bev_xy,bev_angle, gt_bbox, gt_left_bbox, gt_right_bbox, left_dirs, right_dirs, left_sincos, right_sincos, frame, extrin, intrin, extrin2, intrin2, mark = data
+            imgs, bev_xy, bev_angle, gt_bbox, gt_left_bbox, gt_right_bbox, left_dirs, right_dirs, left_sincos, right_sincos, left_orientation, right_orientation, left_conf, right_conf, frame, extrin, intrin, mark = data
             img_size = (Const.grid_height, Const.grid_width)
             rpn_locs, rpn_scores, anchor, rois, roi_indices, final_scores, img_featuremaps, bev_featuremaps = self.model(imgs, frame, gt_bbox, mark=mark)
-
+            # print(left_sincos.shape, left_orientation.shape, left_conf.shape)
             # visualize angle
             # bev_img = cv2.imread("/home/dzc/Data/mix/bevimgs/%d.jpg" % frame)
             # for idx, pt in enumerate(bev_xy.squeeze()):
@@ -104,6 +136,11 @@ class OFTtrainer(BaseTrainer):
             gt_right_bbox = gt_right_bbox[0]
             left_dir = left_dirs[0]
             right_dir = right_dirs[0]
+            left_orientation = left_orientation[0]
+            right_orientation = right_orientation[0]
+            left_conf = left_conf[0]
+            right_conf = right_conf[0]
+
             roi = torch.tensor(rois)
             # -----------------RPN Loss----------------------
             gt_rpn_loc, gt_rpn_label = self.anchor_target_creator(
@@ -122,13 +159,20 @@ class OFTtrainer(BaseTrainer):
 
             # ----------------ROI------------------------------
             # 还需要在双视角下的回归gt，以及筛选过后的分类gt，gt_left_loc, gt_left_label, gt_right_loc, gt_right_label
-            left_2d_bbox, left_sample_roi, left_gt_loc, left_gt_label, left_gt_sincos, left_pos_num, right_2d_bbox, right_sample_roi, right_gt_loc, right_gt_label, right_gt_sincos, right_pos_num = self.proposal_target_creator(
+            # print("left_orientation", left_orientation.shape)
+            left_2d_bbox, left_sample_roi, left_gt_loc, left_gt_label, left_gt_sincos, left_pos_num, \
+            right_2d_bbox, right_sample_roi, right_gt_loc, right_gt_label, right_gt_sincos, right_pos_num, \
+            left_gt_orientation, left_gt_conf, right_gt_orientation, right_gt_conf = self.proposal_target_creator(
                 roi,
                 at.tonumpy(gt_bbox),
                 at.tonumpy(left_dir),
                 at.tonumpy(right_dir),
                 at.tonumpy(left_sincos),
                 at.tonumpy(right_sincos),
+                at.tonumpy(left_orientation),
+                at.tonumpy(right_orientation),
+                at.tonumpy(left_conf),
+                at.tonumpy(right_conf),
                 gt_left_bbox,
                 gt_right_bbox,
                 extrin, intrin, frame,
@@ -136,28 +180,27 @@ class OFTtrainer(BaseTrainer):
                 self.loc_normalize_std)
             left_sample_roi_index = torch.zeros(len(left_sample_roi))
             right_sample_roi_index = torch.zeros(len(right_sample_roi))
-
+            # print("dzc", left_gt_conf)
             # ---------------------------left_roi_pooling---------------------------------
-            left_roi_cls_loc, left_roi_score, left_pred_sincos = self.roi_head(
+            left_roi_cls_loc, left_roi_score, left_pred_orientation, left_pred_conf = self.roi_head(
                 img_featuremaps[0],
                 torch.tensor(left_2d_bbox).to(img_featuremaps[0].device),
                 left_sample_roi_index)
+
             left_n_sample = left_roi_cls_loc.shape[0]
             left_roi_cls_loc = left_roi_cls_loc.view(left_n_sample, -1, 4)
             left_roi_loc = left_roi_cls_loc[
                 torch.arange(0, left_n_sample).long().cuda(), at.totensor(left_gt_label).long()]
             left_gt_label = at.totensor(left_gt_label).long()
             left_gt_loc = at.totensor(left_gt_loc)
-            # left_roi_loc_loss = _fast_rcnn_loc_loss(
-            #     left_roi_loc.contiguous(),
-            #     left_gt_loc,
-            #     left_gt_label.data,
-            #     1)
-            # left_roi_cls_loss = nn.CrossEntropyLoss()(left_roi_score, left_gt_label.to(left_roi_score.device))
-            left_pred_sincos = left_pred_sincos[:left_pos_num]
+            left_gt_orientation = at.totensor(left_gt_orientation)
+            left_gt_conf = at.totensor(left_gt_conf)
+            left_pred_orientation = left_pred_orientation[:left_pos_num]
+            left_pred_conf = left_pred_conf[:left_pos_num]
             # left_sincos_loss = self.MSELoss(left_pred_sincos.float(), torch.tensor(left_gt_sincos).to(left_pred_sincos.device).float())
+
             # ---------------------------right_roi_pooling---------------------------------
-            # right_roi_cls_loc, right_roi_score, right_pred_sincos = self.roi_head(
+            # right_roi_cls_loc, right_roi_score, right_pred_orientation, right_pred_conf = self.roi_head(
             #     img_featuremaps[1],
             #     torch.tensor(right_2d_bbox).to(img_featuremaps[1].device),
             #     right_sample_roi_index)
@@ -168,6 +211,8 @@ class OFTtrainer(BaseTrainer):
             #     torch.arange(0, right_n_sample).long().cuda(), at.totensor(right_gt_label).long()]
             # right_gt_label = at.totensor(right_gt_label).long()
             # right_gt_loc = at.totensor(right_gt_loc)
+            # right_gt_orientation = at.totensor(right_gt_orientation)
+            # right_gt_conf = at.totensor(right_gt_conf)
 
             # right_roi_loc_loss = _fast_rcnn_loc_loss(
             #     right_roi_loc.contiguous(),
@@ -177,8 +222,8 @@ class OFTtrainer(BaseTrainer):
 
             # right_roi_cls_loss = nn.CrossEntropyLoss()(right_roi_score, right_gt_label.to(right_roi_score.device))
             # right_pred_sincos = right_pred_sincos[:right_pos_num]
-            # right_sincos_loss = self.MSELoss(right_pred_sincos.float(),
-            #                                  torch.tensor(right_gt_sincos).to(right_pred_sincos.device).float())
+            # right_pred_orientation = right_pred_orientation[:right_pos_num]
+            # right_pred_conf = right_pred_conf[:right_pos_num]
 
             all_roi_loc = left_roi_loc
             all_roi_gt_loc = left_gt_loc
@@ -186,28 +231,39 @@ class OFTtrainer(BaseTrainer):
             all_roi_score = left_roi_score
             all_gt_label = left_gt_label
 
-            all_pred_sincos = left_pred_sincos
-            all_gt_sincos = torch.tensor(left_gt_sincos)
+            all_pred_orientation = left_pred_orientation
+            all_gt_orientation = left_gt_orientation
 
-            # all_roi_loc_loss = _fast_rcnn_loc_loss(
-            #     all_roi_loc.contiguous(),
-            #     all_roi_gt_loc,
-            #     all_gt_label.data,
-            #     1)
+            all_pred_conf = left_pred_conf
+            all_gt_conf = left_gt_conf
+
+            all_roi_loc_loss = _fast_rcnn_loc_loss(
+                all_roi_loc.contiguous(),
+                all_roi_gt_loc,
+                all_gt_label.data,
+                1)
+
             all_roi_cls_loss = nn.CrossEntropyLoss()(all_roi_score, all_gt_label.to(all_roi_score.device))
-            all_sincos_loss = self.MSELoss(all_pred_sincos.float(),
-                                           torch.tensor(all_gt_sincos).to(all_pred_sincos.device).float())
+
+            all_orientation_loss = OrientationLoss(all_pred_orientation,
+                                                   all_gt_orientation.to(all_pred_orientation.device), all_gt_conf)
+
+            all_gt_conf = torch.max(all_gt_conf, dim=1)[1]
+            all_conf_loss = nn.CrossEntropyLoss()(all_pred_conf, all_gt_conf.to(all_pred_conf.device))
 
             # ----------------------Loss-----------------------------
-            loss = rpn_loc_loss * 3 + rpn_cls_loss * 3 + all_roi_cls_loss + all_sincos_loss
-
+            loss = (rpn_loc_loss + rpn_cls_loss) * 3 + \
+                    (all_roi_loc_loss * 0 + all_roi_cls_loss + 0 * all_orientation_loss + 0 * all_conf_loss)
+            # loss = (rpn_loc_loss + rpn_cls_loss) * 0 + \
+            #        (all_roi_loc_loss * 0 + all_roi_cls_loss * 0 + 0.3 * all_orientation_loss + all_conf_loss)
             Loss += loss.item()
 
             RPN_CLS_LOSS += rpn_cls_loss.item()
             RPN_LOC_LOSS += rpn_loc_loss.item()
+            ALL_ROI_LOC_LOSS += all_roi_loc_loss.item()
             ALL_ROI_CLS_LOSS += all_roi_cls_loss.item()
-            ALL_ANGLE_REG_LOSS += all_sincos_loss.item()
-
+            ALL_ORI_LOSS += all_orientation_loss.item()
+            ALL_CONF_LOSS += all_conf_loss.item()
             # ------------------------------------------------------------
             loss.backward()
             optimizer.step()
@@ -216,91 +272,42 @@ class OFTtrainer(BaseTrainer):
             writer.add_scalar("Total Loss", Loss / (batch_idx + 1), niter)
             writer.add_scalar("rpn_loc_loss", RPN_LOC_LOSS / (batch_idx + 1), niter)
             writer.add_scalar("rpn_cls_loss", RPN_CLS_LOSS / (batch_idx + 1), niter)
-            writer.add_scalar("roi_cls_loss", ALL_ROI_CLS_LOSS / (batch_idx + 1), niter)
-            writer.add_scalar("roi_sincos_loss", ALL_ANGLE_REG_LOSS / (batch_idx + 1), niter)
+            writer.add_scalar("ALL ROI_Loc LOSS", ALL_ROI_LOC_LOSS / (batch_idx + 1), niter)
+            writer.add_scalar("ALL ROI_Cls LOSS", ALL_ROI_CLS_LOSS / (batch_idx + 1), niter)
+            writer.add_scalar("ALL ORI LOSS", ALL_ORI_LOSS / (batch_idx + 1), niter)
+            writer.add_scalar("ALL_CONF_LOSS", ALL_CONF_LOSS / (batch_idx + 1), niter)
 
             if batch_idx % 10 == 0:
-                print("Iteration: %d\n" % batch_idx,
+                print("[Epoch %d] Iter: %d\n" % (epoch, batch_idx),
                       "Total: %4f\n" % (Loss / (batch_idx + 1)),
-                      "Rpn Loc : %4f    || " % (RPN_LOC_LOSS / (batch_idx + 1)),
-                      "Rpn Cls : %4f    ||" % (RPN_CLS_LOSS / (batch_idx + 1)),
-                      "Rpn Cls : %4f    ||" % (ALL_ROI_CLS_LOSS / (batch_idx + 1)),
-                      "Rpn Cls : %4f    ||" % (ALL_ANGLE_REG_LOSS / (batch_idx + 1)),
+                      "Rpn Loc : %4f| " % (RPN_LOC_LOSS / (batch_idx + 1)),
+                      "Rpn Cls : %4f| " % (RPN_CLS_LOSS / (batch_idx + 1)),
+                      "ALL ROI_Loc : %4f| " % ((ALL_ROI_LOC_LOSS) / (batch_idx + 1)),
+                      "ALL ROI_Cls : %4f| " % ((ALL_ROI_CLS_LOSS) / (batch_idx + 1)),
+                      "ALL ORI : %4f| " % ((ALL_ORI_LOSS) / (batch_idx + 1)),
+                      "ALL CONF : %4f| " % ((ALL_CONF_LOSS) / (batch_idx + 1))
                       )
-                print("----------------------------------------------------------------------------------------------------------------------------------------------------------------------")
-            # 给两个图上的框指定gt的loc，目前已经有gt_roi_label_left, gt_roi_label_right,
+                print(
+                    "----------------------------------------------------------------------------------------------------------------------------------------------------------------------")
 
-            # for car in left_2d_bbox:
-            #     for n in range(len(car)):
-            #         for m in range(len(car)):
-            #             if abs(n - m) == 1 or abs(n - m) == 4:
-            #                 cv2.line(left_img, (car[n][0], car[n][1]), (car[m][0], car[m][1]), color=(255, 255, 0), thickness=1)
-
-            # for car in left_2d_bbox:
-            #     xmax = max(car[:, 0])
-            #     xmin = min(car[:, 0])
-            #     ymax = max(car[:, 1])
-            #     ymin = min(car[:, 1])
-            #     cv2.rectangle(left_img, (xmin, ymin), (xmax, ymax), color = (255, 255, 0), thickness = 1)
-
-            #
-            # for car in right_2d_bbox:
-            #     xmax = max(car[:, 0])
-            #     xmin = min(car[:, 0])
-            #     ymax = max(car[:, 1])
-            #     ymin = min(car[:, 1])
-            #     cv2.rectangle(right_img, (xmin, ymin), (xmax, ymax), color = (255, 255, 0), thickness = 2)
-            # cv2.imwrite("/home/dzc/Desktop/CASIA/proj/mvRPN-det/images/right_img.jpg", right_img)
-
-            # ------------loc -> bbox--------------
-
-            # rpn_score = nn.Softmax()(rpn_score)
-            # conf_scores = rpn_score[:, 1].view(1, -1).squeeze()
-            # # print("dzc", max(conf_scores.squeeze()))
-            # left_bbox, left_conf = nms_new(bbox, conf_scores.detach().cpu(), left=4, threshold=0.1)
-            #
-            # left_img = cv2.imread("/home/dzc/Data/4carreal_0318blend/img/left1/%d.jpg" % frame)
-            # # right_img = cv2.imread("/home/dzc/Data/4carreal_0318blend/img/right2/%d.jpg" % frame)
-            # bev_img = cv2.imread("/home/dzc/Data/4carreal_0318blend/bevimgs/%d.jpg" % frame)
-            #
-            # for idx, bbx in enumerate(left_bbox):
-            #     cv2.rectangle(bev_img, (int(bbx[1]), int(bbx[0])), (int(bbx[3]), int(bbx[2])), color=(255, 255, 0), thickness=1)
-
-            # for idx, bbxx in enumerate(gt_left_bbox):
-            #     for item in bbxx:
-            #         # print(np.dot(intrin[0][0], extrin[0][0]))
-            #         # print(np.dot(item, np.dot(intrin[0][0], extrin[0][0])))
-
-
-
-
-            # for idx, bbx in enumerate(left_2d_bbox):
-            #     cv2.rectangle(left_img, (int(bbx[1]), int(bbx[0])), (int(bbx[3]), int(bbx[2])), color=(255, 255, 0), thickness=1)
-            #     # cv2.circle(left_img, (int((bbx[3] + bbx[1]) / 2), (int((bbx[2] + bbx[0]) / 2))), 1, color=(255, 255, 0))
-            #
-            # cv2.imwrite("/home/dzc/Desktop/CASIA/proj/mvRPN-det/images/left_img.jpg", left_img)
-            # cv2.imwrite("/home/dzc/Desktop/CASIA/proj/mvRPN-det/images/bev_img.jpg", bev_img)
-
-            # ----------------生成3D外接框，并投影回原图，先拿左图为例子------------------
-
-    def test(self,epoch, data_loader, writer):
+    def test(self, epoch, data_loader, writer):
+        self.model.train()
         self.model.eval()
+        # self.model.eval()
+        self.roi_head.eval()
+
         all_res = []
         all_pred_res = []
         all_gt_res = []
 
         for batch_idx, data in enumerate(data_loader):
-            imgs, gt_bev_xy, bev_angle, gt_bbox, gt_left_bbox, gt_right_bbox, gt_left_dirs, gt_right_dirs, gt_left_sincos, gt_right_sincos, frame, extrin, intrin, extrin2, intrin2, mark = data
+            imgs, bev_xy, bev_angle, gt_bbox, gt_left_bbox, gt_right_bbox, left_dirs, right_dirs, left_sincos, right_sincos, left_orientation, right_orientation, left_conf, right_conf, frame, extrin, intrin, mark = data
             total_start = time.time()
-            rpn_start = time.time()
-
-            if mark == 1:
-                extrin = extrin2
-                intrin = intrin2
 
             with torch.no_grad():
-                rpn_locs, rpn_scores, anchor, rois, roi_indices, final_scores, img_featuremaps, world_features = self.model(imgs, frame, mark=mark)
-            rpn_end = time.time()
+                rpn_locs, rpn_scores, anchor, rois, roi_indices, img_featuremaps, bev_featuremaps = self.model(imgs,
+                                                                                                               frame,
+                                                                                                               mark=mark)
             roi = torch.tensor(rois)
 
             # -----------投影------------
@@ -308,19 +315,6 @@ class OFTtrainer(BaseTrainer):
             # 保留相应的roi和index
             # box转换和保留
             roi_3d = generate_3d_bbox(roi)
-
-            # bev_img = cv2.imread("/home/dzc/Data/mix_simp/bevimgs/%d.jpg" % frame)
-            # for car in roi:
-            #     # xmax = max(car[:, 0])
-            #     # xmin = min(car[:, 0])
-            #     # ymax = max(car[:, 1])
-            #     # ymin = min(car[:, 1])
-            #     xmax = car[3]
-            #     xmin = car[1]
-            #     ymax = car[2]
-            #     ymin = car[0]
-            #     cv2.rectangle(bev_img, (int(xmin), int(ymin)), (int(xmax), int(ymax)), color=(255, 255, 0), thickness=1)
-            # cv2.imwrite("/home/dzc/Desktop/CASIA/proj/mvRPN-det/results/images/bev_img.jpg", bev_img)
 
             left_2d_bbox = getprojected_3dbox(roi_3d, extrin, intrin, isleft=True)
             right_2d_bbox = getprojected_3dbox(roi_3d, extrin, intrin, isleft=False)
@@ -343,15 +337,14 @@ class OFTtrainer(BaseTrainer):
             )[0]
             if len(right_index_inside) == 0 or len(left_index_inside) == 0:
                 continue
-            # print(right_index_inside.shape, roi_indices.shape)
 
             left_2d_bbox = left_2d_bbox[left_index_inside]
             right_2d_bbox = right_2d_bbox[right_index_inside]
             left_rois_indices = roi_indices[left_index_inside]
             right_rois_indices = roi_indices[right_index_inside]
 
-            left_img = cv2.imread("/home/dzc/Data/mix_simp/img/left1/%d.jpg" % frame)
-            right_img = cv2.imread("/home/dzc/Data/mix_simp/img/right2/%d.jpg" % frame)
+            # left_img = cv2.imread("/home/dzc/Data/mix_simp/img/left1/%d.jpg" % frame)
+            # right_img = cv2.imread("/home/dzc/Data/mix_simp/img/right2/%d.jpg" % frame)
 
             # for car in left_2d_bbox:
             #     # print(car)
@@ -361,12 +354,8 @@ class OFTtrainer(BaseTrainer):
             #     ymin = car[0]
             #     cv2.rectangle(left_img, (xmin, ymin), (xmax, ymax), color=(255, 255, 0), thickness=1)
             # cv2.imwrite("/home/dzc/Desktop/CASIA/proj/mvRPN-det/results/images/left_img.jpg", left_img)
-            #
+
             # for car in right_2d_bbox:
-            #     # xmax = max(car[:, 0])
-            #     # xmin = min(car[:, 0])
-            #     # ymax = max(car[:, 1])
-            #     # ymin = min(car[:, 1])
             #     xmax = car[3]
             #     xmin = car[1]
             #     ymax = car[2]
@@ -378,101 +367,131 @@ class OFTtrainer(BaseTrainer):
             right_2d_bbox = torch.tensor(right_2d_bbox)
 
             # ------------左右ROI pooling-----------
-            left_roi_cls_loc, left_roi_score, left_pred_sincos = self.roi_head(
+            left_roi_cls_loc, left_roi_score, left_pred_orientation, left_pred_conf = self.roi_head(
                 img_featuremaps[0],
-                left_2d_bbox.to(img_featuremaps[0].device),
+                torch.tensor(left_2d_bbox).to(img_featuremaps[0].device),
                 left_rois_indices)
-            # print(right_2d_bbox.shape, right_rois_indices.shape)
+
+            # right_roi_cls_loc, right_roi_score, right_pred_orientation, right_pred_conf = self.roi_head(
+            #     img_featuremaps[1],
+            #     torch.tensor(right_2d_bbox).to(img_featuremaps[1].device),
+            #     right_rois_indices)
+
+            # left_roi_cls_loc, left_roi_score, left_pred_sincos = self.roi_head(
+            #     img_featuremaps[0],
+            #     left_2d_bbox.to(img_featuremaps[0].device),
+            #     left_rois_indices)
             # right_roi_cls_loc, right_roi_score, right_pred_sincos = self.roi_head(
             #     img_featuremaps[1],
             #     right_2d_bbox.to(img_featuremaps[1].device),
             #     right_rois_indices)
             # -----------------------NMS---------------------------
 
+            # 需要遍历一下所有的roi
+            angle_bins = generate_bins(self.bins)
+            tmp = np.zeros(shape=left_pred_conf.shape)
+            tmp += angle_bins
+            left_angle_bins = tmp
+
+            # tmp = np.zeros(shape=right_pred_conf.shape)
+            # tmp += angle_bins
+            # right_angle_bins = tmp
+
+            # [R, 2, 2]
+            left_argmax = np.argmax(left_pred_conf.detach().cpu().numpy(), axis=1)
+            left_orient = left_pred_orientation[np.arange(len(left_pred_orientation)), left_argmax]
+            left_cos = left_orient[:, 0]
+            left_sin = left_orient[:, 1]
+            left_alpha = np.arctan2(left_sin.cpu().detach().numpy(), left_cos.cpu().detach().numpy())
+            left_alpha += left_angle_bins[np.arange(len(left_argmax)), left_argmax]  # 0~180, (R, 2), residual angle
+            # right_argmax = np.argmax(right_pred_conf.detach().cpu().numpy(), axis=1)
+            # right_orient = right_pred_orientation[np.arange(len(right_pred_orientation)), right_argmax]
+            # right_cos = right_orient[:, 0]
+            # right_sin = right_orient[:, 1]
+            # right_alpha = np.arctan2(right_sin.cpu().detach().numpy(), right_cos.cpu().detach().numpy())
+            # right_alpha += right_angle_bins[np.arange(len(right_argmax)), right_argmax]  # 0~180, (R, 2), residual angle
+
             left_prob = at.tonumpy(F.softmax(at.totensor(left_roi_score), dim=1))
             left_front_prob = left_prob[:, 1]
             # right_prob = at.tonumpy(F.softmax(at.totensor(right_roi_score), dim=1))
             # right_front_prob = right_prob[:, 1]
 
-            position_mark =np.zeros((left_front_prob.shape[0],))
+            # position_mark = np.concatenate(
+            #     (np.zeros((left_front_prob.shape[0],)), np.ones((right_front_prob.shape[0]))))
+            # all_front_prob = np.concatenate((left_front_prob, right_front_prob))
+            # all_roi_remain = np.concatenate((roi[left_index_inside], roi[right_index_inside]))
+            # all_pred_alpha = np.concatenate((at.tonumpy(left_alpha), at.tonumpy(right_alpha)))
+
+            position_mark = np.zeros((left_front_prob.shape[0], ))
             all_front_prob = left_front_prob
-            all_roi_remain = np.concatenate((roi[left_index_inside], roi[right_index_inside]))
-            all_pred_sincos = at.tonumpy(left_pred_sincos)
-            # all_bev_boxes, _, all_sincos_remain, position_mark_keep = nms_new(all_roi_remain, all_front_prob, all_pred_sincos, position_mark)
-            # s = time.time()
+            all_roi_remain = roi[left_index_inside]
+            all_pred_alpha =at.tonumpy(left_alpha)
+
             v, indices = torch.tensor(all_front_prob).sort(0)
-            indices_remain = indices[v > 0.2]
-            # print(v)
+            indices_remain = indices[v > 0.65]
             print(frame)
             all_roi_remain = all_roi_remain[indices_remain].reshape(len(indices_remain), 4)
-            all_pred_sincos = all_pred_sincos[indices_remain].reshape(len(indices_remain), 2)
+            all_pred_alpha = all_pred_alpha[indices_remain].reshape(len(indices_remain), 1)
             all_front_prob = all_front_prob[indices_remain].reshape(len(indices_remain), )
             position_mark = position_mark[indices_remain].reshape(len(indices_remain), 1)
 
             all_bev_boxes = []
             if indices_remain.shape[0] != 0:
-                #     keep = indices[np.argmax(v)].reshape(-1)
-                #     all_bev_boxes = all_roi_remain[keep]
-                # else:
                 if indices_remain.shape[0] == 1:
                     keep = [0]
                 else:
                     keep = box_ops.nms(torch.tensor(all_roi_remain), torch.tensor(all_front_prob), 0)
-                    # y = (all_roi_remain[:, 0] + all_roi_remain[:, 2]) / 2
-                    # x = (all_roi_remain[:, 1] + all_roi_remain[:, 3]) / 2
-                    # points = np.array([x, y]).reshape(-1, 2)
-                    # print(points.shape)
-                    # keep, _ = nms(torch.tensor(points), torch.tensor(all_front_prob), dist_thres=78, top_k=50)
-                all_bev_boxes, all_sincos_remain, position_mark_keep = all_roi_remain[keep].reshape(len(keep), 4), \
-                                                                       all_pred_sincos[keep].reshape(len(keep), 2), \
-                                                                       position_mark[keep].reshape(len(keep))
-            # all_bev_boxes, all_sincos_remain, position_mark_keep = all_roi_remain2[keep].reshape(len(keep), 4), all_pred_sincos2[keep].reshape(len(keep), 2), position_mark2[keep].reshape(len(keep))
-            nms_end = time.time()
-            total_end = time.time()
+                all_bev_boxes, all_pred_alpha, position_mark_keep = all_roi_remain[keep].reshape(len(keep), 4), \
+                                                                    all_pred_alpha[keep].reshape(len(keep), 1), \
+                                                                    position_mark[keep].reshape(len(keep))
 
             # -----------------------可视化---------------------------
-            bev_img = cv2.imread("/home/dzc/Data/mix/bevimgs/%d.jpg" % frame)
-
-            # position_mark_keep2 = [0,0,0,0]
-            # all_sincos_remain2 = gt_left_sincos[0]
-
             if len(all_bev_boxes) != 0:
-                test_gt_res, test_pred_res = visualize_3dbox(all_bev_boxes, all_sincos_remain, position_mark_keep,
-                                                             gt_bbox, bev_angle, all_front_prob[keep], extrin, intrin,
-                                                             frame)
-                for k, bbox in enumerate(all_bev_boxes):
-                    ymin, xmin, ymax, xmax = bbox
-                    all_res.append([frame, ((xmin + xmax) / 2), ((ymin + ymax) / 2)])
+                test_gt_res, test_pred_res = visualize_3dbox(all_bev_boxes, all_pred_alpha, position_mark_keep, gt_bbox,
+                                                             bev_angle, all_front_prob[keep], extrin, intrin, frame)
+                # for k, bbox in enumerate(all_bev_boxes):
+                #     ymin, xmin, ymax, xmax = bbox
+                #     all_res.append([frame, ((xmin + xmax) / 2), ((ymin + ymax) / 2)])
 
                 for p in range(len(test_gt_res)):
                     all_gt_res.append(test_gt_res[p])
                 for l in range(len(test_pred_res)):
                     all_pred_res.append(test_pred_res[l])
 
-        res_fpath = '/home/dzc/Data/%s/dzc_res/res.txt' % Const.dataset
-        gt_fpath = '/home/dzc/Data/%s/dzc_res/test_gt.txt' % Const.dataset
-        np.savetxt(res_fpath, np.array(all_res).reshape(-1, 3), "%d")
-
-        all_res_fpath = '/home/dzc/Data/%s/dzc_res/all_res.txt' % Const.dataset
+        res_fpath = '/home/dzc/Data/%s/dzc_res/all_res.txt' % Const.dataset
         all_gt_fpath = '/home/dzc/Data/%s/dzc_res/all_test_gt.txt' % Const.dataset
-        print(all_pred_res)
-        all_gt_res = np.array(all_gt_res).reshape(-1, 6)
-        all_pred_res = np.array(all_pred_res).reshape(-1, 7)
+        # print(all_pred_res)
+        all_gt_res = np.array(all_gt_res).reshape(-1, 14)
+        all_pred_res = np.array(all_pred_res).reshape(-1, 15)
 
-        np.savetxt(all_res_fpath, all_pred_res, "%f")
+        np.savetxt(res_fpath, all_pred_res, "%f")
         np.savetxt(all_gt_fpath, all_gt_res, "%f")
 
-        recall, precision, moda, modp = evaluate(os.path.abspath(res_fpath), os.path.abspath(gt_fpath),
+        recall, precision, moda, modp = evaluate(os.path.abspath(res_fpath), os.path.abspath(all_gt_fpath),
                                                  data_loader.dataset.base.__name__)
 
-@property
-def n_class(self):
-    # Total number of classes including the background.
-    return self.roi_head.n_class
+        AP_50, AOS_50, OS_50, AP_25, AOS_25, OS_25 = evaluateDetectionAPAOS(res_fpath, all_gt_fpath)
+        print("MODA: ", moda, ", MODP: ", modp, ", Recall: ", recall, ", Prec: ", precision)
+        print("AP_50: ", AP_50, " ,AOS_50: ", AOS_50, ", OS_50: ", OS_50)
+        print("AP_25: ", AP_25, " ,AOS_25: ", AOS_25, ", OS_25: ", OS_25)
 
-def visualize_3dbox(pred_ori, pred_angle, position_mark, gt_bbox, bev_angle, all_front_prob, extrin, intrin, idx):
-    # left_img = cv2.imread("/home/dzc/Data/mix/img/left1/%d.jpg" % (idx))
-    # right_img = cv2.imread("/home/dzc/Data/mix/img/right2/%d.jpg" % (idx))
+        # print(recall, precision, moda, modp)
+
+    @property
+    def n_class(self):
+        # Total number of classes including the background.
+        return self.roi_head.n_class
+
+
+def visualize_3dbox(pred_ori, pred_alpha, position_mark, gt_bbox, bev_angle, all_front_prob, extrin, intrin, idx):
+    # left_img = cv2.imread("/home/dzc/Data/opensource2/img/left1/%d.jpg" % (idx))
+    right_img = cv2.imread("/home/dzc/Data/%s/img/right2/%d.jpg" % (Const.dataset, idx))
+    # right_img = cv2.imread("/home/dzc/Data/mix_simp/img/right2/%d.jpg" % idx)
+    # c = 1.5
+    # b = 5
+    # rows, cols, channels = right_img.shape
+    # blank = np.zeros([rows, cols, channels], right_img.dtype)
+    # right_img = cv2.addWeighted(right_img, c, blank, 1 - c, b)
 
     all_pred_res = []
     all_gt_res = []
@@ -487,38 +506,46 @@ def visualize_3dbox(pred_ori, pred_angle, position_mark, gt_bbox, bev_angle, all
     for j, bbox in enumerate(gt_bbox):
         ymin, xmin, ymax, xmax = bbox
         theta = bev_angle[j]
+        # theta = torch.tensor(0)
+        center_x, center_y = int((xmin + xmax) // 2), int((ymin + ymax) // 2)
+        w = 60
+        h = 50
+        xmin = center_x - w // 2
+        xmax = center_x + w // 2
+        ymin = center_y - h // 2
+        ymax = center_y + h // 2
 
         x1_ori, x2_ori, x3_ori, x4_ori, x_mid = xmin, xmin, xmax, xmax, (xmin + xmax) / 2 - 40
-        y1_ori, y2_ori, y3_ori, y4_ori, y_mid = Const.grid_height - ymin, Const.grid_height - ymax, Const.grid_height - ymax, Const.grid_height - ymin, (Const.grid_height -ymax + Const.grid_height -ymin) / 2
-        center_x, center_y = int((xmin + xmax) // 2), int((ymin + ymax) // 2)
-        w = 50
-        h = 60
-        all_gt_res.append([idx.item(), center_x, center_y, w, h, np.rad2deg(theta.item())])
-
+        y1_ori, y2_ori, y3_ori, y4_ori, y_mid = Const.grid_height - ymin, Const.grid_height - ymax, Const.grid_height - ymax, Const.grid_height - ymin, (
+                    Const.grid_height - ymax + Const.grid_height - ymin) / 2
 
         x1_rot, x2_rot, x3_rot, x4_rot, xmid_rot = \
             int(math.cos(theta) * (x1_ori - center_x) - math.sin(theta) * (
-                        y1_ori - (Const.grid_height - center_y)) + center_x), \
+                    y1_ori - (Const.grid_height - center_y)) + center_x), \
             int(math.cos(theta) * (x2_ori - center_x) - math.sin(theta) * (
-                        y2_ori - (Const.grid_height - center_y)) + center_x), \
+                    y2_ori - (Const.grid_height - center_y)) + center_x), \
             int(math.cos(theta) * (x3_ori - center_x) - math.sin(theta) * (
-                        y3_ori - (Const.grid_height - center_y)) + center_x), \
+                    y3_ori - (Const.grid_height - center_y)) + center_x), \
             int(math.cos(theta) * (x4_ori - center_x) - math.sin(theta) * (
-                        y4_ori - (Const.grid_height - center_y)) + center_x), \
+                    y4_ori - (Const.grid_height - center_y)) + center_x), \
             int(math.cos(theta) * (x_mid - center_x) - math.sin(theta) * (
-                        y_mid - (Const.grid_height - center_y)) + center_x)
+                    y_mid - (Const.grid_height - center_y)) + center_x)
 
         y1_rot, y2_rot, y3_rot, y4_rot, ymid_rot = \
             int(math.sin(theta) * (x1_ori - center_x) + math.cos(theta) * (y1_ori - (Const.grid_height - center_y)) + (
-                        Const.grid_height - center_y)), \
+                    Const.grid_height - center_y)), \
             int(math.sin(theta) * (x2_ori - center_x) + math.cos(theta) * (y2_ori - (Const.grid_height - center_y)) + (
-                        Const.grid_height - center_y)), \
+                    Const.grid_height - center_y)), \
             int(math.sin(theta) * (x3_ori - center_x) + math.cos(theta) * (y3_ori - (Const.grid_height - center_y)) + (
-                        Const.grid_height - center_y)), \
+                    Const.grid_height - center_y)), \
             int(math.sin(theta) * (x4_ori - center_x) + math.cos(theta) * (y4_ori - (Const.grid_height - center_y)) + (
-                        Const.grid_height - center_y)), \
+                    Const.grid_height - center_y)), \
             int(math.sin(theta) * (x_mid - center_x) + math.cos(theta) * (y_mid - (Const.grid_height - center_y)) + (
-                        Const.grid_height - center_y))
+                    Const.grid_height - center_y))
+
+        all_gt_res.append(
+            [idx.item(), center_x, center_y, w, h, np.rad2deg(theta.item()), x1_rot, y1_rot, x2_rot, y2_rot, x3_rot,
+             y3_rot, x4_rot, y4_rot])
 
         pt0 = [x1_rot, y1_rot, 0]
         pt1 = [x2_rot, y2_rot, 0]
@@ -581,10 +608,10 @@ def visualize_3dbox(pred_ori, pred_angle, position_mark, gt_bbox, bev_angle, all
     #     cv2.arrowedLine(right_img, (int((gt_projected_2d[k][0][0] + gt_projected_2d[k][2][0]) / 2),
     #                                 int((gt_projected_2d[k][0][1] + gt_projected_2d[k][2][1]) / 2)),
     #                     (gt_projected_2d[k][8][0], gt_projected_2d[k][8][1]), color=(255, 60, 199), thickness=2)
-        # cv2.line(left_img, (int((projected_2d[k][0+ 9][0] + projected_2d[k][2+ 9][0]) / 2), int((projected_2d[k][0+ 9][1] + projected_2d[k][2+ 9][1]) / 2)), (projected_2d[k][8+ 9][0], projected_2d[k][8+ 9][1]), color = (255, 60, 199), thickness=2)
+    # cv2.line(left_img, (int((projected_2d[k][0+ 9][0] + projected_2d[k][2+ 9][0]) / 2), int((projected_2d[k][0+ 9][1] + projected_2d[k][2+ 9][1]) / 2)), (projected_2d[k][8+ 9][0], projected_2d[k][8+ 9][1]), color = (255, 60, 199), thickness=2)
     # cv2.imwrite("/home/dzc/Desktop/CASIA/proj/mvRPN-det/results/images/3d_box_blend/%d_gt.jpg" % idx, right_img)
-    # right_img = cv2.imread("/home/dzc/Data/mix/img/right2/%d.jpg" % (idx))
-    boxes_3d = []
+    # right_img = cv2.imread("/home/dzc/Data/opensource2/img/right2/%d.jpg" % (idx))
+    # boxes_3d = []
     # #============================= MVDET =============================
     # for j, bbox in enumerate(gt_bbox):
     #     ymin, xmin, ymax, xmax = bbox
@@ -594,15 +621,15 @@ def visualize_3dbox(pred_ori, pred_angle, position_mark, gt_bbox, bev_angle, all
     #     xmin += rand
     #     ymax += rand
     #     xmax += rand
-    #
+
     #     x1_ori =  (xmin + xmax) / 2 - 25
     #     y1_ori = Const.grid_height - ymin
     #     center_x, center_y = int((xmin + xmax) // 2), int((ymin + ymax) // 2)
     #     w = ymax - ymin
     #     h = xmax - xmin
-    #
+
     #     # bev_img = cv2.imread()
-    #
+
     #     # pt0 = [x1_rot, y1_rot, 0]
     #     # pt1 = [x2_rot, y2_rot, 0]
     #     # pt2 = [x3_rot, y3_rot, 0]
@@ -612,8 +639,7 @@ def visualize_3dbox(pred_ori, pred_angle, position_mark, gt_bbox, bev_angle, all
     #     # pt_h_2 = [x3_rot, y3_rot, Const.car_height]
     #     # pt_h_3 = [x4_rot, y4_rot, Const.car_height]
     #     # pt_extra = [xmid_rot, ymid_rot, 0]
-    #
-    #
+
     #     x1_rot, x2_rot, x3_rot, x4_rot, x5_rot, x6_rot, x7_rot, x8_rot, x9_rot, x10_rot, x11_rot = \
     #         int(math.cos(np.pi / 6) * (x1_ori - center_x) - math.sin(np.pi / 6) * (
     #                 y1_ori - (Const.grid_height - center_y)) + center_x), \
@@ -635,9 +661,21 @@ def visualize_3dbox(pred_ori, pred_angle, position_mark, gt_bbox, bev_angle, all
     #                 y1_ori - (Const.grid_height - center_y)) + center_x), \
     #         int(math.cos(10*np.pi / 6) * (x1_ori - center_x) - math.sin(10*np.pi / 6) * (
     #                 y1_ori - (Const.grid_height - center_y)) + center_x), \
-    #         int(math.cos(11*np.pi / 6) * (x1_ori - center_x) - math.sin(11*np.pi / 6) * (
-    #                 y1_ori - (Const.grid_height - center_y)) + center_x)
-    #     #
+    #      r_height]
+    #     cy20 = [x10_rot, y10_rot, 0]
+    #     cy21 = [x10_rot, y10_rot, Const.car_height]
+    #     cy22 = [x11_rot, y11_rot, 0]
+    #     cy23 = [x11_rot, y11_rot, Const.car_height]
+
+    #     boxes_3d.append([cy0, cy1, cy2, cy3, cy4, cy5, cy6, cy7, cy8, cy9, cy10, cy11, cy12,cy13, cy14,cy15,cy16,cy17,cy18,cy19,cy20,cy21, cy22, cy23])
+    # gt_ori = np.array(boxes_3d).reshape((gt_n_bbox, 24, 3))
+    # gt_projected_2d = getprojected_3dbox(gt_ori, extrin, intrin, isleft=True)
+    # gt_projected_2d = getprojected_3dbox(gt_ori, extrin, intrin, isleft=False)
+    # for k in range(gt_n_bbox):
+    #     color = (0, 255, 255)
+    #     cv2.line(right_img, (gt_projected_2d[k][0][0], gt_projected_2d[k][0][1]),
+    #              (gt_projected_2d[k][2][0], gt_projected_2d[k][2][1]), color=color, thickness=2)
+    #     cv2.line(right_img, (gt_project
     #     y1_rot, y2_rot, y3_rot, y4_rot,  y5_rot, y6_rot, y7_rot, y8_rot, y9_rot, y10_rot,y11_rot = \
     #         int(math.sin(np.pi / 6) * (x1_ori - center_x) + math.cos(np.pi / 6) * (y1_ori - (Const.grid_height - center_y)) + (
     #                 Const.grid_height - center_y)), \
@@ -661,18 +699,27 @@ def visualize_3dbox(pred_ori, pred_angle, position_mark, gt_bbox, bev_angle, all
     #                 Const.grid_height - center_y)), \
     #         int(math.sin(11*np.pi / 6) * (x1_ori - center_x) + math.cos(11*np.pi / 6) * (y1_ori - (Const.grid_height - center_y)) + (
     #                 Const.grid_height - center_y))
-    #
+
     #     cy0 = [x1_ori, y1_ori, 0]
     #     cy1 = [x1_ori, y1_ori, Const.car_height]
     #     cy2 = [x1_rot, y1_rot, 0]
     #     cy3 = [x1_rot, y1_rot, Const.car_height]
     #     cy4 = [x2_rot, y2_rot, 0]
-    #     cy5 = [x2_rot, y2_rot, Const.car_height]
-    #     cy6 = [x3_rot, y3_rot, 0]
-    #     cy7 = [x3_rot, y3_rot, Const.car_height]
-    #     cy8 = [x4_rot, y4_rot, 0]
-    #     cy9 = [x4_rot, y4_rot, Const.car_height]
-    #     cy10 = [x5_rot, y5_rot, 0]
+    #     r_height]
+    #     cy20 = [x10_rot, y10_rot, 0]
+    #     cy21 = [x10_rot, y10_rot, Const.car_height]
+    #     cy22 = [x11_rot, y11_rot, 0]
+    #     cy23 = [x11_rot, y11_rot, Const.car_height]
+
+    #     boxes_3d.append([cy0, cy1, cy2, cy3, cy4, cy5, cy6, cy7, cy8, cy9, cy10, cy11, cy12,cy13, cy14,cy15,cy16,cy17,cy18,cy19,cy20,cy21, cy22, cy23])
+    # gt_ori = np.array(boxes_3d).reshape((gt_n_bbox, 24, 3))
+    # gt_projected_2d = getprojected_3dbox(gt_ori, extrin, intrin, isleft=True)
+    # gt_projected_2d = getprojected_3dbox(gt_ori, extrin, intrin, isleft=False)
+    # for k in range(gt_n_bbox):
+    #     color = (0, 255, 255)
+    #     cv2.line(right_img, (gt_projected_2d[k][0][0], gt_projected_2d[k][0][1]),
+    #              (gt_projected_2d[k][2][0], gt_projected_2d[k][2][1]), color=color, thickness=2)
+    #     cv2.line(right_img, (gt_projectcy10 = [x5_rot, y5_rot, 0]
     #     cy11 = [x5_rot, y5_rot, Const.car_height]
     #     cy12 = [x6_rot, y6_rot, 0]
     #     cy13 = [x6_rot, y6_rot, Const.car_height]
@@ -686,8 +733,7 @@ def visualize_3dbox(pred_ori, pred_angle, position_mark, gt_bbox, bev_angle, all
     #     cy21 = [x10_rot, y10_rot, Const.car_height]
     #     cy22 = [x11_rot, y11_rot, 0]
     #     cy23 = [x11_rot, y11_rot, Const.car_height]
-    #
-    #
+
     #     boxes_3d.append([cy0, cy1, cy2, cy3, cy4, cy5, cy6, cy7, cy8, cy9, cy10, cy11, cy12,cy13, cy14,cy15,cy16,cy17,cy18,cy19,cy20,cy21, cy22, cy23])
     # gt_ori = np.array(boxes_3d).reshape((gt_n_bbox, 24, 3))
     # gt_projected_2d = getprojected_3dbox(gt_ori, extrin, intrin, isleft=True)
@@ -718,7 +764,7 @@ def visualize_3dbox(pred_ori, pred_angle, position_mark, gt_bbox, bev_angle, all
     #              (gt_projected_2d[k][22][0], gt_projected_2d[k][22][1]), color=color, thickness=2)
     #     cv2.line(right_img, (gt_projected_2d[k][22][0], gt_projected_2d[k][22][1]),
     #              (gt_projected_2d[k][0][0], gt_projected_2d[k][0][1]), color=color, thickness=2)
-    #
+
     #     cv2.line(right_img, (gt_projected_2d[k][0+1][0], gt_projected_2d[k][0+1][1]),
     #              (gt_projected_2d[k][2+1][0], gt_projected_2d[k][2+1][1]), color=color, thickness=2)
     #     cv2.line(right_img, (gt_projected_2d[k][2+1][0], gt_projected_2d[k][2+1][1]),
@@ -743,7 +789,7 @@ def visualize_3dbox(pred_ori, pred_angle, position_mark, gt_bbox, bev_angle, all
     #              (gt_projected_2d[k][22+1][0], gt_projected_2d[k][22+1][1]), color=color, thickness=2)
     #     cv2.line(right_img, (gt_projected_2d[k][22+1][0], gt_projected_2d[k][22+1][1]),
     #              (gt_projected_2d[k][0+1][0], gt_projected_2d[k][0+1][1]), color=color, thickness=2)
-    #
+
     #     cv2.line(right_img, (gt_projected_2d[k][0][0], gt_projected_2d[k][0][1]),
     #              (gt_projected_2d[k][1][0], gt_projected_2d[k][1][1]), color=color, thickness=2)
     #     cv2.line(right_img, (gt_projected_2d[k][6][0], gt_projected_2d[k][6][1]),
@@ -773,93 +819,97 @@ def visualize_3dbox(pred_ori, pred_angle, position_mark, gt_bbox, bev_angle, all
     # # cv2.imwrite("/home/dzc/Desktop/CASIA/proj/mvRPN-det/results/images/3d_box_blend/%d_mvdet.jpg" % idx, right_img)
     # right_img = cv2.imread("/home/dzc/Data/mix/img/right2/%d.jpg" % (idx))
 
-
     boxes_3d = []
-    print(all_front_prob.shape, pred_angle.shape, pred_ori.shape)
+    # print(all_front_prob.shape, pred_angle.shape, pred_ori.shape)
     for i, bbox in enumerate(pred_ori):
         ymin, xmin, ymax, xmax = bbox
-        sincos = pred_angle[i]
-        if pred_angle.shape[0] == 1:
+        alpha = pred_alpha[i]
+        if pred_alpha.shape[0] == 1:
             score = 1.0
         else:
             score = all_front_prob[i]
         if position_mark[i] == 0:
+            center_x, center_y = int((bbox[1] + bbox[3]) // 2), int((bbox[0] + bbox[2]) // 2)
+            w, h = 60 / 2, 50 / 2
+            xmin = center_x - w
+            xmax = center_x + w
+            ymin = center_y - h
+            ymax = center_y + h
             x1_ori, x2_ori, x3_ori, x4_ori, x_mid = xmin, xmin, xmax, xmax, (xmin + xmax) / 2 + 40
-            y1_ori, y2_ori, y3_ori, y4_ori, y_mid = Const.grid_height -ymin, Const.grid_height -ymax, Const.grid_height -ymax, Const.grid_height -ymin, (Const.grid_height -ymax + Const.grid_height -ymin) / 2
-            # if i == 1 and idx == 1796:
-            #     tmp = cv2.imread("/home/dzc/Data/4carreal_0318blend/bevimgs/%d.jpg" % idx)
-            #     cv2.circle(tmp, (int(x_mid), int(y_mid)), radius=1, color=(255, 244, 0))
-            #     cv2.circle(tmp, (int(x1_ori), int(y1_ori)), radius=1, color=(255, 0, 0))
-            #     cv2.circle(tmp, (int(x2_ori), int(y2_ori)), radius=1, color=(255, 244, 0))
-            #     cv2.circle(tmp, (int(x3_ori), int(y3_ori)), radius=1, color=(255, 244, 0))
-            #     cv2.circle(tmp, (int(x4_ori), int(y4_ori)), radius=1, color=(255, 244, 0))
-            #     cv2.imwrite("/home/dzc/Desktop/CASIA/proj/mvRPN-det/results/images/dddd.jpg", tmp)
+            y1_ori, y2_ori, y3_ori, y4_ori, y_mid = Const.grid_height - ymin, Const.grid_height - ymax, Const.grid_height - ymax, Const.grid_height - ymin, (
+                        Const.grid_height - ymax + Const.grid_height - ymin) / 2
             center_x, center_y = int((bbox[1] + bbox[3]) // 2), int((bbox[0] + bbox[2]) // 2)
             ray = np.arctan((Const.grid_height - center_y) / center_x)
-            angle = np.arctan(sincos[0] / sincos[1])
-            if sincos[0] > 0 and \
-                    sincos[1] < 0:
-                angle += np.pi
-            elif sincos[0] < 0 and \
-                    sincos[1] < 0:
-                angle += np.pi
-            elif sincos[0] < 0 and \
-                    sincos[1] > 0:
-                angle += 2 * np.pi
-            # angle += np.pi
+            angle = alpha
+            # if np.sin(alpha) > 0 and \
+            #         np.cos(alpha) < 0:
+            #     angle += np.pi
+            # elif np.sin(alpha) < 0 and \
+            #         np.cos(alpha) < 0:
+            #     angle += np.pi
+            # elif np.sin(alpha) < 0 and \
+            #         np.cos(alpha) > 0:
+            #     angle += 2 * np.pi
         else:
+            center_x, center_y = int((xmin + xmax) // 2), int((ymin + ymax) // 2)
+            w, h = 60 / 2, 50 / 2
+            xmin = center_x - w
+            xmax = center_x + w
+            ymin = center_y - h
+            ymax = center_y + h
             x1_ori, x2_ori, x3_ori, x4_ori, x_mid = xmin, xmin, xmax, xmax, (xmin + xmax) / 2 - 40
-            y1_ori, y2_ori, y3_ori, y4_ori, y_mid = Const.grid_height -ymin, Const.grid_height -ymax, Const.grid_height -ymax, Const.grid_height -ymin, (Const.grid_height -ymax + Const.grid_height -ymin) / 2
+            y1_ori, y2_ori, y3_ori, y4_ori, y_mid = Const.grid_height - ymin, Const.grid_height - ymax, Const.grid_height - ymax, Const.grid_height - ymin, (
+                        Const.grid_height - ymax + Const.grid_height - ymin) / 2
             center_x, center_y = int((xmin + xmax) // 2), int((ymin + ymax) // 2)
             ray = np.arctan(center_y / (Const.grid_width - center_x))
-            angle = np.arctan(sincos[0] / sincos[1])
-            if sincos[0] > 0 and \
-                    sincos[1] < 0:
-                angle += np.pi
-            elif sincos[0] < 0 and \
-                    sincos[1] < 0:
-                angle += np.pi
-            elif sincos[0] < 0 and \
-                    sincos[1] > 0:
-                angle += 2 * np.pi
+            angle = alpha
+            # if np.sin(alpha) > 0 and \
+            #         np.cos(alpha) < 0:
+            #     angle += np.pi
+            # elif np.sin(alpha) < 0 and \
+            #         np.cos(alpha) < 0:
+            #     angle += np.pi
+            # elif np.sin(alpha) < 0 and \
+            #         np.cos(alpha) > 0:
+            #     angle += 2 * np.pi
             # angle += np.pi
         theta_l = angle
         theta = theta_l + ray
-        w = xmax-xmin
-        h = ymax-ymin
-        if position_mark[i] == 0:
-            theta_left = theta + np.pi
-            all_pred_res.append([idx.item(), center_x, center_y, w, h,  np.rad2deg(theta_left.item()), score])
-        else:
-            all_pred_res.append([idx.item(), center_x, center_y, w, h, np.rad2deg(theta.item()), score])
-        # if idx == 1796 and position_mark[i] == 0 and i == 1:
-        #     print(theta_l, ray)
-        # if idx < 1900:
-        #     print("dzc", theta)
+        # theta = torch.tensor(0)
 
         x1_rot, x2_rot, x3_rot, x4_rot, xmid_rot = \
-            int(math.cos(theta) * (x1_ori - center_x) - math.sin(theta) * (y1_ori - (Const.grid_height - center_y)) + center_x), \
-            int(math.cos(theta) * (x2_ori - center_x) - math.sin(theta) * (y2_ori - (Const.grid_height - center_y)) + center_x), \
-            int(math.cos(theta) * (x3_ori - center_x) - math.sin(theta) * (y3_ori - (Const.grid_height - center_y)) + center_x), \
-            int(math.cos(theta) * (x4_ori - center_x) - math.sin(theta) * (y4_ori - (Const.grid_height - center_y)) + center_x), \
-            int(math.cos(theta) * (x_mid - center_x) - math.sin(theta) * (y_mid - (Const.grid_height - center_y)) + center_x)
+            int(math.cos(theta) * (x1_ori - center_x) - math.sin(theta) * (
+                        y1_ori - (Const.grid_height - center_y)) + center_x), \
+            int(math.cos(theta) * (x2_ori - center_x) - math.sin(theta) * (
+                        y2_ori - (Const.grid_height - center_y)) + center_x), \
+            int(math.cos(theta) * (x3_ori - center_x) - math.sin(theta) * (
+                        y3_ori - (Const.grid_height - center_y)) + center_x), \
+            int(math.cos(theta) * (x4_ori - center_x) - math.sin(theta) * (
+                        y4_ori - (Const.grid_height - center_y)) + center_x), \
+            int(math.cos(theta) * (x_mid - center_x) - math.sin(theta) * (
+                        y_mid - (Const.grid_height - center_y)) + center_x)
 
         y1_rot, y2_rot, y3_rot, y4_rot, ymid_rot = \
-            int(math.sin(theta) * (x1_ori - center_x) + math.cos(theta) * (y1_ori - (Const.grid_height - center_y)) + (Const.grid_height - center_y)), \
-            int(math.sin(theta) * (x2_ori - center_x) + math.cos(theta) * (y2_ori - (Const.grid_height - center_y)) + (Const.grid_height - center_y)), \
-            int(math.sin(theta) * (x3_ori - center_x) + math.cos(theta) * (y3_ori - (Const.grid_height - center_y)) + (Const.grid_height - center_y)), \
-            int(math.sin(theta) * (x4_ori - center_x) + math.cos(theta) * (y4_ori - (Const.grid_height - center_y)) + (Const.grid_height - center_y)), \
-            int(math.sin(theta) * (x_mid - center_x) + math.cos(theta) * (y_mid - (Const.grid_height - center_y)) + (Const.grid_height - center_y))
+            int(math.sin(theta) * (x1_ori - center_x) + math.cos(theta) * (y1_ori - (Const.grid_height - center_y)) + (
+                        Const.grid_height - center_y)), \
+            int(math.sin(theta) * (x2_ori - center_x) + math.cos(theta) * (y2_ori - (Const.grid_height - center_y)) + (
+                        Const.grid_height - center_y)), \
+            int(math.sin(theta) * (x3_ori - center_x) + math.cos(theta) * (y3_ori - (Const.grid_height - center_y)) + (
+                        Const.grid_height - center_y)), \
+            int(math.sin(theta) * (x4_ori - center_x) + math.cos(theta) * (y4_ori - (Const.grid_height - center_y)) + (
+                        Const.grid_height - center_y)), \
+            int(math.sin(theta) * (x_mid - center_x) + math.cos(theta) * (y_mid - (Const.grid_height - center_y)) + (
+                        Const.grid_height - center_y))
 
-        # if i == 1 and position_mark[i] == 0 and idx == 1796:
-        #     tmp = cv2.imread("/home/dzc/Data/4carreal_0318blend/bevimgs/%d.jpg" % idx)
-        #     # cv2.rectangle(tmp, (x1_rot, y1_rot), (x3_ori, y3_ori), color=(255, 244, 0))
-        #     cv2.circle(tmp, (int(xmid_rot), int(Const.grid_height -ymid_rot)), radius=1, color=(255, 244, 0))
-        #     cv2.circle(tmp, (int(x1_rot), int(Const.grid_height -y1_rot)), radius=2, color=(255, 0, 0))
-        #     cv2.circle(tmp, (int(x2_rot), int(Const.grid_height -y2_rot)), radius=1, color=(255, 244, 0))
-        #     cv2.circle(tmp, (int(x3_rot), int(Const.grid_height -y3_rot)), radius=1, color=(255, 244, 0))
-        #     cv2.circle(tmp, (int(x4_rot), int(Const.grid_height -y4_rot)), radius=1, color=(255, 244, 0))
-        #     cv2.imwrite("/home/dzc/Desktop/CASIA/proj/mvRPN-det/results/images/dddd2.jpg", tmp)
+        if position_mark[i] == 0:
+            theta_left = theta + np.pi
+            all_pred_res.append(
+                [idx.item(), center_x, center_y, w, h, np.rad2deg(theta_left.item()), score, x1_rot, y1_rot, x2_rot,
+                 y2_rot, x3_rot, y3_rot, x4_rot, y4_rot])
+        else:
+            all_pred_res.append(
+                [idx.item(), center_x, center_y, w, h, np.rad2deg(theta.item()), score, x1_rot, y1_rot, x2_rot, y2_rot,
+                 x3_rot, y3_rot, x4_rot, y4_rot])
 
         pt0 = [x1_rot, y1_rot, 0]
         pt1 = [x2_rot, y2_rot, 0]
@@ -870,60 +920,52 @@ def visualize_3dbox(pred_ori, pred_angle, position_mark, gt_bbox, bev_angle, all
         pt_h_2 = [x3_rot, y3_rot, Const.car_height]
         pt_h_3 = [x4_rot, y4_rot, Const.car_height]
         pt_extra = [xmid_rot, ymid_rot, 0]
-        # pt01 = [x1_ori, Const.grid_height - y1_ori, 0]
-        # pt11 = [x2_ori, Const.grid_height - y2_ori, 0]
-        # pt21 = [x3_ori, Const.grid_height - y3_ori, 0]
-        # pt31 = [x4_ori, Const.grid_height - y4_ori, 0]
-        # pt_h_01 = [x1_ori, Const.grid_height - y1_ori, Const.car_height]
-        # pt_h_11 = [x2_ori, Const.grid_height - y2_ori, Const.car_height]
-        # pt_h_21 = [x3_ori, Const.grid_height - y3_ori, Const.car_height]
-        # pt_h_31 = [x4_ori, Const.grid_height - y4_ori, Const.car_height]
-        # pt_extra2 = [x_mid,  Const.grid_height - y_mid, 0]
 
         boxes_3d.append([pt0, pt1, pt2, pt3, pt_h_0, pt_h_1, pt_h_2, pt_h_3, pt_extra])
     pred_ori = np.array(boxes_3d).reshape((n_bbox, 9, 3))
     projected_2d = getprojected_3dbox(pred_ori, extrin, intrin, isleft=True)
     projected_2d = getprojected_3dbox(pred_ori, extrin, intrin, isleft=False)
-    # for k in range(n_bbox):
-    #     if position_mark[k] == 0:
-    #         color = (255, 255, 0)
-    #     else:
-    #         color = (100, 100, 200)
-    #         # color = (255, 255, 0)
-    #     cv2.line(right_img, (projected_2d[k][0][0], projected_2d[k][0][1]), (projected_2d[k][1][0], projected_2d[k][1][1]), color = color, thickness=2)
-    #     cv2.line(right_img, (projected_2d[k][0][0], projected_2d[k][0][1]), (projected_2d[k][3][0], projected_2d[k][3][1]), color = color, thickness=2 )
-    #     cv2.line(right_img, (projected_2d[k][0][0], projected_2d[k][0][1]), (projected_2d[k][4][0], projected_2d[k][4][1]), color = color, thickness=2)
-    #     cv2.line(right_img, (projected_2d[k][1][0], projected_2d[k][1][1]), (projected_2d[k][5][0], projected_2d[k][5][1]), color = color, thickness=2)
-    #     cv2.line(right_img, (projected_2d[k][1][0], projected_2d[k][1][1]), (projected_2d[k][2][0], projected_2d[k][2][1]), color = color, thickness=2)
-    #     cv2.line(right_img, (projected_2d[k][2][0], projected_2d[k][2][1]), (projected_2d[k][3][0], projected_2d[k][3][1]), color = color, thickness=2)
-    #     cv2.line(right_img, (projected_2d[k][2][0], projected_2d[k][2][1]), (projected_2d[k][6][0], projected_2d[k][6][1]), color = color, thickness=2)
-    #     cv2.line(right_img, (projected_2d[k][3][0], projected_2d[k][3][1]), (projected_2d[k][7][0], projected_2d[k][7][1]), color = color, thickness=2)
-    #     cv2.line(right_img, (projected_2d[k][4][0], projected_2d[k][4][1]), (projected_2d[k][5][0], projected_2d[k][5][1]), color = color, thickness=2)
-    #     cv2.line(right_img, (projected_2d[k][5][0], projected_2d[k][5][1]), (projected_2d[k][6][0], projected_2d[k][6][1]), color = color, thickness=2)
-    #     cv2.line(right_img, (projected_2d[k][6][0], projected_2d[k][6][1]), (projected_2d[k][7][0], projected_2d[k][7][1]), color = color, thickness=2)
-    #     cv2.line(right_img, (projected_2d[k][7][0], projected_2d[k][7][1]), (projected_2d[k][4][0], projected_2d[k][4][1]), color = color, thickness=2)
-    #     cv2.line(right_img, (projected_2d[k][7][0], projected_2d[k][7][1]), (projected_2d[k][4][0], projected_2d[k][4][1]), color = color, thickness=2)
-    #
-    #     # cv2.line(left_img, (projected_2d[k][0+ 9][0], projected_2d[k][0+ 9][1]), (projected_2d[k][1+ 9][0], projected_2d[k][1+ 9][1]), color = (255, 255, 0))
-    #     # cv2.line(left_img, (projected_2d[k][0+ 9][0], projected_2d[k][0+ 9][1]), (projected_2d[k][3+ 9][0], projected_2d[k][3+ 9][1]), color = (255, 255, 0))
-    #     # cv2.line(left_img, (projected_2d[k][0+ 9][0], projected_2d[k][0+ 9][1]), (projected_2d[k][4+ 9][0], projected_2d[k][4+ 9][1]), color = (255, 255, 0))
-    #     # cv2.line(left_img, (projected_2d[k][1+ 9][0], projected_2d[k][1+ 9][1]), (projected_2d[k][5+ 9][0], projected_2d[k][5+ 9][1]), color = (255, 255, 0))
-    #     # cv2.line(left_img, (projected_2d[k][1+ 9][0], projected_2d[k][1+ 9][1]), (projected_2d[k][2+ 9][0], projected_2d[k][2+ 9][1]), color = (255, 255, 0))
-    #     # cv2.line(left_img, (projected_2d[k][2+ 9][0], projected_2d[k][2+ 9][1]), (projected_2d[k][3+ 9][0], projected_2d[k][3+ 9][1]), color = (255, 255, 0))
-    #     # cv2.line(left_img, (projected_2d[k][2+ 9][0], projected_2d[k][2+ 9][1]), (projected_2d[k][6+ 9][0], projected_2d[k][6+ 9][1]), color = (255, 255, 0))
-    #     # cv2.line(left_img, (projected_2d[k][3+ 9][0], projected_2d[k][3+ 9][1]), (projected_2d[k][7+ 9][0], projected_2d[k][7+ 9][1]), color = (255, 255, 0))
-    #     # cv2.line(left_img, (projected_2d[k][4+ 9][0], projected_2d[k][4+ 9][1]), (projected_2d[k][5+ 9][0], projected_2d[k][5+ 9][1]), color = (255, 255, 0))
-    #     # cv2.line(left_img, (projected_2d[k][5+ 9][0], projected_2d[k][5+ 9][1]), (projected_2d[k][6+ 9][0], projected_2d[k][6+ 9][1]), color = (255, 255, 0))
-    #     # cv2.line(left_img, (projected_2d[k][6+ 9][0], projected_2d[k][6+ 9][1]), (projected_2d[k][7+ 9][0], projected_2d[k][7+ 9][1]), color = (255, 255, 0))
-    #     # cv2.line(left_img, (projected_2d[k][7+ 9][0], projected_2d[k][7+ 9][1]), (projected_2d[k][4+ 9][0], projected_2d[k][4+ 9][1]), color = (255, 255, 0))
-    #     # cv2.line(left_img, (projected_2d[k][7+ 9][0], projected_2d[k][7+ 9][1]), (projected_2d[k][4+ 9][0], projected_2d[k][4+ 9][1]), color = (255, 255, 0))
-    #     #
-    #     cv2.arrowedLine(right_img, (int((projected_2d[k][0][0] + projected_2d[k][2][0]) / 2), int((projected_2d[k][0][1] + projected_2d[k][2][1]) / 2)), (projected_2d[k][8][0], projected_2d[k][8][1]), color = (255, 60, 199), thickness=2)
-    #     # cv2.line(left_img, (int((projected_2d[k][0+ 9][0] + projected_2d[k][2+ 9][0]) / 2), int((projected_2d[k][0+ 9][1] + projected_2d[k][2+ 9][1]) / 2)), (projected_2d[k][8+ 9][0], projected_2d[k][8+ 9][1]), color = (255, 60, 199), thickness=2)
-    #
-    # cv2.imwrite("/home/dzc/Desktop/CASIA/proj/mvRPN-det/results/images/3d_box_blend/%d.jpg" % idx, right_img)
+    for k in range(n_bbox):
+        if position_mark[k] == 0:
+            color = (255, 255, 0)
+            color = (0, 255, 0)
+        else:
+            color = (100, 100, 200)
+            color = (0, 255, 0)
+        cv2.line(right_img, (projected_2d[k][0][0], projected_2d[k][0][1]),
+                 (projected_2d[k][1][0], projected_2d[k][1][1]), color=color, thickness=2)
+        cv2.line(right_img, (projected_2d[k][0][0], projected_2d[k][0][1]),
+                 (projected_2d[k][3][0], projected_2d[k][3][1]), color=color, thickness=2)
+        cv2.line(right_img, (projected_2d[k][0][0], projected_2d[k][0][1]),
+                 (projected_2d[k][4][0], projected_2d[k][4][1]), color=color, thickness=2)
+        cv2.line(right_img, (projected_2d[k][1][0], projected_2d[k][1][1]),
+                 (projected_2d[k][5][0], projected_2d[k][5][1]), color=color, thickness=2)
+        cv2.line(right_img, (projected_2d[k][1][0], projected_2d[k][1][1]),
+                 (projected_2d[k][2][0], projected_2d[k][2][1]), color=color, thickness=2)
+        cv2.line(right_img, (projected_2d[k][2][0], projected_2d[k][2][1]),
+                 (projected_2d[k][3][0], projected_2d[k][3][1]), color=color, thickness=2)
+        cv2.line(right_img, (projected_2d[k][2][0], projected_2d[k][2][1]),
+                 (projected_2d[k][6][0], projected_2d[k][6][1]), color=color, thickness=2)
+        cv2.line(right_img, (projected_2d[k][3][0], projected_2d[k][3][1]),
+                 (projected_2d[k][7][0], projected_2d[k][7][1]), color=color, thickness=2)
+        cv2.line(right_img, (projected_2d[k][4][0], projected_2d[k][4][1]),
+                 (projected_2d[k][5][0], projected_2d[k][5][1]), color=color, thickness=2)
+        cv2.line(right_img, (projected_2d[k][5][0], projected_2d[k][5][1]),
+                 (projected_2d[k][6][0], projected_2d[k][6][1]), color=color, thickness=2)
+        cv2.line(right_img, (projected_2d[k][6][0], projected_2d[k][6][1]),
+                 (projected_2d[k][7][0], projected_2d[k][7][1]), color=color, thickness=2)
+        cv2.line(right_img, (projected_2d[k][7][0], projected_2d[k][7][1]),
+                 (projected_2d[k][4][0], projected_2d[k][4][1]), color=color, thickness=2)
+        cv2.line(right_img, (projected_2d[k][7][0], projected_2d[k][7][1]),
+                 (projected_2d[k][4][0], projected_2d[k][4][1]), color=color, thickness=2)
+
+        # cv2.arrowedLine(right_img, (int((projected_2d[k][0][0] + projected_2d[k][2][0]) / 2), int((projected_2d[k][0][1] + projected_2d[k][2][1]) / 2)), (projected_2d[k][8][0], projected_2d[k][8][1]), color = (255, 60, 199), thickness=2)
+        # cv2.line(left_img, (int((projected_2d[k][0+ 9][0] + projected_2d[k][2+ 9][0]) / 2), int((projected_2d[k][0+ 9][1] + projected_2d[k][2+ 9][1]) / 2)), (projected_2d[k][8+ 9][0], projected_2d[k][8+ 9][1]), color = (255, 60, 199), thickness=2)
+
+    cv2.imwrite("/home/dzc/Desktop/CASIA/proj/mvRPN-det/results/images/3d_box_blend/%d.jpg" % idx, right_img)
 
     return all_gt_res, all_pred_res
+
 
 def _smooth_l1_loss(x, t, in_weight, sigma):
     sigma2 = sigma ** 2
@@ -934,6 +976,7 @@ def _smooth_l1_loss(x, t, in_weight, sigma):
     y = (flag * (sigma2 / 2.) * (diff ** 2) +
          (1 - flag) * (abs_diff - 0.5 / sigma2))
     return y.sum()
+
 
 def _fast_rcnn_loc_loss(pred_loc, gt_loc, gt_label, sigma):
     in_weight = torch.zeros(gt_loc.shape).to(pred_loc.device)
@@ -953,13 +996,15 @@ def _fast_rcnn_loc_loss(pred_loc, gt_loc, gt_label, sigma):
     loc_loss /= ((gt_label >= 0).sum().float())  # ignore gt_label==-1 for rpn_loss
     return loc_loss
 
+
 def generate_3d_bbox(pred_bboxs):
     # 输出以左下角为原点的3d坐标
     n_bbox = pred_bboxs.shape[0]
 
     zeros = np.zeros((n_bbox, 1))
     heights = np.zeros((n_bbox, 1)) * Const.car_height
-    ymax, xmax, ymin, xmin = pred_bboxs[:, 0].reshape(-1, 1), pred_bboxs[:, 1].reshape(-1, 1), pred_bboxs[:, 2].reshape(-1, 1), pred_bboxs[:, 3].reshape(-1, 1)
+    ymax, xmax, ymin, xmin = pred_bboxs[:, 0].reshape(-1, 1), pred_bboxs[:, 1].reshape(-1, 1), pred_bboxs[:, 2].reshape(
+        -1, 1), pred_bboxs[:, 3].reshape(-1, 1)
 
     pt0s = np.concatenate((xmax, Const.grid_height - ymin, zeros), axis=1).reshape(1, n_bbox, 3)
     pt1s = np.concatenate((xmin, Const.grid_height - ymin, zeros), axis=1).reshape(1, n_bbox, 3)
@@ -973,6 +1018,7 @@ def generate_3d_bbox(pred_bboxs):
     res = np.vstack((pt0s, pt1s, pt2s, pt3s, pth0s, pth1s, pth2s, pth3s)).transpose(1, 0, 2)
     return res
 
+
 def getimage_pt(points3d, extrin, intrin):
     # 此处输入的是以左下角为原点的坐标，输出的是opencv格式的左上角为原点的坐标
     newpoints3d = np.vstack((points3d, 1.0))
@@ -981,7 +1027,8 @@ def getimage_pt(points3d, extrin, intrin):
     # print(Zc)
     return [imagepoints[0, 0], imagepoints[1, 0]]
 
-def getprojected_3dbox(points3ds, extrin, intrin, isleft = True):
+
+def getprojected_3dbox(points3ds, extrin, intrin, isleft=True):
     if isleft:
         extrin_ = extrin[0].numpy()
         intrin_ = intrin[0].numpy()
@@ -1003,6 +1050,7 @@ def getprojected_3dbox(points3ds, extrin, intrin, isleft = True):
 
     return imagepoints
 
+
 def getprojected_3dbox_ori(points3ds, extrin, intrin, position_mark, isleft=True):
     # print("dzc", points3ds.shape, position_mark.shape)
     left_bboxes = []
@@ -1020,6 +1068,7 @@ def getprojected_3dbox_ori(points3ds, extrin, intrin, position_mark, isleft=True
         # print(left_bboxes)
     return np.array(left_bboxes).reshape((points3ds.shape[0], points3ds.shape[1], 2))
 
+
 def getprojected_3dbox_right(points3ds, extrin, intrin):
     right_bboxes = []
     for i in range(points3ds.shape[0]):
@@ -1031,6 +1080,7 @@ def getprojected_3dbox_right(points3ds, extrin, intrin):
 
     return np.array(right_bboxes).reshape((points3ds.shape[0], 9, 2))
 
+
 def get_outter(projected_3dboxes):
     projected_3dboxes = projected_3dboxes + 1e-3
     zero_mask = np.zeros((projected_3dboxes.shape[0], projected_3dboxes.shape[1], 1))
@@ -1040,19 +1090,20 @@ def get_outter(projected_3dboxes):
     xmax_mask = np.concatenate((one_mask, zero_mask), axis=2)
     ymin_mask = np.concatenate((huge_mask, one_mask), axis=2)
     xmin_mask = np.concatenate((one_mask, huge_mask), axis=2)
-    xmax = np.max((projected_3dboxes * xmax_mask), axis = (1,2)).reshape(1, -1, 1)
-    ymax = np.max((projected_3dboxes * ymax_mask), axis = (1,2)).reshape(1, -1, 1)
-    xmin = np.min((projected_3dboxes * xmin_mask), axis = (1,2)).reshape(1, -1, 1)
-    ymin = np.min((projected_3dboxes * ymin_mask), axis = (1,2)).reshape(1, -1, 1)
+    xmax = np.max((projected_3dboxes * xmax_mask), axis=(1, 2)).reshape(1, -1, 1)
+    ymax = np.max((projected_3dboxes * ymax_mask), axis=(1, 2)).reshape(1, -1, 1)
+    xmin = np.min((projected_3dboxes * xmin_mask), axis=(1, 2)).reshape(1, -1, 1)
+    ymin = np.min((projected_3dboxes * ymin_mask), axis=(1, 2)).reshape(1, -1, 1)
     res = np.concatenate((ymin, xmin, ymax, xmax), axis=2)
     res = np.array(res, dtype=int).squeeze()
 
     return res
 
+
 def generate_3d_bbox2(pred_bboxs):
     # 输出以左下角为原点的3d坐标
     n_bbox = pred_bboxs.shape[0]
-    boxes_3d = [] #
+    boxes_3d = []  #
     for i in range(pred_bboxs.shape[0]):
         ymax, xmax, ymin, xmin = pred_bboxs[i]
         pt0 = [xmax, Const.grid_height - ymin, 0]

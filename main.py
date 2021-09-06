@@ -15,14 +15,19 @@ from detectors.models.persp_trans_detector import PerspTransDetector
 from detectors.utils.logger import Logger
 from detectors.utils.draw_curve import draw_curve
 from detectors.utils.image_utils import img_color_denormalize
+from detectors.ORITrainer import ORITrainer
 from detectors.OFTTrainer import OFTtrainer
-from detectors.RPNTrainer import RPNtrainer
 import warnings
 import itertools
 from detectors.models.VGG16Head import VGG16RoIHead
 from tensorboardX import SummaryWriter
 import torch.nn as nn
 warnings.filterwarnings("ignore")
+
+def fix_bn(m):
+   classname = m.__class__.__name__
+   if classname.find('BatchNorm') != -1:
+       m.eval()
 
 def main(args):
     # seed
@@ -31,8 +36,6 @@ def main(args):
     if args.seed is not None:
         np.random.seed(args.seed)
         torch.manual_seed(args.seed)
-        # torch.backends.cudnn.deterministic = True
-        # torch.backends.cudnn.benchmark = False
         torch.backends.cudnn.benchmark = True
     else:
         torch.backends.cudnn.benchmark = True
@@ -44,15 +47,13 @@ def main(args):
 
     normalize = T.Normalize((0.485, 0.456, 0.406), (0.229, 0.224, 0.225))
     denormalize = img_color_denormalize((0.485, 0.456, 0.406), (0.229, 0.224, 0.225))
-    # resize = T.Resize([384, 512]) # h, w
-    # resize = T.Resize([240, 320]) # h, w
-    train_trans = T.Compose([T.ToTensor(), bright, saturation, normalize])
+    train_trans = T.Compose([T.ToTensor(), normalize])
     test_trans = T.Compose([T.ToTensor(), normalize])
     data_path = os.path.expanduser('/home/dzc/Data/%s' % Const.dataset)
-    # data_path2 = os.path.expanduser('/home/dzc/Data/%s' % Const.dataset)
     base = Robomaster_1_dataset(data_path, args, worldgrid_shape=Const.grid_size)
-    train_set = oftFrameDataset(base, train=True, transform=train_trans, grid_reduce=Const.reduce)
-    test_set = oftFrameDataset(base , train=False, transform=test_trans, grid_reduce=Const.reduce)
+    train_set = oftFrameDataset(base, train=1, transform=train_trans, grid_reduce=Const.reduce)
+    test_set = oftFrameDataset(base, train=2, transform=test_trans, grid_reduce=Const.reduce)
+
     train_loader = torch.utils.data.DataLoader(train_set, batch_size=args.batch_size, shuffle=True,
                                                num_workers=args.num_workers, pin_memory=True, drop_last=True)
     test_loader = torch.utils.data.DataLoader(test_set, batch_size=args.batch_size, shuffle=False,
@@ -60,17 +61,32 @@ def main(args):
 
     # model
     model = PerspTransDetector(train_set)
-    # classifier = model.classifier
-    roi_head = VGG16RoIHead(Const.roi_classes + 1,  7, 1/Const.reduce)
-    optimizer = optim.Adam(params=itertools.chain(model.parameters(), roi_head.parameters()), lr=args.lr, weight_decay=args.weight_decay)
-    # optimizer = optim.Adam([{'params': filter(lambda p: p.requires_grad, model.backbone.parameters()), 'lr': 1e-3},
-    #                         {'params': filter(lambda p: p.requires_grad, model.rpn.parameters())},
-    #                         {'params': filter(lambda p: p.requires_grad, roi_head.parameters())}], lr=args.lr, weight_decay=args.weight_decay)
+    roi_head = VGG16RoIHead(Const.roi_classes + 1, 7, 1/Const.reduce)
+
+    # model.load_state_dict(torch.load('%s/mvdet_rpn_%d.pth' % (Const.rpnsavedir, 4)))
+    # for param in model.named_parameters():
+    #     param[1].requires_grad = False
+    # model.apply(fix_bn)
+    #
+    # saved_roi_head = torch.load('%s/roi_rpn_head_%d.pth' % (Const.modelsavedir, 4))
+    # roi_head_dict = roi_head.state_dict()
+    # new_state_dict = {k: v for k, v in saved_roi_head.items() if k in roi_head_dict.keys()}
+    # roi_head_dict.update(new_state_dict)
+    # roi_head.load_state_dict(roi_head_dict)
+
+    for param in roi_head.named_parameters():
+        if "orientation" in param[0] and "confidence" in param[0]:
+            param[1].requires_grad = False
+
+    # optimizer = optim.Adam(params=itertools.chain(model.parameters(), roi_head.parameters()), lr=args.lr, weight_decay=args.weight_decay)
+    optimizer = optim.Adam([{'params': filter(lambda p: p.requires_grad, model.parameters())},
+                            {'params': filter(lambda p: p.requires_grad, roi_head.parameters())}], lr=args.lr,
+                           weight_decay=args.weight_decay)
     print('Settings:')
     print(vars(args))
 
+    # trainer = ORITrainer(model, roi_head, denormalize)
     trainer = OFTtrainer(model, roi_head, denormalize)
-    # trainer = RPNtrainer(model, roi_head, denormalize)
 
     # learn
     # model.load_state_dict(torch.load('%s/mvdet_rpn_%d.pth' % (Const.modelsavedir, 30)))
@@ -105,12 +121,12 @@ if __name__ == '__main__':
     parser.add_argument('-b', '--batch_size', type=int, default=1, metavar='N',
                         help='input batch size for training (default: 1)')
     parser.add_argument('--epochs', type=int, default=10, metavar='N', help='number of epochs to train (default: 10)')
-    parser.add_argument('--lr', type=float, default=0.0001, metavar='LR', help='learning rate (default: 0.1)')
+    parser.add_argument('--lr', type=float, default=0.00005, metavar='LR', help='learning rate (default: 0.1)')
     parser.add_argument('--weight_decay', type=float, default=1e-5)
     parser.add_argument('--momentum', type=float, default=0.5, metavar='M', help='SGD momentum (default: 0.5)')
-    parser.add_argument('--seed', type=int, default=16, help='random seed (default: None)')
+    parser.add_argument('--seed', type=int, default=7, help='random seed (default: None)')
 
-    parser.add_argument('--resume', type=bool, default = True)
+    parser.add_argument('--resume', type=bool, default = False)
     args = parser.parse_args()
 
     main(args)
