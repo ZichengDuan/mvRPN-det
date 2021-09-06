@@ -52,6 +52,20 @@
             </Attribute>
           </value>
         </entry>
+        <entry key="/detectors/evaluation/evaluate.py">
+          <value>
+            <Attribute>
+              <option name="separator" value="," />
+            </Attribute>
+          </value>
+        </entry>
+        <entry key="/detectors/evaluation/pyeval/CLEAR_MOD_HUN.py">
+          <value>
+            <Attribute>
+              <option name="separator" value="," />
+            </Attribute>
+          </value>
+        </entry>
         <entry key="/detectors/evaluation/pyeval/calAOS.py">
           <value>
             <Attribute>
