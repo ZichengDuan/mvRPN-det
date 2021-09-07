@@ -457,8 +457,8 @@ class ORITrainer(BaseTrainer):
 
             left_prob = at.tonumpy(F.softmax(at.totensor(left_roi_score), dim=1))
             left_front_prob = left_prob[:, 1]
-            # right_prob = at.tonumpy(F.softmax(at.totensor(right_roi_score), dim=1))
-            # right_front_prob = right_prob[:, 1]
+            right_prob = at.tonumpy(F.softmax(at.totensor(right_roi_score), dim=1))
+            right_front_prob = right_prob[:, 1]
 
 
             position_mark = np.concatenate((np.zeros((left_front_prob.shape[0], )), np.ones((right_front_prob.shape[0]))))

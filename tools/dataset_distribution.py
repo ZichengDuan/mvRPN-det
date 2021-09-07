@@ -16,8 +16,8 @@ class DistributionCalculator():
         self.annopath = annopath
         # self.training_frame_range = list(range(0, 2400)) + list(range(3101, 4100+ 4021))
         # self.testing_frame_range = list(range(2400, 4021))
-        self.training_frame_range = list(range(0, 1400)) + list(range(2000, 6989))
-        self.testing_frame_range = list(range(1400, 2000))
+        self.training_frame_range = list(range(0, 1800)) + list(range(2100, 3500)) + list(range(3600, 4330))
+        self.testing_frame_range = list(range(1800, 2100)) + list(range(3500, 3600))
 
     def cal_ang_distribution(self):
         files = os.listdir(self.annopath)
@@ -108,9 +108,9 @@ class DistributionCalculator():
 
 
 if __name__ == "__main__":
-    annopath = "/Users/dzc/Desktop/CASIA/dataset/mix/annotations"
+    annopath = "/home/dzc/Data/opensource/annotations"
     calculator = DistributionCalculator(annopath)
     # calculator.cal_location_distribution()
-    # calculator.cal_ang_distribution()
-    calculator.cal_occlusion_rate()
+    calculator.cal_ang_distribution()
+    # calculator.cal_occlusion_rate()
     pass
