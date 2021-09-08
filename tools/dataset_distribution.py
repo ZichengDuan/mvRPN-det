@@ -111,6 +111,6 @@ if __name__ == "__main__":
     annopath = "/home/dzc/Data/opensource/annotations"
     calculator = DistributionCalculator(annopath)
     # calculator.cal_location_distribution()
-    # calculator.cal_ang_distribution()
+    calculator.cal_ang_distribution()
     calculator.cal_occlusion_rate()
     pass

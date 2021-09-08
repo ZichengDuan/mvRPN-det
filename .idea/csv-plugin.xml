@@ -150,6 +150,13 @@
             </Attribute>
           </value>
         </entry>
+        <entry key="/tools/barchart.py">
+          <value>
+            <Attribute>
+              <option name="separator" value="," />
+            </Attribute>
+          </value>
+        </entry>
         <entry key="/tools/dataset_distribution.py">
           <value>
             <Attribute>
