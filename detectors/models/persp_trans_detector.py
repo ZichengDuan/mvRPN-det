@@ -81,9 +81,13 @@ class PerspTransDetector(nn.Module):
             # print("reducedgrid_shape", self.reducedgrid_shape)
 
             world_feature = kornia.vflip(world_feature)
+            if cam == 0:
+                plt.imsave("world_feature_0.jpg", torch.norm(world_feature[0], dim=0).cpu().numpy())
+            else:
+                plt.imsave("world_feature_1.jpg", torch.norm(world_feature[0], dim=0).cpu().numpy())
             world_features.append(world_feature.cuda())
         world_features = torch.cat(world_features + [self.coord_map.repeat([B, 1, 1, 1]).cuda()], dim=1)
-        # plt.imsave("world_features.jpg", torch.norm(world_features[0], dim=0).cpu().numpy())
+        plt.imsave("world_features.jpg", torch.norm(world_features[0], dim=0).cpu().numpy())
         # 3d特征图
         # feature_to_plot = world_features[0][0].detach().cpu().numpy()
         # fig = plt.figure()
