@@ -66,10 +66,10 @@ class PerspTransDetector(nn.Module):
             img_feature =self.backbone(imgs[:, cam].to('cuda:0'))
             img_feature = F.interpolate(img_feature, self.upsample_shape, mode='bilinear')
 
-            # if cam == 0:
-            #     plt.imsave("img_norm_0.jpg", img_feature[0][0].cpu().numpy())
-            # else:
-            #     plt.imsave("img_norm_1.jpg", img_feature[0][0].cpu().numpy())
+            if cam == 0:
+                plt.imsave("img_norm_0.jpg", torch.norm(img_feature[0], dim=0).cpu().numpy())
+            else:
+                plt.imsave("img_norm_1.jpg", torch.norm(img_feature[0], dim=0).cpu().numpy())
 
             img_featuremap.append(img_feature)
 

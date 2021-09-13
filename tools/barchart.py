@@ -67,7 +67,7 @@ ax1.text(8, occ_train+0.05, '%.1f' % occ_train, ha='center', va= 'bottom',fontsi
 ax1.text(8+bar_width, occ_test+0.05, '%.1f' % occ_test, ha='center', va= 'bottom',fontsize=20)
 
 ax1.legend(prop=font1)
-img= Image.open("/home/dzc/Desktop/CASIA/proj/mvRPN-det/tools/dataset.png")
+img= Image.open("/home/dzc/Desktop/CASIA/proj/mvRPN-det/tools/datasets.png")
 ax2.imshow(img)
 ax2.set_xticks([])
 ax2.set_yticks([])
