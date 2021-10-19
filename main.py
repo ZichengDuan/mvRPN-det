@@ -127,8 +127,8 @@ def main(args):
             # roi_head.load_state_dict(torch.load("%s/roi_rpn_head_%d.pth" % (Const.modelsavedir, 1)))
             roi_head.eval()
             model.eval()
+            # trainer.test(epoch, test_loader, writer)
             trainer.test(epoch, test_loader, writer)
-            # trainer.test(epoch, video_loader, writer)
             break
     writer.close()
 

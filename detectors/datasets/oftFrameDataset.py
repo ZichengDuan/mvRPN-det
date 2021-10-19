@@ -33,10 +33,12 @@ class oftFrameDataset(VisionDataset):
             frame_range = list (range(2000, 2100)) + list(range(3500, 3600))
         elif train == 2:
             frame_range = list(range(1800, 2100)) + list(range(3500, 3600))
-            # frame_range = list(range(1320, 1374)) + list(range(1715, 1799)) + list(range(2800, 2933)) + list(range(1000, 1124))
+            frame_range = list(range(3500, 4000))
+            # frame_range = [0, 2990]
         elif train == 4:
             # frame_range = list(range(1800, 2100)) + list(range(3500, 3600))
-            frame_range = list(range(0, 1625))
+            frame_range = list(range(1490, 1510))
+            # frame_range = [394]
 
 
         self.upsample_shape = list(map(lambda x: int(x / self.img_reduce), self.img_shape))

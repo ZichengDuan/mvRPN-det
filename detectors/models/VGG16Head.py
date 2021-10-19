@@ -32,6 +32,7 @@ class VGG16RoIHead(nn.Module):
         #                                  ).to("cuda:0")
         # self.converter = nn.Sequential(nn.Conv2d(512, 512, kernel_size=1, stride=1),
         #                                nn.ReLU(True)).cuda()
+
         self.classifier = nn.Sequential(nn.Linear(25088, 4096, bias=True),
                                    nn.ReLU(inplace=True),
                                    nn.Dropout(p=0.5, inplace=False),

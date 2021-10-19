@@ -70,7 +70,7 @@ class RegionProposalNetwork(nn.Module):
         h = F.relu(self.conv1(x))
         rpn_locs = self.loc(h)
         # print("dzcc", rpn_locs.shape)
-        rpn_locs = rpn_locs.permute(0, 2, 3, 1).contiguous().view(n, -1, 4)
+        rpn_locs = rpn_locs.permute(0, 2, 3, 1).contiguous().view(n, -1, 4) # x, y, w, h, n * 4
         # print(rpn_locs.shape)
         rpn_scores = self.score(h)
         rpn_scores = rpn_scores.permute(0, 2, 3, 1).contiguous()
