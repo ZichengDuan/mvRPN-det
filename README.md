@@ -1,10 +1,13 @@
-# mvRPN-det：MVDet+RPN + Roi Pooling的融合Bird-Eye-View检测
-## 算法目的
-实现Robomaster比赛场底下的敌我战车定位以及朝向角度估计。
+## MVM3Det源代码+实验代码【自用未整理】
 
-## 主要流程、输入输出
-输入为两个岗哨视觉相机的rgb图像，经过特征提取和投影叠加以及上采样生成BEV角度下的特征图。进而用RPN对叠加后的特征实行目标检测，并将返回的roi反向投影回原图特征，进行roi pooling，其中roi pooling得到的置信度用于指导rpn阶段生成的roi进行nms。
+### 2022.01.19
+分支用途统计：
+* [opensource_multibin](https://github.com/ZichengDuan/mvRPN-det/tree/opensource_multibin) 分支提供了论文中的最终实验数据，主要集中在[ORITrainner.py](https://github.com/ZichengDuan/mvRPN-det/blob/opensource_multibin/detectors/ORITrainer.py) 。
+* [opensource_v100](https://github.com/ZichengDuan/mvRPN-det/tree/opensource_v100) 是在服务器上用WildTrack数据集进行试验的代码。
+* [opensource](https://github.com/ZichengDuan/mvRPN-det/tree/opensource) 是尝试直接回归sincos【不可行】。
+* 其他分支均为实验中瞎分的分支，参考意义不大。
 
-另外，算法在roi pooling中加入了一个新的输出头用于角度估计。通过回归相对角度的sin cos值，可以最终预测出战车的角度信息。
 
-最终预测出的置信度、角度信息、定位信息都通过之前的index数组联系到一起。
+官方MVM3D数据集与官方推理代码详情请见[MVM3Det](https://github.com/DRL-CASIA/MVM3D) ，数据集API请参考[NeuronsDataset](https://github.com/DRL-CASIA/NeuronsDataset) 。
+
+
