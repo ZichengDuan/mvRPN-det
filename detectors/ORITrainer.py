@@ -208,8 +208,6 @@ class ORITrainer(BaseTrainer):
             all_roi_score = torch.cat((left_roi_score, right_roi_score))
             all_gt_label = torch.cat((left_gt_label, right_gt_label))
 
-            # all_pred_sincos = torch.cat((left_pred_sincos, right_pred_sincos))
-            # all_gt_sincos = torch.cat((torch.tensor(left_gt_sincos), torch.tensor(right_gt_sincos)))
 
             all_pred_orientation = torch.cat((left_pred_orientation, right_pred_orientation))
             all_gt_orientation = torch.cat((left_gt_orientation, right_gt_orientation))
@@ -672,7 +670,6 @@ class ORITrainer(BaseTrainer):
         # print("Avg get outter infer time: %4f" % (getoutter_time / batch_idx))
         # print("Avg roi infer time: %4f" % (roi_time / batch_idx))
         # print("Avg nms infer time: %4f" % (nms_time / batch_idx))
-
 
 
     @property

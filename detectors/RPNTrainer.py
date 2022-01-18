@@ -158,9 +158,6 @@ class RPNtrainer(BaseTrainer):
             #         # print(np.dot(intrin[0][0], extrin[0][0]))
             #         # print(np.dot(item, np.dot(intrin[0][0], extrin[0][0])))
 
-
-
-
             # for idx, bbx in enumerate(left_2d_bbox):
             #     cv2.rectangle(left_img, (int(bbx[1]), int(bbx[0])), (int(bbx[3]), int(bbx[2])), color=(255, 255, 0), thickness=1)
             #     # cv2.circle(left_img, (int((bbx[3] + bbx[1]) / 2), (int((bbx[2] + bbx[0]) / 2))), 1, color=(255, 255, 0))
@@ -171,27 +168,15 @@ class RPNtrainer(BaseTrainer):
 
     def test(self,epoch, data_loader, writer):
         self.model.eval()
-        rpn_time = 0
-        trans_time = 0
-        roi_time = 0
-        nms_time = 0
-        total_time = 0
-        gene3d_time = 0
-        proj3d_time = 0
-        getoutter_time = 0
 
         for batch_idx, data in enumerate(data_loader):
             imgs, gt_bev_xy,bev_angle, gt_bbox, gt_left_bbox, gt_right_bbox, gt_left_dirs, gt_right_dirs, gt_left_sincos, gt_right_sincos, frame, extrin, intrin, extrin2, intrin2, mark = data
-            total_start = time.time()
-            rpn_start = time.time()
-
             if mark == 1:
                 extrin = extrin2
                 intrin = intrin2
 
             with torch.no_grad():
                 rpn_locs, rpn_scores, anchor, rois, roi_indices, img_featuremaps, bev_featuremaps = self.model(imgs, mark=mark)
-            rpn_end = time.time()
             roi = torch.tensor(rois).to(rpn_locs.device)
             roi_cls_loc, roi_score, _ = self.roi_head(bev_featuremaps, roi, roi_indices)
 
@@ -199,7 +184,6 @@ class RPNtrainer(BaseTrainer):
             prob = prob[:, 1]
             bbox, conf = nms_new2(at.tonumpy(roi), at.tonumpy(prob), prob_threshold=0.7)
             # keep = box_ops.nms(roi, prob, 0.1)
-
             # roi = roi[keep]
 
             bev_img = cv2.imread("/home/dzc/Data/mix/bevimgs/%d.jpg" % frame)
