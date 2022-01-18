@@ -532,8 +532,9 @@ def visualize_3dbox(pred_ori, pred_angle, position_mark, gt_bbox, bev_angle, all
         # cv2.line(left_img, (int((projected_2d[k][0+ 9][0] + projected_2d[k][2+ 9][0]) / 2), int((projected_2d[k][0+ 9][1] + projected_2d[k][2+ 9][1]) / 2)), (projected_2d[k][8+ 9][0], projected_2d[k][8+ 9][1]), color = (255, 60, 199), thickness=2)
     # cv2.imwrite("/home/dzc/Desktop/CASIA/proj/mvRPN-det/results/images/3d_box_blend/%d_gt.jpg" % idx, right_img)
     # right_img = cv2.imread("/home/dzc/Data/opensource/img/right2/%d.jpg" % (idx))
-    boxes_3d = []
+
     #============================= MVDET =============================
+    # boxes_3d = []
     # for j, bbox in enumerate(gt_bbox):
     #     ymin, xmin, ymax, xmax = bbox
     #     theta = torch.tensor(0)
@@ -721,7 +722,6 @@ def visualize_3dbox(pred_ori, pred_angle, position_mark, gt_bbox, bev_angle, all
     #     # cv2.line(left_img, (int((projected_2d[k][0+ 9][0] + projected_2d[k][2+ 9][0]) / 2), int((projected_2d[k][0+ 9][1] + projected_2d[k][2+ 9][1]) / 2)), (projected_2d[k][8+ 9][0], projected_2d[k][8+ 9][1]), color = (255, 60, 199), thickness=2)
     # cv2.imwrite("/home/dzc/Desktop/CASIA/proj/mvRPN-det/results/images/3d_box_blend/%d_mvdet.jpg" % idx, right_img)
     # right_img = cv2.imread("/home/dzc/Data/opensource/img/right2/%d.jpg" % (idx))
-
 
     boxes_3d = []
     print(all_front_prob.shape, pred_angle.shape, pred_ori.shape)
