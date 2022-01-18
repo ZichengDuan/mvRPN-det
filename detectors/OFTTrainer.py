@@ -970,7 +970,7 @@ def getprojected_3dbox(points3ds, extrin, intrin, isleft = True):
     else:
         extrin_ = extrin[1].numpy()
         intrin_ = intrin[1].numpy()
-    # print(extrin_.shape)
+    print(extrin_.shape, intrin_.shape)
     extrin_big = extrin_.repeat(points3ds.shape[0] * points3ds.shape[1], axis=0)
     intrin_big = intrin_.repeat(points3ds.shape[0] * points3ds.shape[1], axis=0)
 
@@ -979,7 +979,7 @@ def getprojected_3dbox(points3ds, extrin, intrin, isleft = True):
     homo3dpts = np.concatenate((points3ds_big, homog), 2).reshape(points3ds.shape[0] * points3ds.shape[1], 4, 1)
     res = np.matmul(extrin_big, homo3dpts)
     Zc = res[:, -1]
-    # print(intrin_big.shape, res.shape)
+    print(intrin_big.shape, res.shape)
     res2 = np.matmul(intrin_big, res)
     imagepoints = (res2.reshape(-1, 3) / Zc).reshape((points3ds.shape[0], points3ds.shape[1], 3))[:, :, :2].astype(int)
 
